@@ -1,0 +1,53 @@
+<svg width="16" height="16" viewBox="0 0 16 16" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<title>Group 2</title>
+<desc>Created using Figma</desc>
+<g id="Canvas" transform="translate(416 333)">
+<g id="Group 2">
+<g id="Line 2">
+<use xlink:href="#path0_stroke" transform="translate(-416 -317)"/>
+</g>
+<g id="Line 2">
+<use xlink:href="#path1_stroke" transform="matrix(-4.37114e-08 -1 1 -4.37114e-08 -400 -317)"/>
+</g>
+<g id="Line 2">
+<use xlink:href="#path2_stroke" transform="matrix(-0.6 -0.8 0.8 -0.6 -400 -329.235)"/>
+</g>
+<g id="Line 2">
+<use xlink:href="#path3_stroke" transform="matrix(-1 -8.74228e-08 8.74228e-08 -1 -402.824 -333)"/>
+</g>
+<g id="Line 2">
+<use xlink:href="#path4_stroke" transform="matrix(-4.37114e-08 1 -1 -4.37114e-08 -411.294 -331.745)"/>
+</g>
+<g id="Line 2">
+<use xlink:href="#path5_stroke" transform="translate(-411.294 -327.353)"/>
+</g>
+<g id="Line 2">
+<use xlink:href="#path4_stroke" transform="matrix(-4.37114e-08 -1 1 -4.37114e-08 -403.765 -327.98)"/>
+</g>
+<g id="Line 2">
+<use xlink:href="#path6_stroke" transform="matrix(-4.37114e-08 1 -1 -4.37114e-08 -413.176 -324.529)"/>
+</g>
+<g id="Line 2">
+<use xlink:href="#path7_stroke" transform="translate(-413.176 -323.588)"/>
+</g>
+<g id="Line 2">
+<use xlink:href="#path8_stroke" transform="matrix(-3.68096e-08 1 -1 -3.68096e-08 -404.32 -323.588)"/>
+</g>
+<g id="Line">
+<use xlink:href="#path9_stroke" transform="matrix(-4.37114e-08 1 -1 -4.37114e-08 -416 -332.059)"/>
+</g>
+</g>
+</g>
+<defs>
+<path id="path0_stroke" d="M 0 0L 15.0588 0L 15.0588 -1.5L 0 -1.5L 0 0Z"/>
+<path id="path1_stroke" d="M 0 0L 12.2353 0L 12.2353 -1.5L 0 -1.5L 0 0Z"/>
+<path id="path2_stroke" d="M 0 0L 4.70588 0L 4.70588 -1.5L 0 -1.5L 0 0Z"/>
+<path id="path3_stroke" d="M 0 0L 13.1765 0L 13.1765 -1.5L 0 -1.5L 0 0Z"/>
+<path id="path4_stroke" d="M 0 0L 3.76471 0L 3.76471 -1.5L 0 -1.5L 0 0Z"/>
+<path id="path5_stroke" d="M 0 0L 7.52941 0L 7.52941 -1.5L 0 -1.5L 0 0Z"/>
+<path id="path6_stroke" d="M 0 0L 6.27451 0L 6.27451 -1.5L 0 -1.5L 0 0Z"/>
+<path id="path7_stroke" d="M 0 0L 10.3529 0L 10.3529 -1.5L 0 -1.5L 0 0Z"/>
+<path id="path8_stroke" d="M 0 1.11022e-16L 5.64706 1.11022e-16L 5.64706 -1.5L 0 -1.5L 0 1.11022e-16Z"/>
+<path id="path9_stroke" d="M 0 0L 15.0588 0L 15.0588 -1.5L 0 -1.5L 0 0Z"/>
+</defs>
+</svg>

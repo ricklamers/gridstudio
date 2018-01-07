@@ -1,0 +1,24 @@
+- Copy paste ranges of values (values and formulas)
+- Delete as range command (for speed)
+- Range assign in Python
+- Read data from Python
+
+
+- Make Grid so nice to use that people start asking (can I also get access?)
+- Make a bunch of cool features and make stuff in it for myself
+- Key: persistence and shareability (need server!)
+- Data science: many really cool examples to come up with
+- Resource library: demo page with links to all kinds of files with cool but relatively trivial examples. Speaks to imagination and is incredibly fun to construct together with a bunch of smart people.
+- Dockerize the code so that people can bootstrap their own server to work with proprietary data (or offline even!)
+
+
+Edge case =((1/3)*MATHC("e")^(3/2) - (1/3)*MATHC("e")^3)*(-1)
+
+
+"A keyboard GUI. With the introduction of the GUI, the guys at Xerox also introduced the mouse. So when we think of a GUI, we think of a principally mouse-driven user interface, where keys are sometimes useful too. (Hence the term 'keyboard shortcuts'.) In these times of RSI, I would like to design a GUI that can be completely and consistently driven through a keyboard. (Optionally with 'mouse shortcuts'.) This would probably make it very popular with programmers, system administrators, UNIX- lovers, and similar races."
+
+--> this for Grid, first class support for all kinds of keyboard navigation
+
+- ProductHunt launch to find initial audience (product needs to be further ahead - need really great design)
+
+- Easy API integration

@@ -1,0 +1,2 @@
+- On clear cell, clear outgoing dependents
+- Automatic reference incrementing, change input syntax A1 -> A

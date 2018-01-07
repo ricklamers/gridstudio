@@ -1,0 +1,1 @@
+docker run -v C:\\Users\\Rick\\workspace\\docker-test\\grid-app:/home/source -p 4000:8080 goserver
