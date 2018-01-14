@@ -58,6 +58,9 @@
 
 		this.wsManager = new WSManager(this);
 		this.editor = new Editor(this);
+		this.termManager = new TermManager(this);
+
+		
 		
  		this.dom = document.querySelector('body');
 		this.canvas = document.createElement('canvas');
@@ -261,9 +264,14 @@
 
 		this.init = function(){
 			
-			// init editor
+			// initialize editor
 			this.editor.init();
+
+			// initialize wsManager
 			this.wsManager.init();
+
+			// initialize terminal
+			this.termManager.init();
 			
 			this.menuInit();
 
@@ -295,6 +303,8 @@
 			this.isFocusedOnElement = function(){
 				
 				if(!_this.input_field.is(':focus') && !_this.formula_input.is(":focus") && !_this.editor.ace.isFocused()){
+					// TEMP: for terminal
+					return true;
 					return false;
 				}else{
 					return true;

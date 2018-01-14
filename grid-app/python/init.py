@@ -77,9 +77,44 @@ def sheet(cell_range, data = None):
 
     if data is not None:
         if ":" in cell_range:
-            data = {'arguments': ['RANGE', 'SET', cell_range, str(data)]}
-            data = ''.join(['#PARSE#', json.dumps(data)])
-            print(data, end='', flush=True)
+
+            if type(data) is list:
+
+                # if data is string without starting with =, add escape quotes
+                for index, element in enumerate(data):
+
+                    if isinstance(element, str):
+                        # string meant as string, escape
+                        element = "\"" + element + "\""
+                        data[index] = element
+                    else:
+                        data[index] = str(element)
+
+                arguments =  ['RANGE', 'SETLIST', cell_range]
+
+                # append list
+                arguments = arguments + data
+
+                data = {'arguments':arguments}
+                data = ''.join(['#PARSE#', json.dumps(data)])
+                print(data, end='', flush=True)
+
+            else:
+
+                # if data is string without starting with =, add escape quotes
+                if isinstance(data, str) and data[0] == '=':
+                    # string meant as direct formula
+                    # do nothing
+                    data = data[1:]
+                elif isinstance(data, str):
+                    # string meant as string, escape
+                    data = "\"" + data + "\""
+
+                data = {'arguments': ['RANGE', 'SETSINGLE', cell_range, ''.join(["=",str(data)])]}
+                data = ''.join(['#PARSE#', json.dumps(data)])
+                print(data, end='', flush=True)
+
+
         else:
             data = {'arguments': ['SET', cell_range, str(data)]}
             data = ''.join(['#PARSE#', json.dumps(data)])
@@ -136,5 +171,8 @@ def getAndExecuteInput():
             command_buffer = ""
         else:
             command_buffer += code_input + "\n"
+
+# testing
+#sheet("A1:A2", [1,2])
 
 getAndExecuteInput()

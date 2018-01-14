@@ -5,6 +5,8 @@
 		<title>Grid</title>
 		<link rel="icon" href="favicon-v2.png">
 		<link href="style.css" rel="stylesheet" />
+		<link href="xterm/xterm.js/xterm.css" rel="stylesheet" />
+
 	</head>
 	<body>
 		<header>
@@ -45,13 +47,20 @@
 			</div-sheet>
 			<div class='code-editor'>
 				<div id="editor"></div>
-				<div class="console"></div>
+				<div class="dev-tabs">
+					<div class="tabs"><div class="tab current" data-tab='terminal'>Terminal</div><div data-tab='console' class="tab">Python out</div></div>
+					<div class="terminal" id="terminal-container"></div>
+					<div class="console" style="display:none;"></div>
+				</div>
 			</div>
 		</div>
-		
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/es6-promise/4.1.1/es6-promise.auto.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/fetch/1.0.0/fetch.min.js"></script>
+		<script src="js/jquery-3.2.1.min.js"></script>
 		<script src="js/editor/ace.js"></script>
 		<script src="js/editor.js"></script>
-		<script src="js/jquery-3.2.1.min.js"></script>
+		<script src="xterm/dist/bundle.js"></script>
 		<script src="js/plotly-finance-latest.min.js" charset="utf-8"></script>
 		<script src="js/ws.js"></script>
 		<script src="js/app.js"></script>

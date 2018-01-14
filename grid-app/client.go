@@ -271,7 +271,7 @@ func (c *Client) writePump() {
 				references := cellRangeToCells(parsed[2])
 
 				switch parsed[1] {
-				case "SET":
+				case "SETSINGLE":
 
 					formula := parsed[3][1:]
 					formula = referencesToUpperCase(formula)
@@ -301,7 +301,7 @@ func (c *Client) writePump() {
 						dv.DependOut = OriginalDependOut // dependout remain
 
 						// IMPORTANT AUTO (SINGLE) REFERENCE INCREMENT
-						dv.DataFormula = incrementSingleReferences(dv.DataFormula, incrementAmount)
+						//dv.DataFormula = incrementSingleReferences(dv.DataFormula, incrementAmount)
 
 						// range auto reference manipulation, increment row automatically for references in this formula for each iteration
 						newDvs[ref] = dv
@@ -314,6 +314,58 @@ func (c *Client) writePump() {
 					}
 
 					// then setDependencies for all
+					for ref, dv := range newDvs {
+						grid.data[ref] = setDependencies(ref, dv, &grid)
+					}
+
+					// now compute all dirty
+					computeAndSend(&grid, c)
+				case "SETLIST":
+
+					// Note: SETLIST doesn't support formula insert, only raw data. E.g. numbers or strings
+
+					// values are all values from parsed[3] on
+					values := parsed[3:]
+
+					// parsed[3] contains the value (formula)
+					newDvs := make(map[string]DynamicValue)
+
+					// starting row
+
+					// get row of first reference
+					// initRow := getReferenceRowIndex(references[0])
+
+					// first add all to grid
+					valuesIndex := 0
+					for _, ref := range references {
+
+						OriginalDependOut := grid.data[ref].DependOut
+
+						dv := DynamicValue{
+							ValueType:   DynamicValueTypeFormula,
+							DataFormula: values[valuesIndex],
+						}
+
+						NewDependIn := make(map[string]bool)
+						dv.DependIn = &NewDependIn       // new dependin (new formula)
+						dv.DependOut = OriginalDependOut // dependout remain
+
+						// IMPORTANT AUTO (SINGLE) REFERENCE INCREMENT
+						//dv.DataFormula = incrementSingleReferences(dv.DataFormula, incrementAmount)
+
+						// range auto reference manipulation, increment row automatically for references in this formula for each iteration
+						newDvs[ref] = dv
+
+						// set to grid for access during setDependencies
+						grid.data[ref] = dv
+
+						valuesIndex++
+
+					}
+
+					// then setDependencies for all
+
+					// even though all values, has to be ran for all new values because fields might depend on new input data
 					for ref, dv := range newDvs {
 						grid.data[ref] = setDependencies(ref, dv, &grid)
 					}

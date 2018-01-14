@@ -66,6 +66,8 @@
                         consoleText = consoleText.replaceAll("\n", "<br>");
                         _this.app.console.append("<div class='message'>" + consoleText + "</div>");
                         _this.app.console[0].scrollTop = _this.app.console[0].scrollHeight;
+
+                        _this.app.termManager.showTab("console");
                     }
                 }
                 

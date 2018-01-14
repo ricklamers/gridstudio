@@ -4,6 +4,20 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+    {
+        "name": "Python",
+        "type": "python",
+        "request": "launch",
+        "stopOnEntry": true,
+        "pythonPath": "${config:python.pythonPath}",
+        "program": "${file}",
+        "cwd": "${workspaceFolder}",
+        "env": {},
+        "envFile": "${workspaceFolder}/.env",
+        "debugOptions": [
+            "RedirectOutput"
+        ]
+    },
         {
             "name": "Launch",
             "type": "go",

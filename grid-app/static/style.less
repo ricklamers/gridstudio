@@ -175,26 +175,56 @@ body{
 	box-sizing: border-box;
 	border-left: 1px solid #bbb;
 	
-	.console{
+	.dev-tabs{
 		position: absolute;
 		width: 100%;
-		height: 20%;
+		height: 30%;
 		background: #fff;
 		color: #000;
-		padding: 10px;
 		bottom :0;
 		border-top: 1px solid #bbb;
-		overflow-y: auto;
-		
-		.message{
-			padding-left: 15px;
-			&:before{
-				position: absolute;
-				content: '$ ';
-				color: #999;
-				margin-left: -13px;
+		z-index: 999;
+
+		.terminal, .console {
+			height: 100%;
+		}
+
+		.terminal{
+			background: #000;
+		}
+
+		.tabs{
+			margin-top: -30px;
+			right: 0;
+			background: #eee;
+			position: absolute;
+			.tab{
+				padding: 6px;
+				float: left;
+				cursor: pointer;
+				&:hover, &.current{
+					background: #ccc;
+				}
 			}
 		}
+
+		.console{
+			overflow-y: auto;
+
+			padding: 10px;
+			.message{
+				padding-left: 15px;
+				position: relative;
+
+				&:before{
+					position: absolute;
+					content: '# ';
+					color: #999;
+					margin-left: -13px;
+				}
+			}
+		}
+		
 	}
 	
 }
@@ -202,7 +232,7 @@ body{
 #editor {
 	position: absolute;
 	width: 100%;
-	height: 80%;
+	height: 70%;
 }
 
 input:focus{

@@ -149,30 +149,56 @@ body div-sheet canvas {
   box-sizing: border-box;
   border-left: 1px solid #bbb;
 }
-.code-editor .console {
+.code-editor .dev-tabs {
   position: absolute;
   width: 100%;
-  height: 20%;
+  height: 30%;
   background: #fff;
   color: #000;
-  padding: 10px;
   bottom: 0;
   border-top: 1px solid #bbb;
-  overflow-y: auto;
+  z-index: 999;
 }
-.code-editor .console .message {
-  padding-left: 15px;
+.code-editor .dev-tabs .terminal,
+.code-editor .dev-tabs .console {
+  height: 100%;
 }
-.code-editor .console .message:before {
+.code-editor .dev-tabs .terminal {
+  background: #000;
+}
+.code-editor .dev-tabs .tabs {
+  margin-top: -30px;
+  right: 0;
+  background: #eee;
   position: absolute;
-  content: '$ ';
+}
+.code-editor .dev-tabs .tabs .tab {
+  padding: 6px;
+  float: left;
+  cursor: pointer;
+}
+.code-editor .dev-tabs .tabs .tab:hover,
+.code-editor .dev-tabs .tabs .tab.current {
+  background: #ccc;
+}
+.code-editor .dev-tabs .console {
+  overflow-y: auto;
+  padding: 10px;
+}
+.code-editor .dev-tabs .console .message {
+  padding-left: 15px;
+  position: relative;
+}
+.code-editor .dev-tabs .console .message:before {
+  position: absolute;
+  content: '# ';
   color: #999;
   margin-left: -13px;
 }
 #editor {
   position: absolute;
   width: 100%;
-  height: 80%;
+  height: 70%;
 }
 input:focus {
   outline: none;
