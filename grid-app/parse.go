@@ -284,9 +284,9 @@ func findReferences(formula string) map[string]bool {
 
 			// remove from references
 
-			// split operation (if 1, or 0 just replace with empty, if bigger replace)
+			// split operation (if 1 just replace with empty, if bigger replace) else, remove reference from references
 			if len(references) > 1 {
-				references = append(references[:k-1], references[k+1:]...)
+				references = append(references[:k], references[k+1:]...)
 			} else {
 				references = []string{}
 			}

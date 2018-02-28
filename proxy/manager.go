@@ -107,7 +107,7 @@ func main() {
 		http.SetCookie(w, &cookie)
 
 		// ws_port to 4000 for debug
-		cookieWs := http.Cookie{Name: "ws_port", Value: strconv.Itoa(ds.port), Expires: expiration}
+		cookieWs := http.Cookie{Name: "ws_port", Value: "4000", Expires: expiration}
 		http.SetCookie(w, &cookieWs)
 
 		// redirect to app
