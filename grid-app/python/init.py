@@ -75,50 +75,56 @@ def cell_range_to_indexes(cell_range):
 
 def sheet(cell_range, data = None):
 
+    # input data into sheet
     if data is not None:
-        if ":" in cell_range:
+        
+        # always convert cell to range
+        if ":" not in cell_range:
+            cell_range = cell_range + ":" + cell_range
+        
+        
+        # convert numpy to array
+        data_type_string = str(type(data))
+        if data_type_string == "<class 'numpy.ndarray'>":
+            data = data.tolist()
+            
+        if type(data) is list:
+            
+            # if data is string without starting with =, add escape quotes
+            for index, element in enumerate(data):
 
-            if type(data) is list:
-
-                # if data is string without starting with =, add escape quotes
-                for index, element in enumerate(data):
-
-                    if isinstance(element, str):
-                        # string meant as string, escape
-                        element = "\"" + element + "\""
-                        data[index] = element
-                    else:
-                        data[index] = str(element)
-
-                arguments =  ['RANGE', 'SETLIST', cell_range]
-
-                # append list
-                arguments = arguments + data
-
-                data = {'arguments':arguments}
-                data = ''.join(['#PARSE#', json.dumps(data)])
-                print(data, end='', flush=True)
-
-            else:
-
-                # if data is string without starting with =, add escape quotes
-                if isinstance(data, str) and data[0] == '=':
-                    # string meant as direct formula
-                    # do nothing
-                    data = data[1:]
-                elif isinstance(data, str):
+                if isinstance(element, str):
                     # string meant as string, escape
-                    data = "\"" + data + "\""
+                    element = "\"" + element + "\""
+                    data[index] = element
+                else:
+                    data[index] = str(element)
 
-                data = {'arguments': ['RANGE', 'SETSINGLE', cell_range, ''.join(["=",str(data)])]}
-                data = ''.join(['#PARSE#', json.dumps(data)])
-                print(data, end='', flush=True)
+            arguments =  ['RANGE', 'SETLIST', cell_range]
 
+            # append list
+            arguments = arguments + data
 
-        else:
-            data = {'arguments': ['SET', cell_range, str(data)]}
+            data = {'arguments':arguments}
             data = ''.join(['#PARSE#', json.dumps(data)])
             print(data, end='', flush=True)
+
+        else:
+
+            # if data is string without starting with =, add escape quotes
+            if isinstance(data, str) and data[0] == '=':
+                # string meant as direct formula
+                # do nothing
+                data = data[1:]
+            elif isinstance(data, str):
+                # string meant as string, escape
+                data = "\"" + data + "\""
+
+            data = {'arguments': ['RANGE', 'SETSINGLE', cell_range, ''.join(["=",str(data)])]}
+            data = ''.join(['#PARSE#', json.dumps(data)])
+            print(data, end='', flush=True)
+    
+    # get data from sheet
     else:
         #convert non-range to range for get operation
         if ":" in cell_range:

@@ -59,8 +59,6 @@
 		this.wsManager = new WSManager(this);
 		this.editor = new Editor(this);
 		this.termManager = new TermManager(this);
-
-		
 		
  		this.dom = document.querySelector('body');
 		this.canvas = document.createElement('canvas');
@@ -302,9 +300,7 @@
 			
 			this.isFocusedOnElement = function(){
 				
-				if(!_this.input_field.is(':focus') && !_this.formula_input.is(":focus") && !_this.editor.ace.isFocused()){
-					// TEMP: for terminal
-					return true;
+				if(!_this.input_field.is(':focus') && !_this.formula_input.is(":focus") && !_this.editor.ace.isFocused() && !_this.termManager.isFocused()){
 					return false;
 				}else{
 					return true;
@@ -1261,6 +1257,11 @@
 			input.click();
 		}
 		
+		this.openFileUpload = function(){
+			var input = $(this.dom).find('menu-item.upload-file input');
+			input.click();
+		}
+		
 		this.uploadFile = function(){
 				
 			var input = $(this.dom).find('menu-item.load-csv input');
@@ -1278,6 +1279,58 @@
 			}
 			
 			reader.readAsText(input[0].files[0]);
+			
+		}
+		
+		
+		this.uploadFile = function(file){
+			
+			var formData = new FormData();
+
+			// add assoc key values, this will be posts values
+			formData.append("file", file, file.name);
+			formData.append("upload_file", true);
+			
+			var progressHandling = function (event) {
+				var percent = 0;
+				var position = event.loaded || event.position;
+				var total = event.total;
+				
+				if (event.lengthComputable) {
+					percent = Math.ceil(position / total * 100);
+				}
+				
+				console.log("File upload progress: " + percent);
+				
+				// update progressbars classes so it fits your code
+				// $(progress_bar_id + " .progress-bar").css("width", +percent + "%");
+				// $(progress_bar_id + " .status").text(percent + "%");
+			};
+			
+			$.ajax({
+				type: "POST",
+				url: "uploadFile",
+				xhr: function () {
+					var myXhr = $.ajaxSettings.xhr();
+					if (myXhr.upload) {
+						myXhr.upload.addEventListener('progress', progressHandling, false);
+					}
+					return myXhr;
+				},
+				success: function (data) {
+					// your callback here
+					alert("Upload successfully!");
+				},
+				error: function (error) {
+					// handle error
+				},
+				async: true,
+				data: formData,
+				cache: false,
+				contentType: false,
+				processData: false,
+				timeout: 60000
+			});
 			
 		}
 
@@ -1304,6 +1357,10 @@
 				_this.toggleCode();
 			});
 			
+			menu.find('menu-item.upload-file input').on('change', function(){
+				var file = $(this)[0].files[0];
+				_this.uploadFile(file);
+			});
 			
 			// set up file change handler for loadCSV
 			var input = $(this.dom).find('menu-item.load-csv input');
@@ -1314,8 +1371,14 @@
 			})
 			
 			menu.find('menu-item.load-csv').click(function(e){
-				if(!$(e.target).hasClass('file-input')){
+				if(!$(e.target).hasClass('csv-input')){
 					_this.openFile();
+				}
+			});
+			
+			menu.find('menu-item.upload-file').click(function(e){
+				if(!$(e.target).hasClass('file-input')){
+					_this.openFileUpload();
 				}
 			});
 			

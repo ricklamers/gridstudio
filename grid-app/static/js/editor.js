@@ -65,15 +65,12 @@
 
                     }
 
-                    // I know, it is evil, but this way I'll be able to have awesome features!
-                    
                     // evalScript per line
                     // var scriptLines = script.split("\n");
                     // for(var x = 0; x < scriptLines.length; x++){
                     //     _this.evalScript(scriptLines[x]);
                     // }
                     _this.evalScript(script);
-
 
                     var range = editor.getSelectionRange();
 

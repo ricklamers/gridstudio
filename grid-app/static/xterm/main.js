@@ -32,6 +32,10 @@ Terminal.applyAddon(winptyCompat);
         this.uiInit();
         this.createTerminal();
       }
+            
+      this.isFocused = function(){
+        return this.term.isFocused;
+      }
     
       this.showTab = function(selector){
 
@@ -70,6 +74,8 @@ Terminal.applyAddon(winptyCompat);
           scrollback: 1000,
           tabStopWidth: 8
         });
+        this.term = term;
+        
         window.term = term;  // Expose `term` to window for debugging purposes
         term.on('resize', function (size) {
           if (!pid) {
@@ -81,7 +87,7 @@ Terminal.applyAddon(winptyCompat);
     
           fetch(url, {method: 'POST'});
         });
-    
+        
         protocol = (location.protocol === 'https:') ? 'wss://' : 'ws://';
         var port = 3000;
     

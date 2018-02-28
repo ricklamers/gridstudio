@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -151,8 +152,15 @@ func main() {
 
 		printActiveUsers(usersessions)
 
-		// start docker instance
-		dockerCmd := exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.port), "--rm=true", "-v", "C:\\Users\\Rick\\workspace\\grid-docker\\grid-app:/home/source", "-p", strconv.Itoa(ds.port)+":8080", "-p", strconv.Itoa(termBase+ds.port)+":3000", "goserver")
+		var dockerCmd *exec.Cmd
+
+		// start docker instance based on OS
+		if runtime.GOOS == "windows" {
+			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.port), "--rm=true", "-v", "C:\\Users\\Rick\\workspace\\grid-docker\\grid-app:/home/source", "-p", strconv.Itoa(ds.port)+":8080", "-p", strconv.Itoa(termBase+ds.port)+":3000", "goserver")
+		} else {
+			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.port), "--rm=true", "-v", "/Users/rick/workspace/grid-docker/grid-app:/home/source", "-p", strconv.Itoa(ds.port)+":8080", "-p", strconv.Itoa(termBase+ds.port)+":3000", "goserver")
+		}
+
 		dockerCmd.Stdout = os.Stdout
 		dockerCmd.Stderr = os.Stderr
 		dockerCmd.Start()

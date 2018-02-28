@@ -3,11 +3,12 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/NYTimes/gziphandler"
-	"github.com/twinj/uuid"
 )
 
 var addr = flag.String("addr", ":8080", "http service address")
@@ -90,21 +91,34 @@ func main() {
 
 	http.Handle("/", withGz)
 
-	fileUUIDs := []uuid.Uuid{}
+	http.HandleFunc("/uploadFile", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("upload method:", r.Method)
 
-	http.HandleFunc("/createFile", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" {
+			r.ParseMultipartForm(32 << 20)
 
-		u := uuid.NewV4()
-		fileUUIDs = append(fileUUIDs, u)
+			file, handler, err := r.FormFile("file")
 
-		// var buff bytes.Buffer
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
 
-		// for _, k := range fileUUIDs {
-		// 	buff.WriteString(k.String())
-		// 	buff.WriteString("\n")
-		// }
+			defer file.Close()
 
-		fmt.Fprintf(w, "%s", u.String())
+			fmt.Fprintf(w, "%v", handler.Header)
+
+			f, err := os.OpenFile("/home/user/"+handler.Filename, os.O_WRONLY|os.O_CREATE, 0666)
+
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+
+			defer f.Close()
+
+			io.Copy(f, file)
+		}
 	})
 
 	hub := newHub()

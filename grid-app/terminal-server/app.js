@@ -38,7 +38,7 @@ app.post('/terminals', function (req, res) {
         name: 'xterm-color',
         cols: cols || 80,
         rows: rows || 24,
-        cwd: process.env.PWD,
+        cwd: "/home/user/",
         env: process.env
       });
 

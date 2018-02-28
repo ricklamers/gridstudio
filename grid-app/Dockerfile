@@ -16,6 +16,9 @@ RUN pip3 install pandas
 RUN mkdir /home/run/
 COPY ./terminal-server/ /home/run/terminal-server/
 
+# create work directory
+RUN mkdir /home/user/
+
 WORKDIR /home/run/terminal-server/
 RUN npm install
 
