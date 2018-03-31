@@ -33,6 +33,10 @@ body header div-menu {
   flex-direction: row;
   padding: 5px;
 }
+body header a {
+  color: #000;
+  text-decoration: none;
+}
 body header menu-item {
   cursor: pointer;
   padding: 5px;

@@ -166,7 +166,6 @@ def getAndExecuteInput():
     command_buffer = ""
 
     while True:
-
         code_input = input("")
         # when empty line is found, execute code
         if code_input == "":
@@ -180,5 +179,4 @@ def getAndExecuteInput():
 
 # testing
 #sheet("A1:A2", [1,2])
-
 getAndExecuteInput()

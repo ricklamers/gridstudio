@@ -26,7 +26,7 @@
 
             var hostname = window.location.hostname;
             
-            var wsPort = getCookie("ws_port");
+            var wsPort = 4430;
             this.ws = new WebSocket("ws:"+hostname+":" + wsPort + "/ws");
             
             this.ws.onopen = function (event) {

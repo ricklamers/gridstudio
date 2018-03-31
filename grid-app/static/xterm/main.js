@@ -85,21 +85,14 @@ Terminal.applyAddon(winptyCompat);
               rows = size.rows,
               url = '/terminals/' + pid + '/size?cols=' + cols + '&rows=' + rows;
     
-          fetch(url, {method: 'POST'});
+          fetch(url, {method: 'POST', credentials: "same-origin"});
         });
         
         protocol = (location.protocol === 'https:') ? 'wss://' : 'ws://';
-        var port = 3000;
+        var wsPort = 4430;
+        var port = 8080;
     
-        // get port cookie
-        function getCookie(name) {
-            var value = "; " + document.cookie;
-            var parts = value.split("; " + name + "=");
-            if (parts.length == 2) return parts.pop().split(";").shift();
-        }
-        port = getCookie("term_port");
-    
-        socketURL = protocol + location.hostname + ((port) ? (':' + port) : '') + '/terminals/';
+        socketURL = protocol + location.hostname + ((wsPort) ? (':' + wsPort) : '') + '/terminals/';
         var fetchUrl = 'http://' + location.hostname + ((port) ? (':' + port) : '');
     
         term.open(terminalContainer);
@@ -109,7 +102,7 @@ Terminal.applyAddon(winptyCompat);
     
         var paramFetchUrl = fetchUrl+'/terminals?cols=' + term.cols + '&rows=' + term.rows;
     
-        fetch(paramFetchUrl, {method: 'POST'}).then(function (res) {
+        fetch(paramFetchUrl, {method: 'POST', credentials: "same-origin"}).then(function (res) {
     
           res.text().then(function (processId) {
             pid = processId;

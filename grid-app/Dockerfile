@@ -1,4 +1,4 @@
-FROM golang:1.9
+FROM golang:1.10
 
 WORKDIR /home/source/
 
@@ -24,7 +24,7 @@ RUN npm install
 
 WORKDIR /home/source/
 
-RUN go-wrapper download   # "go get -d -v ./..."
+RUN go get -d -v ./...
 
 EXPOSE 8080
 EXPOSE 3000

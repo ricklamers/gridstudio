@@ -12,30 +12,30 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
 	"time"
 
+	"./dockermanager"
+	"./websocketproxy"
+
 	"github.com/gorilla/websocket"
-	"github.com/koding/websocketproxy"
 	"github.com/twinj/uuid"
 )
 
-const wsBase = 5000
 const termBase = -1000
+const httpPort = 8080
+const wsPort = 4430
 
-func wsProxy(port int) {
+func wsProxy(wsPort int, usersessions map[string]dockermanager.DockerSession) {
 
-	base, err := url.Parse("ws://127.0.0.1:" + strconv.Itoa(port) + "/ws")
-	fmt.Println("WS base: " + "ws://127.0.0.1:" + strconv.Itoa(port) + "/ws")
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	wsPort := wsBase + port
-
+	// base, err := url.Parse("ws://127.0.0.1:" + strconv.Itoa(port) + "/ws")
+	// fmt.Println("WS base: " + "ws://127.0.0.1:" + strconv.Itoa(port) + "/ws")
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 	fmt.Println("WS Listening on port: " + strconv.Itoa(wsPort))
 
-	wsp := websocketproxy.NewProxy(base)
+	wsp := websocketproxy.NewProxy(usersessions)
 	wsp.Upgrader = &websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool { return true },
 	}
@@ -44,10 +44,6 @@ func wsProxy(port int) {
 	if errWS != nil {
 		log.Fatal(errWS)
 	}
-}
-
-type DockerSession struct {
-	port int
 }
 
 func getFreePort(usedports map[int]bool, startPort int) int {
@@ -68,7 +64,7 @@ func getFreePort(usedports map[int]bool, startPort int) int {
 	}
 }
 
-func printActiveUsers(usersessions map[string]DockerSession) {
+func printActiveUsers(usersessions map[string]dockermanager.DockerSession) {
 	fmt.Printf("%d user sessions active.\n", len(usersessions))
 }
 
@@ -79,11 +75,9 @@ func main() {
 	// form: UID key and int as port of active docker client
 	var startPort = 4000
 	var usedports map[int]bool
-	var usedwsports map[int]bool
-	var usersessions map[string]DockerSession
-	usersessions = make(map[string]DockerSession)
+	var usersessions map[string]dockermanager.DockerSession
+	usersessions = make(map[string]dockermanager.DockerSession)
 	usedports = make(map[int]bool)
-	usedwsports = make(map[int]bool)
 
 	// index.html to initialize
 	httpClient := http.Client{}
@@ -91,15 +85,18 @@ func main() {
 	fs := http.FileServer(http.Dir("static"))
 	http.Handle("/dashboard/", fs)
 
+	// setup WS proxy for Go server and Terminal
+	go wsProxy(wsPort, usersessions)
+
 	http.HandleFunc("/create-debug", func(w http.ResponseWriter, r *http.Request) {
 
 		// start user session and set cookie
 		uuid := uuid.NewV4().String()
 
-		ds := DockerSession{port: getFreePort(usedports, startPort)}
+		ds := dockermanager.DockerSession{Port: getFreePort(usedports, startPort)}
 
 		// set usedports for assigned port
-		usedports[ds.port] = true
+		usedports[ds.Port] = true
 		usersessions[uuid] = ds
 
 		// set cookie to UUID
@@ -108,8 +105,8 @@ func main() {
 		http.SetCookie(w, &cookie)
 
 		// ws_port to 4000 for debug
-		cookieWs := http.Cookie{Name: "ws_port", Value: "4000", Expires: expiration}
-		http.SetCookie(w, &cookieWs)
+		// cookieWs := http.Cookie{Name: "ws_port", Value: "4000", Expires: expiration}
+		// http.SetCookie(w, &cookieWs)
 
 		// redirect to app
 		http.Redirect(w, r, "/", 302)
@@ -120,10 +117,11 @@ func main() {
 		// start user session and set cookie
 		uuid := uuid.NewV4().String()
 
-		ds := DockerSession{port: getFreePort(usedports, startPort)}
+		ds := dockermanager.DockerSession{Port: getFreePort(usedports, startPort)}
+		ds.TermPort = ds.Port + termBase
 
 		// set usedports for assigned port
-		usedports[ds.port] = true
+		usedports[ds.Port] = true
 
 		usersessions[uuid] = ds
 
@@ -131,21 +129,6 @@ func main() {
 		expiration := time.Now().Add(365 * 24 * time.Hour)
 		cookie := http.Cookie{Name: "session_uuid", Value: uuid, Expires: expiration, Path: "/"}
 		http.SetCookie(w, &cookie)
-
-		cookieWs := http.Cookie{Name: "ws_port", Value: strconv.Itoa(ds.port + wsBase), Expires: expiration, Path: "/"}
-		http.SetCookie(w, &cookieWs)
-
-		cookieTerm := http.Cookie{Name: "term_port", Value: strconv.Itoa(ds.port + termBase), Expires: expiration, Path: "/"}
-		http.SetCookie(w, &cookieTerm)
-
-		// initialize ws Proxy
-		// TODO: Create way to kill wsProxy (channels?)
-		if _, ok := usedwsports[wsBase+ds.port]; !ok {
-			go wsProxy(ds.port)
-			usedwsports[wsBase+ds.port] = true
-		} else {
-			fmt.Println("WS Port already initialized for port: " + strconv.Itoa(wsBase+ds.port))
-		}
 
 		// log
 		fmt.Println("Create users session with UUID: " + uuid + ".")
@@ -156,9 +139,9 @@ func main() {
 
 		// start docker instance based on OS
 		if runtime.GOOS == "windows" {
-			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.port), "--rm=true", "-v", "C:\\Users\\Rick\\workspace\\grid-docker\\grid-app:/home/source", "-p", strconv.Itoa(ds.port)+":8080", "-p", strconv.Itoa(termBase+ds.port)+":3000", "goserver")
+			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true", "-v", "C:\\Users\\Rick\\workspace\\grid-docker\\grid-app:/home/source", "-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "goserver")
 		} else {
-			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.port), "--rm=true", "-v", "/Users/rick/workspace/grid-docker/grid-app:/home/source", "-p", strconv.Itoa(ds.port)+":8080", "-p", strconv.Itoa(termBase+ds.port)+":3000", "goserver")
+			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true", "-v", "/Users/ricklamers/workspace/grid-docker/grid-app:/home/source", "-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "goserver")
 		}
 
 		dockerCmd.Stdout = os.Stdout
@@ -184,13 +167,13 @@ func main() {
 		ds := usersessions[uuid]
 
 		// set usedports for assigned port
-		usedports[ds.port] = false
+		usedports[ds.Port] = false
 
 		// delete from user sessions
 		delete(usersessions, uuid)
 
 		// kill Docker instance
-		dockerCmd := exec.Command("docker", "kill", "grid"+strconv.Itoa(ds.port))
+		dockerCmd := exec.Command("docker", "kill", "grid"+strconv.Itoa(ds.Port))
 		dockerCmd.Stdout = os.Stdout
 		dockerCmd.Stderr = os.Stderr
 		dockerCmd.Start()
@@ -198,6 +181,8 @@ func main() {
 		fmt.Println("Destruct users session with UUID: " + uuid + ".")
 
 		printActiveUsers(usersessions)
+
+		http.Redirect(w, r, "/dashboard/", 302)
 
 	})
 
@@ -219,7 +204,7 @@ func main() {
 
 		ds := usersessions[uuid]
 
-		if ds.port == 0 {
+		if ds.Port == 0 {
 
 			// if no cookie is set or found redirect
 			http.Redirect(w, r, "/dashboard/", 302)
@@ -228,7 +213,13 @@ func main() {
 
 			fmt.Println(r.RequestURI)
 
-			base, err := url.Parse("http://127.0.0.1:" + strconv.Itoa(ds.port) + r.RequestURI)
+			httpRedirPort := ds.Port
+
+			if r.URL.Path == "/terminals" {
+				httpRedirPort = ds.TermPort
+			}
+
+			base, err := url.Parse("http://127.0.0.1:" + strconv.Itoa(httpRedirPort) + r.RequestURI)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -273,6 +264,8 @@ func main() {
 
 	})
 
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	fmt.Println("Listening on port: " + strconv.Itoa(httpPort))
+
+	log.Fatal(http.ListenAndServe(":"+strconv.Itoa(httpPort), nil))
 
 }

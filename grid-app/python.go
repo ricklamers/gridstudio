@@ -24,6 +24,8 @@ func (c *Client) pythonInterpreter() {
 		// pythonCommand = "pypy3-c"
 	}
 
+	// TODO: odd 512 byte block gets filled when initializing python (could be bug? intented behaviour?)
+
 	pythonCmd := exec.Command(pythonCommand, "-u", "python/init.py")
 
 	var b bytes.Buffer
@@ -39,13 +41,16 @@ func (c *Client) pythonInterpreter() {
 		fmt.Println("Killing Python user session")
 		pythonIn.Close()
 	}()
-	// pythonOut, _ := pythonCmd.StdoutPipe()
 
+	// pythonOut, _ := pythonCmd.StdoutPipe()
 	pythonCmd.Start()
 
 	bufferSize := b.Len()
 	errorBufferSize := eb.Len()
+
 	timer := time.NewTicker(time.Millisecond * 50)
+
+	// TODO: make more efficient, and avoid race condition
 
 	for {
 		// read and clean buffer
@@ -58,19 +63,34 @@ func (c *Client) pythonInterpreter() {
 				return
 			}
 
+			fmt.Println("Write for Python interpreter received: " + command)
+
 			pythonIn.Write([]byte(command + "\n\n"))
 
 		case <-timer.C:
 			// fmt.Println(b.Len())
 			// detect whether Python process has outputted new data
-			if bufferSize != b.Len() {
+
+			if b.Len() != bufferSize {
 
 				oldSize := bufferSize
 				bufferSize = b.Len()
 
+				lowIndex := oldSize
+				highIndex := bufferSize
+
+				if lowIndex >= 512 {
+					lowIndex -= 512
+					highIndex -= 512
+				} else {
+					continue
+				}
+
+				newString := b.String()[lowIndex:highIndex]
+
 				// only change bufferSize if ending is #PONG#
 				// print string from b that is size of newBufferLength that starts at oldSize
-				newString := string(b.Bytes()[oldSize:bufferSize])
+
 				// newString = newString[:len(newString)]
 
 				// check first 7 chars in substring
@@ -119,7 +139,6 @@ func (c *Client) pythonInterpreter() {
 					pythonIn.Write(commandBuf.Bytes())
 
 				} else {
-					// fmt.Println(newString)
 
 					if len(newString) > 0 {
 						jsonData := []string{"INTERPRETER"}
@@ -130,17 +149,26 @@ func (c *Client) pythonInterpreter() {
 				}
 
 			}
+
 			if eb.Len() != errorBufferSize {
 
 				oldSize := errorBufferSize
 				errorBufferSize = eb.Len()
 
-				errorString := string(eb.Bytes()[oldSize:errorBufferSize])
+				lowIndex := oldSize
+				highIndex := errorBufferSize
 
-				jsonData := []string{"INTERPRETER"}
-				jsonData = append(jsonData, errorString)
-				json, _ := json.Marshal(jsonData)
-				c.send <- json
+				if lowIndex >= 512 {
+					lowIndex -= 512
+					highIndex -= 512
+
+					errorString := eb.String()[lowIndex:highIndex]
+
+					jsonData := []string{"INTERPRETER"}
+					jsonData = append(jsonData, "Error: "+errorString)
+					json, _ := json.Marshal(jsonData)
+					c.send <- json
+				}
 
 				// fmt.Println(errorString)
 			}
