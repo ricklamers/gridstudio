@@ -1,97 +1,73 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os/exec"
 	"runtime"
 	"strings"
-	"time"
 )
 
-func (c *Client) pythonInterpreter() {
+func streamPythonEOut(stdoutPipe io.ReadCloser, pythonIn io.WriteCloser, c *Client) {
+	buffer := make([]byte, 100, 1000)
 
-	/// PYTHON COMMUNICATION SPAWNING PROTOCOL
-	pythonCommand := "python3"
-
-	if runtime.GOOS == "windows" {
-		// in Windows runtime Python 3 doesn't use 3 in the name of the executable
-		pythonCommand = "python"
-
-		// pypy test
-		// pythonCommand = "pypy3-c"
-	}
-
-	// TODO: odd 512 byte block gets filled when initializing python (could be bug? intented behaviour?)
-
-	pythonCmd := exec.Command(pythonCommand, "-u", "python/init.py")
-
-	var b bytes.Buffer
-	writer := bufio.NewWriter(&b)
-	pythonCmd.Stdout = writer
-
-	var eb bytes.Buffer
-	errwriter := bufio.NewWriter(&eb)
-	pythonCmd.Stderr = errwriter
-
-	pythonIn, _ := pythonCmd.StdinPipe()
-	defer func() {
-		fmt.Println("Killing Python user session")
-		pythonIn.Close()
-	}()
-
-	// pythonOut, _ := pythonCmd.StdoutPipe()
-	pythonCmd.Start()
-
-	bufferSize := b.Len()
-	errorBufferSize := eb.Len()
-
-	timer := time.NewTicker(time.Millisecond * 50)
-
-	// TODO: make more efficient, and avoid race condition
+	bufferString := ""
 
 	for {
-		// read and clean buffer
+		n, err := stdoutPipe.Read(buffer)
+		if err == io.EOF {
+			stdoutPipe.Close()
+			break
+		}
+		if err != nil {
+			fmt.Println(err)
+			break
+		}
+		buffer = buffer[0:n]
 
-		select {
-		case command := <-c.commands:
+		bufferString += string(buffer)
 
-			if command == "CLOSE" {
-				fmt.Println("CLOSE received")
-				return
-			}
+		if strings.HasSuffix(bufferString, "\n") {
 
-			fmt.Println("Write for Python interpreter received: " + command)
-
-			pythonIn.Write([]byte(command + "\n\n"))
-
-		case <-timer.C:
-			// fmt.Println(b.Len())
 			// detect whether Python process has outputted new data
+			errorString := bufferString
 
-			if b.Len() != bufferSize {
+			jsonData := []string{"INTERPRETER"}
+			jsonData = append(jsonData, "Error: "+errorString)
+			json, _ := json.Marshal(jsonData)
+			c.send <- json
 
-				oldSize := bufferSize
-				bufferSize = b.Len()
+			bufferString = ""
+		}
+	}
+}
 
-				lowIndex := oldSize
-				highIndex := bufferSize
+func streamPythonOut(stdoutPipe io.ReadCloser, pythonIn io.WriteCloser, c *Client) {
+	buffer := make([]byte, 100, 1000)
 
-				if lowIndex >= 512 {
-					lowIndex -= 512
-					highIndex -= 512
-				} else {
-					continue
-				}
+	bufferString := ""
 
-				newString := b.String()[lowIndex:highIndex]
+	for {
+		n, err := stdoutPipe.Read(buffer)
+		if err == io.EOF {
+			stdoutPipe.Close()
+			break
+		}
+		buffer = buffer[0:n]
+
+		bufferString += string(buffer)
+
+		if strings.HasSuffix(bufferString, "\n") {
+
+			// detect whether Python process has outputted new data
+			if len(buffer) > 0 {
+
+				newString := bufferString
 
 				// only change bufferSize if ending is #PONG#
 				// print string from b that is size of newBufferLength that starts at oldSize
-
-				// newString = newString[:len(newString)]
 
 				// check first 7 chars in substring
 				if len(newString) > 6 && newString[:7] == "#PARSE#" {
@@ -150,28 +126,53 @@ func (c *Client) pythonInterpreter() {
 
 			}
 
-			if eb.Len() != errorBufferSize {
+			bufferString = ""
+		}
 
-				oldSize := errorBufferSize
-				errorBufferSize = eb.Len()
+	}
+}
 
-				lowIndex := oldSize
-				highIndex := errorBufferSize
+func (c *Client) pythonInterpreter() {
 
-				if lowIndex >= 512 {
-					lowIndex -= 512
-					highIndex -= 512
+	/// PYTHON COMMUNICATION SPAWNING PROTOCOL
+	pythonCommand := "python3"
 
-					errorString := eb.String()[lowIndex:highIndex]
+	if runtime.GOOS == "windows" {
+		// in Windows runtime Python 3 doesn't use 3 in the name of the executable
+		pythonCommand = "python"
+	}
 
-					jsonData := []string{"INTERPRETER"}
-					jsonData = append(jsonData, "Error: "+errorString)
-					json, _ := json.Marshal(jsonData)
-					c.send <- json
-				}
+	pythonCmd := exec.Command(pythonCommand, "-u", "python/init.py")
 
-				// fmt.Println(errorString)
+	pythonIn, _ := pythonCmd.StdinPipe()
+	defer func() {
+		fmt.Println("Killing Python user session")
+		pythonIn.Close()
+	}()
+
+	pythonOut, _ := pythonCmd.StdoutPipe()
+	pythonEOut, _ := pythonCmd.StderrPipe()
+
+	pythonCmd.Start()
+
+	go streamPythonOut(pythonOut, pythonIn, c)
+	go streamPythonEOut(pythonEOut, pythonIn, c)
+
+	for {
+		// read and clean buffer
+
+		select {
+		case command := <-c.commands:
+
+			if command == "CLOSE" {
+				fmt.Println("CLOSE received")
+				return
 			}
+
+			fmt.Println("Write for Python interpreter received: " + command)
+
+			pythonIn.Write([]byte(command + "\n\n"))
+
 		}
 
 	}

@@ -107,7 +107,7 @@ def sheet(cell_range, data = None):
 
             data = {'arguments':arguments}
             data = ''.join(['#PARSE#', json.dumps(data)])
-            print(data, end='', flush=True)
+            print(data, flush=True)
 
         else:
 
@@ -122,7 +122,7 @@ def sheet(cell_range, data = None):
 
             data = {'arguments': ['RANGE', 'SETSINGLE', cell_range, ''.join(["=",str(data)])]}
             data = ''.join(['#PARSE#', json.dumps(data)])
-            print(data, end='', flush=True)
+            print(data, flush=True)
     
     # get data from sheet
     else:
@@ -131,7 +131,7 @@ def sheet(cell_range, data = None):
             cell_range = ':'.join([cell_range, cell_range])
 
         # in blocking fashion get latest data of range from Go
-        print("#DATA#" + cell_range, end='', flush=True)
+        print("#DATA#" + cell_range, flush=True)
         getAndExecuteInputOnce()
         # if everything works, the exec command has filled sheet_data with the appropriate data
         # return data range as arrays
