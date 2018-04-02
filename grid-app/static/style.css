@@ -152,6 +152,7 @@ body div-sheet canvas {
   top: 0;
   box-sizing: border-box;
   border-left: 1px solid #bbb;
+  overflow: hidden;
 }
 .code-editor .dev-tabs {
   position: absolute;

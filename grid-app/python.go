@@ -10,125 +10,147 @@ import (
 	"strings"
 )
 
-func streamPythonEOut(stdoutPipe io.ReadCloser, pythonIn io.WriteCloser, c *Client) {
+func streamPythonEOut(stdoutPipe io.ReadCloser, pythonIn io.WriteCloser, c *Client, closeChannel chan string) {
 	buffer := make([]byte, 100, 1000)
 
 	bufferString := ""
 
 	for {
-		n, err := stdoutPipe.Read(buffer)
-		if err == io.EOF {
-			stdoutPipe.Close()
-			break
+
+		select {
+		case command := <-closeChannel:
+			if command == "CLOSE" {
+				return
+			}
+
+		default:
+			n, err := stdoutPipe.Read(buffer)
+			if err == io.EOF {
+				stdoutPipe.Close()
+				break
+			}
+			if err != nil {
+				fmt.Println(err)
+				break
+			}
+			buffer = buffer[0:n]
+
+			bufferString += string(buffer)
+
+			if strings.HasSuffix(bufferString, "\n") {
+
+				// detect whether Python process has outputted new data
+				errorString := bufferString
+
+				jsonData := []string{"INTERPRETER"}
+				jsonData = append(jsonData, "Error: "+errorString)
+				json, _ := json.Marshal(jsonData)
+				c.send <- json
+
+				bufferString = ""
+			}
+
 		}
-		if err != nil {
-			fmt.Println(err)
-			break
-		}
-		buffer = buffer[0:n]
 
-		bufferString += string(buffer)
-
-		if strings.HasSuffix(bufferString, "\n") {
-
-			// detect whether Python process has outputted new data
-			errorString := bufferString
-
-			jsonData := []string{"INTERPRETER"}
-			jsonData = append(jsonData, "Error: "+errorString)
-			json, _ := json.Marshal(jsonData)
-			c.send <- json
-
-			bufferString = ""
-		}
 	}
 }
 
-func streamPythonOut(stdoutPipe io.ReadCloser, pythonIn io.WriteCloser, c *Client) {
+func streamPythonOut(stdoutPipe io.ReadCloser, pythonIn io.WriteCloser, c *Client, closeChannel chan string) {
 	buffer := make([]byte, 100, 1000)
 
 	bufferString := ""
 
 	for {
-		n, err := stdoutPipe.Read(buffer)
-		if err == io.EOF {
-			stdoutPipe.Close()
-			break
-		}
-		buffer = buffer[0:n]
 
-		bufferString += string(buffer)
+		select {
+		case command := <-closeChannel:
+			if command == "CLOSE" {
+				return
+			}
 
-		if strings.HasSuffix(bufferString, "\n") {
+		default:
+			for {
+				n, err := stdoutPipe.Read(buffer)
+				if err == io.EOF {
+					stdoutPipe.Close()
+					break
+				}
+				buffer = buffer[0:n]
 
-			// detect whether Python process has outputted new data
-			if len(buffer) > 0 {
+				bufferString += string(buffer)
 
-				newString := bufferString
+				if strings.HasSuffix(bufferString, "\n") {
 
-				// only change bufferSize if ending is #PONG#
-				// print string from b that is size of newBufferLength that starts at oldSize
+					// detect whether Python process has outputted new data
+					if len(buffer) > 0 {
 
-				// check first 7 chars in substring
-				if len(newString) > 6 && newString[:7] == "#PARSE#" {
+						newString := bufferString
 
-					// could receive double JSON message
-					commands := strings.Split(newString, "#PARSE#")
+						// only change bufferSize if ending is #PONG#
+						// print string from b that is size of newBufferLength that starts at oldSize
 
-					// remove first element
-					commands = commands[1:]
+						// check first 7 chars in substring
+						if len(newString) > 6 && newString[:7] == "#PARSE#" {
 
-					for _, e := range commands {
-						c.actions <- []byte(e)
-					}
+							// could receive double JSON message
+							commands := strings.Split(newString, "#PARSE#")
 
-				} else if len(newString) > 5 && newString[:6] == "#DATA#" {
+							// remove first element
+							commands = commands[1:]
 
-					// data receive request
-					cellRangeString := newString[6:]
+							for _, e := range commands {
+								c.actions <- []byte(e)
+							}
 
-					cells := cellRangeToCells(cellRangeString)
+						} else if len(newString) > 5 && newString[:6] == "#DATA#" {
 
-					var commandBuf bytes.Buffer
+							// data receive request
+							cellRangeString := newString[6:]
 
-					for _, e := range cells {
+							cells := cellRangeToCells(cellRangeString)
 
-						valueDv := c.grid.data[e]
-						value := convertToString(valueDv).DataString
-						// for each cell get data
-						commandBuf.WriteString("sheet_data[\"")
-						commandBuf.WriteString(e)
-						commandBuf.WriteString("\"] = ")
+							var commandBuf bytes.Buffer
 
-						if valueDv.ValueType == DynamicValueTypeString {
-							commandBuf.WriteString("\"")
-							commandBuf.WriteString(value)
-							commandBuf.WriteString("\"")
+							for _, e := range cells {
+
+								valueDv := c.grid.data[e]
+								value := convertToString(valueDv).DataString
+								// for each cell get data
+								commandBuf.WriteString("sheet_data[\"")
+								commandBuf.WriteString(e)
+								commandBuf.WriteString("\"] = ")
+
+								if valueDv.ValueType == DynamicValueTypeString {
+									commandBuf.WriteString("\"")
+									commandBuf.WriteString(value)
+									commandBuf.WriteString("\"")
+								} else {
+									commandBuf.WriteString(value)
+								}
+
+								commandBuf.WriteString("\n")
+							}
+							// empty line to finish command
+							commandBuf.WriteString("\n")
+							pythonIn.Write(commandBuf.Bytes())
+
 						} else {
-							commandBuf.WriteString(value)
+
+							if len(newString) > 0 {
+								jsonData := []string{"INTERPRETER"}
+								jsonData = append(jsonData, newString)
+								json, _ := json.Marshal(jsonData)
+								c.send <- json
+							}
 						}
 
-						commandBuf.WriteString("\n")
 					}
-					// empty line to finish command
-					commandBuf.WriteString("\n")
-					pythonIn.Write(commandBuf.Bytes())
 
-				} else {
-
-					if len(newString) > 0 {
-						jsonData := []string{"INTERPRETER"}
-						jsonData = append(jsonData, newString)
-						json, _ := json.Marshal(jsonData)
-						c.send <- json
-					}
+					bufferString = ""
 				}
 
 			}
-
-			bufferString = ""
 		}
-
 	}
 }
 
@@ -150,13 +172,15 @@ func (c *Client) pythonInterpreter() {
 		pythonIn.Close()
 	}()
 
+	closeChannel := make(chan string)
+
 	pythonOut, _ := pythonCmd.StdoutPipe()
 	pythonEOut, _ := pythonCmd.StderrPipe()
 
 	pythonCmd.Start()
 
-	go streamPythonOut(pythonOut, pythonIn, c)
-	go streamPythonEOut(pythonEOut, pythonIn, c)
+	go streamPythonOut(pythonOut, pythonIn, c, closeChannel)
+	go streamPythonEOut(pythonEOut, pythonIn, c, closeChannel)
 
 	for {
 		// read and clean buffer
@@ -165,6 +189,7 @@ func (c *Client) pythonInterpreter() {
 		case command := <-c.commands:
 
 			if command == "CLOSE" {
+				closeChannel <- "CLOSE"
 				fmt.Println("CLOSE received")
 				return
 			}

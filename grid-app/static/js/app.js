@@ -86,6 +86,8 @@
 
 		this.drawRowStart = 0;
 		this.drawColumnStart = 0;
+		this.drawRowEnd = 0;
+		this.drawColumnEnd = 0;
 		
 		this.pixelRatio = window.devicePixelRatio;
 
@@ -184,6 +186,10 @@
 			return index;
 		}
 
+		this.cellZeroIndexToString = function(rowIndex, columnIndex){
+			return this.indexToLetters(columnIndex+1) + (rowIndex+1);
+		}
+
 		this.set_formula = function(position, value, update) {
 			if(!this.dataFormulas[position[0]]){
 				this.dataFormulas[position[0]] = [];
@@ -267,6 +273,9 @@
 
 			// initialize wsManager
 			this.wsManager.init();
+			this.wsManager.onconnect = function(){
+				_this.refreshView();
+			}
 
 			// initialize terminal
 			this.termManager.init();
@@ -675,6 +684,53 @@
 				// console.log(e);
 
 			});
+		}
+
+		this.setSheetSize = function(rows, columns){
+
+			this.numRows = rows;
+			this.numColumns = columns;
+
+			// limit columnWidth and rowHeight to respective rows and columns
+			if(columns < this.columnWidths.length){
+				this.columnWidths = this.columnWidths.slice(0, columns)
+			}else{
+				// generate enough new columnWidths
+				var nToGenerate = columns - this.columnWidths.length;
+				for(var x = 0; x < nToGenerate; x++){
+					this.columnWidths.push(this.cellWidth);
+				}
+			}
+
+			if(rows < this.rowHeights.length){
+				this.rowHeights = this.rowHeights.slice(0, rows)
+			}else{
+				// generate enough new columnHeights
+				var nToGenerate = rows - this.rowHeights.length;
+				for(var x = 0; x < nToGenerate; x++){
+					this.rowHeights.push(this.cellHeight);
+				}
+			}
+
+			this.computeScrollBounds();
+
+			this.sizeSizer();
+
+			this.drawSheet();
+		}
+
+		this.refreshView = function(){
+			
+			// first get the view based on current scroll position 
+			// (horizontally which columns are in view, vertically which rows are in view)
+
+			// send websocket request for this range
+			var cellIndexStringStart = this.cellZeroIndexToString(this.drawRowStart, this.drawColumnStart);
+			var cellIndexStringEnd = this.cellZeroIndexToString(this.drawRowEnd, this.drawColumnEnd);
+
+			var rangeString = cellIndexStringStart + ":" + cellIndexStringEnd;
+
+			this.wsManager.send('{"arguments":["GET","'+rangeString+'"]}')
 		}
 
 		this.deselect_input_field = function(set_values){
@@ -1262,7 +1318,7 @@
 			input.click();
 		}
 		
-		this.uploadFile = function(){
+		this.uploadCSV = function(){
 				
 			var input = $(this.dom).find('menu-item.load-csv input');
 			
@@ -1366,7 +1422,7 @@
 			var input = $(this.dom).find('menu-item.load-csv input');
 			
 			input[0].addEventListener('change', function(e){
-				_this.uploadFile();
+				_this.uploadCSV();
 				console.log(e);
 			})
 			
@@ -1753,11 +1809,10 @@
 			var drawRowStart = Math.round(rowPercentage * this.finalRow);
 			var drawColumnStart = Math.round(columnPercentage * this.finalColumn);
 
-			this.drawRowStart = drawRowStart;
-			this.drawColumnStart = drawColumnStart;
+			
 
 			for(var x = 0; x < this.numColumns; x++){
-				if(x == this.drawColumnStart){
+				if(x == drawColumnStart){
 					break;
 				}
 				measureWidth += this.columnWidths[x];
@@ -1765,7 +1820,7 @@
 			}
 
 			for(var x = 0; x < this.numRows; x++){
-				if(x == this.drawRowStart){
+				if(x == drawRowStart){
 					break;
 				}
 				measureHeight += this.rowHeights[x];
@@ -1845,6 +1900,37 @@
 
 			// this render highlight
 			this.renderHighlights();
+
+			// if drawRow(Start/End) or drawColumn(Start/End) changes, refresh whole view
+
+			// TODO: make refresh view partial!
+			var viewInvalidated = false;
+			if(this.drawRowStart != drawRowStart){
+				viewInvalidated = true;
+			}
+			if(this.drawColumnStart != drawColumnStart){
+				viewInvalidated = true;
+			}
+
+			if(this.drawRowEnd != i){
+				viewInvalidated = true;
+			}
+			if(this.drawColumnEnd != d){
+				viewInvalidated = true;
+			}
+			
+			
+			this.drawRowStart = drawRowStart;
+			this.drawColumnStart = drawColumnStart;
+			this.drawRowEnd = i;
+			this.drawColumnEnd = d;
+
+			// only refresh AFTER global state has updated to new drawRow/Column indexes
+			// new values need to be used in refreshView call
+
+			if(viewInvalidated){
+				this.refreshView();
+			}
 
 			// render cell data
 			this.renderCells(drawRowStart, drawColumnStart, i, d, firstCellHeightOffset, firstCellWidthOffset);

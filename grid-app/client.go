@@ -57,8 +57,10 @@ type Client struct {
 }
 
 type Grid struct {
-	data       map[string]DynamicValue
-	dirtyCells map[string]DynamicValue
+	data        map[string]DynamicValue
+	dirtyCells  map[string]DynamicValue
+	rowCount    int
+	columnCount int
 }
 
 // readPump pumps messages from the websocket connection to the hub (?)
@@ -193,6 +195,26 @@ func computeDirtyCells(grid *Grid, cellsToSend *[][]string) {
 	}
 }
 
+func sendCells(cellsToSend *[][]string, c *Client) {
+
+	jsonData := []string{"SET"}
+
+	// send all dirty cells
+	for _, e := range *cellsToSend {
+		jsonData = append(jsonData, e[0], e[1], e[2])
+	}
+
+	json, _ := json.Marshal(jsonData)
+	c.send <- json
+
+}
+
+func sendSheetSize(rowCount int, columnCount int, c *Client) {
+	jsonData := []string{"SHEETSIZE", strconv.Itoa(rowCount), strconv.Itoa(columnCount)}
+	json, _ := json.Marshal(jsonData)
+	c.send <- json
+}
+
 func computeAndSend(grid *Grid, c *Client) {
 
 	cellsToSend := [][]string{}
@@ -200,16 +222,26 @@ func computeAndSend(grid *Grid, c *Client) {
 	// compute dirty cells as a result of adding a cell above
 	computeDirtyCells(grid, &cellsToSend)
 
-	jsonData := []string{"SET"}
+	sendCells(&cellsToSend, c)
 
-	// send all dirty cells
-	for _, e := range cellsToSend {
-		jsonData = append(jsonData, e[0], e[1], e[2])
+}
+
+func sendCellsInRange(cellRange string, grid *Grid, c *Client) {
+
+	cells := cellRangeToCells(cellRange)
+
+	cellsToSend := [][]string{}
+
+	for _, refString := range cells {
+		dv := grid.data[refString]
+
+		// cell to string
+		stringAfter := convertToString(dv)
+
+		cellsToSend = append(cellsToSend, []string{refString, stringAfter.DataString, dv.DataFormula})
 	}
 
-	json, _ := json.Marshal(jsonData)
-	c.send <- json
-
+	sendCells(&cellsToSend, c)
 }
 
 func (c *Client) writePump() {
@@ -219,15 +251,21 @@ func (c *Client) writePump() {
 	columnCount := 26
 	rowCount := 10000
 
-	grid := Grid{data: make(map[string]DynamicValue), dirtyCells: make(map[string]DynamicValue)}
+	grid := Grid{data: make(map[string]DynamicValue), dirtyCells: make(map[string]DynamicValue), rowCount: rowCount, columnCount: columnCount}
 
 	c.grid = &grid
+
+	cellCount := 1
 
 	for x := 1; x <= columnCount; x++ {
 		for y := 1; y <= rowCount; y++ {
 			dv := makeDv("")
-			dv.ValueType = DynamicValueTypeString
+			dv.ValueType = DynamicValueTypeInteger
+			dv.DataInteger = int32(cellCount)
+			dv.DataFormula = strconv.Itoa(cellCount)
 			grid.data[indexToLetters(x)+strconv.Itoa(y)] = dv
+
+			cellCount++
 		}
 	}
 
@@ -374,6 +412,9 @@ func (c *Client) writePump() {
 					computeAndSend(&grid, c)
 
 				}
+			case "GET":
+
+				sendCellsInRange(parsed[1], &grid, c)
 
 			case "SET":
 
@@ -465,6 +506,7 @@ func (c *Client) writePump() {
 				fmt.Println("Received CSV: " + parsed[1])
 
 				// TODO: grow the grid to minimum size
+				minColumnSize := 0
 
 				// replace \r to \n
 				csvString := strings.Replace(parsed[1], "\r", "\n", -1)
@@ -473,6 +515,7 @@ func (c *Client) writePump() {
 
 				reader.Comma = ','
 				lineCount := 0
+
 				for {
 					// read just one record, but we could ReadAll() as well
 					record, err := reader.Read()
@@ -486,14 +529,16 @@ func (c *Client) writePump() {
 					// record is an array of string so is directly printable
 					fmt.Println("Record", lineCount, "is", record, "and has", len(record), "fields")
 
+					if minColumnSize == 0 {
+						minColumnSize = len(record)
+					}
+
 					// and we can iterate on top of that
 					for i := 0; i < len(record); i++ {
 						fmt.Println(" ", record[i])
 
 						// for now load CSV file to upper left cell, starting at A1
 						cellIndex := indexToLetters(i+1) + strconv.Itoa(lineCount+1)
-
-						oldDv := grid.data[cellIndex]
 
 						inputString := record[i]
 
@@ -503,14 +548,23 @@ func (c *Client) writePump() {
 						}
 
 						newDv := makeDv(inputString)
-						newDv.DependOut = oldDv.DependOut // regain external dependencies
+
+						oldDv := grid.data[cellIndex]
+						if oldDv.DependOut != nil {
+							newDv.DependOut = oldDv.DependOut // regain external dependencies, in case of oldDv
+						}
 
 						// this will add it to dirtyCells for re-compute
 						grid.data[cellIndex] = setDependencies(cellIndex, newDv, &grid)
 					}
 					fmt.Println()
 					lineCount++
+
 				}
+
+				minRowSize := lineCount
+
+				sendSheetSize(minRowSize, minColumnSize, c)
 
 				computeAndSend(&grid, c)
 			}

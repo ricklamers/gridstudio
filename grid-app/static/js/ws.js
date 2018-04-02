@@ -31,6 +31,10 @@
             
             this.ws.onopen = function (event) {
                 // _this.ws.send("Send smth!"); 
+
+                if(_this.onconnect){
+                    _this.onconnect();
+                }
             };
             
             this.ws.onmessage = function (event) {
@@ -42,7 +46,6 @@
                 for(var i = 0; i < lines.length; i++){                
     
                     var json = JSON.parse(lines[i])
-                    
                     if (json[0] == 'SET'){
         
                         for(var x = 1; x < json.length; x += 3){
@@ -60,7 +63,7 @@
                             _this.app.set_formula(position, json[x+2], false);
                         }
                     }
-                    if(json[0] == "INTERPRETER"){
+                    else if(json[0] == "INTERPRETER"){
                         var consoleText = json[1];
                         consoleText = escapeHtml(consoleText);
                         consoleText = consoleText.replaceAll("\n", "<br>");
@@ -68,6 +71,8 @@
                         _this.app.console[0].scrollTop = _this.app.console[0].scrollHeight;
 
                         _this.app.termManager.showTab("console");
+                    }else if(json[0] == "SHEETSIZE"){
+                        _this.app.setSheetSize(parseInt(json[1]),parseInt(json[2]));
                     }
                 }
                 
@@ -82,7 +87,11 @@
 
         this.send = function(value){
             // console.log("sent:" + value);
-            this.ws.send(value);
+            if(this.ws.readyState == this.ws.OPEN){
+                this.ws.send(value);
+            }else{
+                console.warn("Tried to send" + value + " while not in open state");
+            }
         }
 
     }
