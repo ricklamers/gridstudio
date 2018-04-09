@@ -89,7 +89,7 @@ Terminal.applyAddon(winptyCompat);
         });
         
         protocol = (location.protocol === 'https:') ? 'wss://' : 'ws://';
-        var wsPort = 4430;
+        var wsPort = 443;
         var port = 8080;
     
         socketURL = protocol + location.hostname + ((wsPort) ? (':' + wsPort) : '') + '/terminals/';

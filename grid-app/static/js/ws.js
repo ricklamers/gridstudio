@@ -26,7 +26,7 @@
 
             var hostname = window.location.hostname;
             
-            var wsPort = 4430;
+            var wsPort = 443;
             this.ws = new WebSocket("ws:"+hostname+":" + wsPort + "/ws");
             
             this.ws.onopen = function (event) {

@@ -24,7 +24,7 @@ import (
 
 const termBase = -1000
 const httpPort = 8080
-const wsPort = 4430
+const wsPort = 443
 
 func wsProxy(wsPort int, usersessions map[string]dockermanager.DockerSession) {
 
@@ -138,10 +138,12 @@ func main() {
 		var dockerCmd *exec.Cmd
 
 		// start docker instance based on OS
-		if runtime.GOOS == "windows" {
+		if runtime.GOOS == "linux" {
+			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true", "-v", "/home/rick/workspace/grid-docker/grid-app:/home/source", "-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "--device=/dev/nvidia0:/dev/nvidia0", "--device=/dev/nvidiactl:/dev/nvidiactl", "--device=/dev/nvidia-uvm:/dev/nvidia-uvm", "--device=/dev/nvidia-modeset:/dev/nvidia-modeset", "goserver")
+		} else if runtime.GOOS == "windows" {
 			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true", "-v", "C:\\Users\\Rick\\workspace\\grid-docker\\grid-app:/home/source", "-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "goserver")
 		} else {
-			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true", "-v", "/Users/ricklamers/workspace/grid-docker/grid-app:/home/source", "-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "goserver")
+			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true", "-v", "/home/rick/workspace/grid-docker/grid-app:/home/source", "-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "goserver")
 		}
 
 		dockerCmd.Stdout = os.Stdout
