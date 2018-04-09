@@ -13,27 +13,12 @@ import (
 
 var addr = flag.String("addr", ":8080", "http service address")
 
-var grid map[string]cell
-
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile `file`")
 var memprofile = flag.String("memprofile", "", "write memory profile to `file`")
 
 func main() {
 
 	// initialize map
-	// grid = map[string]cell{}
-
-	// x := 0
-	// for {
-	// 	set("0:"+strconv.Itoa(x), cell{CellType: CellTypeFloat, DataFloat: 100})
-
-	// 	if x == 100 {
-	// 		break
-	// 	}
-	// 	x = x + 1
-	// }
-
-	// fmt.Println(get("0:" + strconv.Itoa(x)))
 
 	// PROFILING //
 	// flag.Parse()
@@ -53,33 +38,6 @@ func main() {
 
 	parseInit()
 
-	// var input string
-
-	// if len(os.Args) == 2 && os.Args[1] == "test" {
-
-	// testIndex := 1
-
-	// assert(convertToString(parse(createDv("A2"))).DataString, "2", &testIndex)
-	// assert(convertToString(parse(createDv("A2+A3/A5"))).DataString, "2.6", &testIndex)
-
-	// } else {
-
-	// no commands start server
-	// if len(os.Args) < 2 {
-	// input = "AVERAGE(2,SUM(2,4))"
-
-	// } else {
-	// single command start server
-	// input = os.Args[1]
-
-	// var dv DynamicValue
-
-	// dv = parse(createDv(input))
-	// fmt.Println(convertToString(dv).DataString)
-	// }
-
-	// }
-
 	fs := http.FileServer(http.Dir("static"))
 
 	// withoutGz := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -90,6 +48,10 @@ func main() {
 	withGz := gziphandler.GzipHandler(fs)
 
 	http.Handle("/", withGz)
+
+	http.HandleFunc("/upcheck", func(w http.ResponseWriter, r *http.Request) {
+
+	})
 
 	http.HandleFunc("/uploadFile", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("upload method:", r.Method)
@@ -166,11 +128,4 @@ func assert(value string, expected string, testID *int) {
 	}
 	// increment test number
 	*testID++
-}
-
-func set(index string, value cell) {
-	grid[index] = value
-}
-func get(index string) cell {
-	return grid[index]
 }

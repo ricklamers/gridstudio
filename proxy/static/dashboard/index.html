@@ -1,12 +1,9 @@
-<!DOCTYPE html>
-<html>
-    <head>
-        <title>Grid dashboard</title>
-    </head>
-    <body>
-        <h2>Start Grid workspace</h2>
-        <form method="get" action="/create">
-            <button>Open new workspace</button>
-        </form>
-    </body>
-</html>
+<h2>Start Grid workspace</h2>
+<form method="post" action="/initialize">
+    <button>Open new workspace</button>
+</form>
+
+<h2>Existing workspaces</h2>
+<div class='workspace-list'>Loading...</div>
+
+<a href="/logout">Logout</a>

@@ -257,10 +257,10 @@
 			this.ctx.scale(this.pixelRatio,this.pixelRatio);
 
 			// determine width based on columnWidths
-			var sizerWidth = this.columnWidths.reduce(function(total, num){ return total + num; }, 0);
+			var sizerWidth = this.columnWidths.reduce(function(total, num){ return total + num; }, 0) + this.sidebarSize;
 
 			// determine height based on rowHeights
-			var sizerHeight = this.rowHeights.reduce(function(total, num){ return total + num; }, 0);
+			var sizerHeight = this.rowHeights.reduce(function(total, num){ return total + num; }, 0) + this.sidebarSize;
 
 			this.sheetSizer.style.height = sizerHeight + "px";
 			this.sheetSizer.style.width = sizerWidth + "px";
@@ -2108,9 +2108,10 @@
 
 				this.ctx.textAlign = 'center';
 				var centerOffset = this.sidebarSize/2;
-				var centeringOffset = ((this.rowHeights[i] + 2 - this.fontHeight)/2) + 1;
-
+				var centeringOffset = ((this.rowHeights[i] + 2 - (this.fontHeight-3))/2) + 1;
+				this.ctx.font = "9px Arial";
 				this.ctx.fillText(i+1, firstCellWidthOffset + centerOffset, currentY + firstCellHeightOffset + this.sidebarSize + centeringOffset);
+				this.ctx.font = this.fontStyle;
 
 				currentY += this.rowHeights[i];
 

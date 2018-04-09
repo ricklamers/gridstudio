@@ -81,7 +81,22 @@ func (w *WebsocketProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		websocketPort = ds.TermPort
 	}
 
-	backendURL, err := url.Parse("ws://127.0.0.1:" + strconv.Itoa(websocketPort) + req.RequestURI)
+	// Web socket URL request filtering/directing
+	splitUrl := strings.Split(req.URL.Path, "/")
+
+	if len(splitUrl) < 3 {
+		return
+	}
+	uuid := splitUrl[2]
+
+	requestString := req.RequestURI
+	workspacePrefix := "workspace/" + uuid + "/"
+
+	if strings.Contains(requestString, workspacePrefix) {
+		requestString = strings.Replace(requestString, workspacePrefix, "", -1)
+	}
+
+	backendURL, err := url.Parse("ws://127.0.0.1:" + strconv.Itoa(websocketPort) + requestString)
 	if err != nil {
 		log.Fatal(err)
 	}
