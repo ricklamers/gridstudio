@@ -102,6 +102,16 @@ func streamPythonOut(stdoutPipe io.ReadCloser, pythonIn io.WriteCloser, c *Clien
 								c.actions <- []byte(e)
 							}
 
+						} else if len(newString) > 6 && newString[:7] == "#IMAGE#" {
+							commands := strings.Split(newString, "#IMAGE#")
+
+							// remove first element
+							commands = commands[1:2]
+
+							// send JSON bytes directly to client websocket connection
+							for _, e := range commands {
+								c.send <- []byte(e)
+							}
 						} else if len(newString) > 5 && newString[:6] == "#DATA#" {
 
 							// data receive request

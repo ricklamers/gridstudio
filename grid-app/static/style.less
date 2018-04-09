@@ -191,6 +191,20 @@ body{
 		border-top: 1px solid #bbb;
 		z-index: 999;
 
+		.plots {
+			display: flex;
+			justify-content: center;
+			align-content: center;
+			height: 100%;
+			
+			img{
+				width: 100%;
+				height: 100%;
+				object-fit: contain;
+				overflow: hidden;
+			}
+		}
+
 		.terminal, .console {
 			height: 100%;
 		}

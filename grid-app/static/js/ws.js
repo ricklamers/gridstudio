@@ -44,36 +44,47 @@
                 lines = lines.split("\n");
     
                 for(var i = 0; i < lines.length; i++){                
-    
-                    var json = JSON.parse(lines[i])
-                    if (json[0] == 'SET'){
-        
-                        for(var x = 1; x < json.length; x += 3){
-                            var rowText = json[x].replace(/^\D+/g, '');
-                            var rowNumber = parseInt(rowText)-1;
-            
-                            var columnText = json[x].replace(rowText, '');
-                            var columnNumber = _this.app.lettersToIndex(columnText)-1;
-            
-                            var position = [rowNumber, columnNumber];
-                            _this.app.set(position,json[x+1]);
-                            
-                            // make sure to not trigger a re-send
-                            // filter empty response
-                            _this.app.set_formula(position, json[x+2], false);
-                        }
-                    }
-                    else if(json[0] == "INTERPRETER"){
-                        var consoleText = json[1];
-                        consoleText = escapeHtml(consoleText);
-                        consoleText = consoleText.replaceAll("\n", "<br>");
-                        _this.app.console.append("<div class='message'>" + consoleText + "</div>");
-                        _this.app.console[0].scrollTop = _this.app.console[0].scrollHeight;
+                    console.warn("Got back multiple lines in one onmessage event");
+                }
 
-                        _this.app.termManager.showTab("console");
-                    }else if(json[0] == "SHEETSIZE"){
-                        _this.app.setSheetSize(parseInt(json[1]),parseInt(json[2]));
+                var json = JSON.parse(event.data);
+
+                if (json[0] == 'SET'){
+    
+                    for(var x = 1; x < json.length; x += 3){
+                        var rowText = json[x].replace(/^\D+/g, '');
+                        var rowNumber = parseInt(rowText)-1;
+        
+                        var columnText = json[x].replace(rowText, '');
+                        var columnNumber = _this.app.lettersToIndex(columnText)-1;
+        
+                        var position = [rowNumber, columnNumber];
+                        _this.app.set(position,json[x+1]);
+                        
+                        // make sure to not trigger a re-send
+                        // filter empty response
+                        _this.app.set_formula(position, json[x+2], false);
                     }
+                }
+                else if(json[0] == "INTERPRETER"){
+                    var consoleText = json[1];
+                    consoleText = escapeHtml(consoleText);
+                    consoleText = consoleText.replaceAll("\n", "<br>");
+                    _this.app.console.append("<div class='message'>" + consoleText + "</div>");
+                    _this.app.console[0].scrollTop = _this.app.console[0].scrollHeight;
+
+                    _this.app.termManager.showTab("console");
+                }else if(json[0] == "SHEETSIZE"){
+                    _this.app.setSheetSize(parseInt(json[1]),parseInt(json[2]));
+                }
+                else if(json.arguments && json.arguments[0] == "IMAGE"){
+                    
+                    var img = document.createElement('img');
+                    img.src = "data:image/png;base64, " + json.arguments[1];
+                    $(".dev-tabs .plots").append(img);
+
+                    _this.app.termManager.showTab("plots");
+                    
                 }
                 
                 // re-render on receive data

@@ -14,6 +14,17 @@ def cell(cell, value = None):
         sheet(cell_range)
         return sheet_data[cell]
 
+def plot():
+    plt.savefig("tmp.png")
+    with open("tmp.png", "rb") as image_file:
+        encoded_string = base64.b64encode(image_file.read())
+
+    image_string = str(encoded_string)
+    data = {'arguments': ["IMAGE", image_string[2:len(image_string)-1]]}
+    data = ''.join(['#IMAGE#', json.dumps(data)])
+
+    print(data, flush=True)
+
 def getReferenceRowIndex(reference):
     return int(re.findall(r'\d+', reference)[0])
 
