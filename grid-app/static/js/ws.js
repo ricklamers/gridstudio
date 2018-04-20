@@ -81,7 +81,7 @@
                     
                     var img = document.createElement('img');
                     img.src = "data:image/png;base64, " + json.arguments[1];
-                    $(".dev-tabs .plots").append(img);
+                    $(".dev-tabs .plots").html(img);
 
                     _this.app.termManager.showTab("plots");
                     
