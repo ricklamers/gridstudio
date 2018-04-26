@@ -266,6 +266,27 @@
 			this.sheetSizer.style.width = sizerWidth + "px";
 		}
 
+		this.initImagePlotTab = function(){
+
+			$(document).on('click','.full-plot', function(){
+				$(this).remove();
+			});
+
+			$(document).on('keydown', function(e){
+				if(e.keyCode == 27){
+					if($('.full-plot').length > 0){
+						$('.full-plot').remove();
+					}
+				}
+			});
+
+			$(".dev-tabs .plots").on('click', 'img', function(){
+				// create full screen image
+				var image_data = $(this).attr('src');
+				$('body').append("<div class='full-plot'><img title='Click to close' src='"+image_data+"' /></div>");
+			});
+		}
+
 		this.init = function(){
 			
 			// initialize editor
@@ -286,6 +307,8 @@
 			this.init_input();
 			
 			this.initRowCols();
+
+			this.initImagePlotTab();
 
 			this.sheetSizer.appendChild(this.canvas);
 			this.sizeSizer();
@@ -1396,6 +1419,14 @@
 
 			menu.find('menu-item.about').click(function(){
 				alert("This is a web-based Spreadsheet program built by R. Lamers");
+			});
+
+			menu.find('menu-item.close-workspace').click(function(e){
+				e.preventDefault();
+				
+				var currentUrl = window.location.href;
+				var newUrl = currentUrl.replace("/workspace/","/destruct/");
+				window.location.href = newUrl;
 			});
 
 			menu.find('menu-item.plot-scatter').click(function(){

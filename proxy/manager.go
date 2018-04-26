@@ -199,7 +199,7 @@ func main() {
 	usersessions = make(map[string]dockermanager.DockerSession)
 	usedports = make(map[int]bool)
 
-	db, err := sql.Open("mysql", "root:@/grid")
+	db, err := sql.Open("mysql", "root:manneomanneo@/grid")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -241,7 +241,7 @@ func main() {
 			io.WriteString(h, password+constPasswordSalt)
 			passwordHashed := base64.URLEncoding.EncodeToString(h.Sum(nil))
 
-			// fmt.Println("Hashed PW: " + passwordHashed)
+			fmt.Println("Hashed PW: " + passwordHashed)
 
 			// check token validity
 			rows, err := db.Query("SELECT id FROM users WHERE email = ? AND password = ?", email, passwordHashed)
@@ -279,6 +279,20 @@ func main() {
 
 		io.WriteString(w, renderTemplate("static/dashboard/login.html"))
 
+	})
+
+	http.HandleFunc("/static/", func(w http.ResponseWriter, r *http.Request) {
+
+		fileString := "static/home" + strings.Replace(r.URL.Path, "static/", "", -1)
+
+		// fmt.Println("Serving static file: " + fileString)
+
+		http.ServeFile(w, r, fileString)
+
+	})
+
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "static/home/index.html")
 	})
 
 	http.HandleFunc("/dashboard/", func(w http.ResponseWriter, r *http.Request) {

@@ -43,47 +43,65 @@
     
                 lines = lines.split("\n");
     
-                for(var i = 0; i < lines.length; i++){                
-                    console.warn("Got back multiple lines in one onmessage event");
-                }
+                // DEBUGINFO
+                // if(lines.length > 1){
+                //     console.warn("Got back multiple lines in one onmessage event");
+                //     console.log(lines);
+                // }
 
-                var json = JSON.parse(event.data);
+                for(var x = 0; x < lines.length; x++){
 
-                if (json[0] == 'SET'){
-    
-                    for(var x = 1; x < json.length; x += 3){
-                        var rowText = json[x].replace(/^\D+/g, '');
-                        var rowNumber = parseInt(rowText)-1;
-        
-                        var columnText = json[x].replace(rowText, '');
-                        var columnNumber = _this.app.lettersToIndex(columnText)-1;
-        
-                        var position = [rowNumber, columnNumber];
-                        _this.app.set(position,json[x+1]);
-                        
-                        // make sure to not trigger a re-send
-                        // filter empty response
-                        _this.app.set_formula(position, json[x+2], false);
+                    // check for empty trailing newlines in websocket messages
+                    if(lines[x].length > 0){
+
+                        var json = JSON.parse(lines[x]);
+
+                        if (json[0] == 'SET'){
+            
+                            for(var x = 1; x < json.length; x += 3){
+                                var rowText = json[x].replace(/^\D+/g, '');
+                                var rowNumber = parseInt(rowText)-1;
+                
+                                var columnText = json[x].replace(rowText, '');
+                                var columnNumber = _this.app.lettersToIndex(columnText)-1;
+                
+                                var position = [rowNumber, columnNumber];
+                                _this.app.set(position,json[x+1]);
+                                
+                                // make sure to not trigger a re-send
+                                // filter empty response
+                                _this.app.set_formula(position, json[x+2], false);
+                            }
+                        }
+                        else if(json[0] == "INTERPRETER"){
+                            var consoleText = json[1];
+                            consoleText = escapeHtml(consoleText);
+                            consoleText = consoleText.replaceAll("\n", "<br>");
+
+                            if(consoleText.indexOf("[error]") != -1){
+                                consoleText = consoleText.replace("[error]","");
+                                _this.app.console.append("<div class='message error'>" + consoleText + "</div>");
+                            }else{
+                                _this.app.console.append("<div class='message'>" + consoleText + "</div>");
+                            }
+                            _this.app.console[0].scrollTop = _this.app.console[0].scrollHeight;
+
+                            _this.app.termManager.showTab("console");
+                        }else if(json[0] == "SHEETSIZE"){
+                            _this.app.setSheetSize(parseInt(json[1]),parseInt(json[2]));
+                        }
+                        else if(json.arguments && json.arguments[0] == "IMAGE"){
+                            
+                            var img = document.createElement('img');
+                            img.setAttribute("title","Click to enlarge");
+                            img.src = "data:image/png;base64, " + json.arguments[1];
+                            $(".dev-tabs .plots").html(img);
+
+                            _this.app.termManager.showTab("plots");
+                            
+                        }
+
                     }
-                }
-                else if(json[0] == "INTERPRETER"){
-                    var consoleText = json[1];
-                    consoleText = escapeHtml(consoleText);
-                    consoleText = consoleText.replaceAll("\n", "<br>");
-                    _this.app.console.append("<div class='message'>" + consoleText + "</div>");
-                    _this.app.console[0].scrollTop = _this.app.console[0].scrollHeight;
-
-                    _this.app.termManager.showTab("console");
-                }else if(json[0] == "SHEETSIZE"){
-                    _this.app.setSheetSize(parseInt(json[1]),parseInt(json[2]));
-                }
-                else if(json.arguments && json.arguments[0] == "IMAGE"){
-                    
-                    var img = document.createElement('img');
-                    img.src = "data:image/png;base64, " + json.arguments[1];
-                    $(".dev-tabs .plots").html(img);
-
-                    _this.app.termManager.showTab("plots");
                     
                 }
                 

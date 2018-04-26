@@ -209,8 +209,8 @@ func sendCells(cellsToSend *[][]string, c *Client) {
 
 }
 
-func sendSheetSize(rowCount int, columnCount int, c *Client) {
-	jsonData := []string{"SHEETSIZE", strconv.Itoa(rowCount), strconv.Itoa(columnCount)}
+func sendSheetSize(c *Client, grid *Grid) {
+	jsonData := []string{"SHEETSIZE", strconv.Itoa(grid.rowCount), strconv.Itoa(grid.columnCount)}
 	json, _ := json.Marshal(jsonData)
 	c.send <- json
 }
@@ -260,9 +260,9 @@ func (c *Client) writePump() {
 	for x := 1; x <= columnCount; x++ {
 		for y := 1; y <= rowCount; y++ {
 			dv := makeDv("")
-			dv.ValueType = DynamicValueTypeInteger
-			dv.DataInteger = int32(cellCount)
-			dv.DataFormula = strconv.Itoa(cellCount)
+			// dv.ValueType = DynamicValueTypeInteger
+			// dv.DataInteger = int32(cellCount)
+			// dv.DataFormula = strconv.Itoa(cellCount)
 			grid.data[indexToLetters(x)+strconv.Itoa(y)] = dv
 
 			cellCount++
@@ -564,8 +564,20 @@ func (c *Client) writePump() {
 
 				minRowSize := lineCount
 
-				sendSheetSize(minRowSize, minColumnSize, c)
+				newRowCount := grid.rowCount
+				newColumnCount := grid.columnCount
 
+				if minRowSize > grid.rowCount {
+					newRowCount = minRowSize
+				}
+				if minColumnSize > grid.columnCount {
+					newColumnCount = minColumnSize
+				}
+
+				grid.rowCount = newRowCount
+				grid.columnCount = newColumnCount
+
+				sendSheetSize(c, &grid)
 				computeAndSend(&grid, c)
 			}
 

@@ -1,6 +1,11 @@
 import json
 import traceback
 import re
+import matplotlib
+matplotlib.use('Agg')
+
+import base64
+import matplotlib.pyplot as plt
 
 sheet_data = {}
 

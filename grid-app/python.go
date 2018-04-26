@@ -43,7 +43,7 @@ func streamPythonEOut(stdoutPipe io.ReadCloser, pythonIn io.WriteCloser, c *Clie
 				errorString := bufferString
 
 				jsonData := []string{"INTERPRETER"}
-				jsonData = append(jsonData, "Error: "+errorString)
+				jsonData = append(jsonData, "[error]"+errorString)
 				json, _ := json.Marshal(jsonData)
 				c.send <- json
 

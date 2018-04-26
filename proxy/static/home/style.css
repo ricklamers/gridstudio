@@ -1,0 +1,65 @@
+* {
+  margin: 0;
+  padding: 0;
+}
+html,
+body {
+  font-family: "Arial", sans-serif;
+  font-size: 14px;
+  height: 100%;
+  box-sizing: border-box;
+}
+h2 {
+  font-weight: normal;
+}
+a.back {
+  text-decoration: none;
+  margin-bottom: 20px;
+  display: inline-block;
+}
+.new-workspace-form {
+  margin-bottom: 30px;
+}
+.workspace-list li {
+  padding: 10px;
+  margin-bottom: 10px;
+  list-style: none;
+  display: inline-block;
+  background: #eee;
+}
+.workspace-list li button {
+  margin-left: 20px;
+}
+body {
+  padding: 20px;
+}
+h1,
+h2 {
+  margin-bottom: 20px;
+}
+.workspace-list form {
+  display: inline-block;
+}
+input,
+button {
+  padding: 5px 10px;
+}
+input {
+  margin-bottom: 10px;
+}
+a {
+  color: royalblue;
+}
+body {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+}
+h2.title {
+  margin-bottom: 20px;
+  font-size: 42px;
+}
+button {
+  padding: 5px 10px;
+}
