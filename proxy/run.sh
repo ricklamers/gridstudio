@@ -1,2 +1,8 @@
 go build manager.go
-sudo ./manager
+
+if [[ "$OSTYPE" == "msys" ]]; then
+	./manager.exe
+else
+	sudo ./manager
+fi
+

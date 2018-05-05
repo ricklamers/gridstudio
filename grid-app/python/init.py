@@ -143,7 +143,7 @@ def sheet(cell_range, data = None):
     # get data from sheet
     else:
         #convert non-range to range for get operation
-        if ":" in cell_range:
+        if ":" not in cell_range:
             cell_range = ':'.join([cell_range, cell_range])
 
         # in blocking fashion get latest data of range from Go

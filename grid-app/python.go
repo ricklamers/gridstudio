@@ -135,7 +135,11 @@ func streamPythonOut(stdoutPipe io.ReadCloser, pythonIn io.WriteCloser, c *Clien
 									commandBuf.WriteString(value)
 									commandBuf.WriteString("\"")
 								} else {
-									commandBuf.WriteString(value)
+									if len(value) == 0 {
+										commandBuf.WriteString("\"\"")
+									} else {
+										commandBuf.WriteString(value)
+									}
 								}
 
 								commandBuf.WriteString("\n")

@@ -43,6 +43,18 @@ var maxOperatorSize int
 var operatorsBroken []map[string]int
 var breakChars []string
 
+func makeEmptyDv() DynamicValue {
+	dv := DynamicValue{}
+
+	DependIn := make(map[string]bool)
+	DependOut := make(map[string]bool)
+
+	dv.DependIn = &DependIn
+	dv.DependOut = &DependOut
+
+	return dv
+}
+
 func makeDv(formula string) DynamicValue {
 	dv := DynamicValue{ValueType: DynamicValueTypeFormula, DataFormula: formula}
 
@@ -378,6 +390,8 @@ func referencesToUpperCase(formula string) string {
 func cellRangeToCells(reference string) []string {
 	references := []string{}
 
+	fmt.Println(reference)
+
 	cells := strings.Split(reference, ":")
 
 	cell1Row := getReferenceRowIndex(cells[0])
@@ -385,6 +399,21 @@ func cellRangeToCells(reference string) []string {
 
 	cell1Column := getReferenceColumnIndex(cells[0])
 	cell2Column := getReferenceColumnIndex(cells[1])
+
+	// illegal argument, cell1Row should always be lower
+	if cell1Row > cell2Row {
+		return references
+	}
+	// illegal argument, cell1Column should always be lower
+	if cell1Column > cell2Column {
+		return references
+	}
+
+	// all equals means just one cell, example: A1:A2
+	// if cell1Row == cell2Row && cell1Column == cell2Column {
+	// 	references = append(references, indexToLetters(cell1Column)+strconv.Itoa(cell1Row))
+	// 	return references
+	// }
 
 	for x := cell1Column; x <= cell2Column; x++ {
 		for y := cell1Row; y <= cell2Row; y++ {

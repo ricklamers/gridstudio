@@ -89,7 +89,11 @@ func (c *Client) readPump() {
 
 		messageString := string(message)
 
-		fmt.Println("Received WS message: " + messageString)
+		if len(messageString) > 100 {
+			fmt.Println("Received WS message: " + messageString[:100] + "... [truncated]")
+		} else {
+			fmt.Println("Received WS message: " + messageString)
+		}
 
 		// check if command or code
 		if messageString[:7] == "#PARSE#" {
@@ -260,9 +264,12 @@ func (c *Client) writePump() {
 	for x := 1; x <= columnCount; x++ {
 		for y := 1; y <= rowCount; y++ {
 			dv := makeDv("")
+
+			// DEBUG: fill with incrementing numbers
 			// dv.ValueType = DynamicValueTypeInteger
 			// dv.DataInteger = int32(cellCount)
 			// dv.DataFormula = strconv.Itoa(cellCount)
+
 			grid.data[indexToLetters(x)+strconv.Itoa(y)] = dv
 
 			cellCount++
@@ -503,7 +510,7 @@ func (c *Client) writePump() {
 
 				computeAndSend(&grid, c)
 			case "CSV":
-				fmt.Println("Received CSV: " + parsed[1])
+				fmt.Println("Received CSV! Size: " + strconv.Itoa(len(parsed[1])))
 
 				// TODO: grow the grid to minimum size
 				minColumnSize := 0
@@ -527,7 +534,7 @@ func (c *Client) writePump() {
 						return
 					}
 					// record is an array of string so is directly printable
-					fmt.Println("Record", lineCount, "is", record, "and has", len(record), "fields")
+					// fmt.Println("Record", lineCount, "is", record, "and has", len(record), "fields")
 
 					if minColumnSize == 0 {
 						minColumnSize = len(record)
@@ -535,19 +542,32 @@ func (c *Client) writePump() {
 
 					// and we can iterate on top of that
 					for i := 0; i < len(record); i++ {
-						fmt.Println(" ", record[i])
+						// fmt.Println(" ", record[i])
 
 						// for now load CSV file to upper left cell, starting at A1
 						cellIndex := indexToLetters(i+1) + strconv.Itoa(lineCount+1)
 
 						inputString := record[i]
 
+						newDv := makeEmptyDv()
+
+						newDv.DataFormula = inputString
+
 						// if not number, escape with quotes
 						if !numberOnlyFilter.MatchString(inputString) {
-							inputString = "\"" + inputString + "\""
-						}
+							newDv.ValueType = DynamicValueTypeString
+							newDv.DataString = inputString
+						} else {
+							newDv.ValueType = DynamicValueTypeFloat
+							floatValue, err := strconv.ParseFloat(inputString, 64)
 
-						newDv := makeDv(inputString)
+							if err != nil {
+								fmt.Println("Error parsing number: ")
+								fmt.Println(err)
+							}
+
+							newDv.DataFloat = floatValue
+						}
 
 						oldDv := grid.data[cellIndex]
 						if oldDv.DependOut != nil {
@@ -555,9 +575,11 @@ func (c *Client) writePump() {
 						}
 
 						// this will add it to dirtyCells for re-compute
-						grid.data[cellIndex] = setDependencies(cellIndex, newDv, &grid)
+						// grid.data[cellIndex] = setDependencies(cellIndex, newDv, &grid)
+						grid.data[cellIndex] = newDv
+
 					}
-					fmt.Println()
+					// fmt.Println()
 					lineCount++
 
 				}

@@ -62,7 +62,10 @@
 		
  		this.dom = document.querySelector('body');
 		this.canvas = document.createElement('canvas');
-		this.ctx = this.canvas.getContext('2d');
+		this.canvasWidth, this.canvasHeight;
+
+		this.ctx = this.canvas.getContext('2d', {alpha: false});
+		
 		this.sheetDom = document.querySelector('div-sheet');
 		this.sheetSizer = this.sheetDom.querySelector('.sheet-sizer');
 		this.formula_input = $(this.dom.querySelector('.formula-bar input'));
@@ -252,7 +255,11 @@
 		this.sizeSizer = function(){
 			
 			this.canvas.width = this.sheetDom.clientWidth * this.pixelRatio;
+			this.canvasWidth = this.canvas.width;
+
 			this.canvas.height = this.sheetDom.clientHeight * this.pixelRatio;
+			this.canvasHeight = this.canvas.height;
+
 			this.canvas.style.width = this.sheetDom.clientWidth + "px";
 			this.ctx.scale(this.pixelRatio,this.pixelRatio);
 
@@ -288,7 +295,7 @@
 		}
 
 		this.init = function(){
-			
+
 			// initialize editor
 			this.editor.init();
 
@@ -739,7 +746,9 @@
 
 			this.sizeSizer();
 
-			this.drawSheet();
+			// this.drawSheet();
+
+			this.refreshView();
 		}
 
 		this.refreshView = function(){
@@ -1817,9 +1826,11 @@
 
 			this.ctx.strokeStyle = '#bbbbbb';
 			this.ctx.lineWidth = 1;
-			this.ctx.clearRect(0, 0, width, height);
 
-			
+			// this.ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
+			this.ctx.fillStyle = "white";
+			this.ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
+
 			// incorporate offset in drawing
 
 			// draw row lines
@@ -2113,7 +2124,7 @@
 
 					var cellMaxWidth = this.columnWidths[d] - this.textPadding - 2; // minus borders
 
-					if(cell_data !== undefined){
+					if(cell_data !== undefined && cell_data.length > 0){
 
 						this.ctx.textAlign = 'left';
 
@@ -2201,6 +2212,21 @@
 		body.removeChild(dummy);
 		return result;
 	};
+
+	var measureTextDOM = function (text, font) {
+		var w, h, div = document.createElement('div');
+		div.style.font = font;
+		div.style.padding = '0';
+		div.style.margin = '0';
+		div.style.position = 'absolute';
+		div.style.visibility = 'hidden';
+		div.innerHTML = text;
+		document.body.appendChild(div);
+		w = div.clientWidth;
+		h = div.clientHeight;
+		document.body.removeChild(div);
+		return {width: w, height: h};
+	}
 
 	var app = new App();
 	app.init();
