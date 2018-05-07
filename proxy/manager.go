@@ -85,7 +85,7 @@ func printActiveUsers(usersessions map[string]dockermanager.DockerSession) {
 	fmt.Printf("%d user sessions active.\n", len(usersessions))
 }
 
-func checkQuickHttpResponse(requestUrl string) bool {
+func checkQuickHTTPResponse(requestURL string) bool {
 
 	timeout := time.Duration(150 * time.Millisecond)
 
@@ -93,7 +93,7 @@ func checkQuickHttpResponse(requestUrl string) bool {
 		Timeout: timeout,
 	}
 
-	resp, err := client.Get(requestUrl)
+	resp, err := client.Get(requestURL)
 	if err != nil {
 		return false
 	}
@@ -106,9 +106,10 @@ func checkQuickHttpResponse(requestUrl string) bool {
 }
 
 type WorkspaceRow struct {
-	Id    int    `json:"id"`
+	ID    int    `json:"id"`
 	Owner int    `json:"owner"`
 	Slug  string `json:"slug"`
+	Name  string `json:"name"`
 }
 
 func getUserId(r *http.Request, db *sql.DB) int {
@@ -120,17 +121,17 @@ func getUserId(r *http.Request, db *sql.DB) int {
 		return -1
 	}
 
-	owner_query, err := db.Query("SELECT id FROM users WHERE email = ? AND token = ?", cookieEmail.Value, cookieToken.Value)
+	ownerQuery, err := db.Query("SELECT id FROM users WHERE email = ? AND token = ?", cookieEmail.Value, cookieToken.Value)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if owner_query.Next() {
+	if ownerQuery.Next() {
 
-		var user_id int
-		owner_query.Scan(&user_id)
+		var userId int
+		ownerQuery.Scan(&userId)
 
-		return user_id
+		return userId
 	} else {
 		return -1
 	}
@@ -322,30 +323,95 @@ func main() {
 	// setup WS proxy for Go server and Terminal
 	go wsProxy(wsPort, usersessions)
 
+	http.HandleFunc("/workspace-change-name", func(w http.ResponseWriter, r *http.Request) {
+		cookieEmail, err1 := r.Cookie("email")
+		cookieToken, err2 := r.Cookie("token")
+
+		if err1 == nil && err2 == nil && checkLoggedIn(cookieEmail.Value, cookieToken.Value, db) {
+
+			r.ParseForm()
+			id := r.Form.Get("workspaceId")
+			newName := r.Form.Get("workspaceNewName")
+
+			_, err := db.Query("UPDATE workspaces SET name=? WHERE id = ?", newName, id)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+		}
+	})
+
+	http.HandleFunc("/get-workspace-details", func(w http.ResponseWriter, r *http.Request) {
+
+		workspaces := []WorkspaceRow{}
+
+		r.ParseForm()
+		requestedSlug := r.Form.Get("workspaceSlug")
+
+		rows, err := db.Query("SELECT id, owner, slug, name FROM workspaces WHERE slug = ?", requestedSlug)
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		var (
+			id    int
+			owner int
+			slug  string
+			name  string
+		)
+
+		for rows.Next() {
+			err := rows.Scan(&id, &owner, &slug, &name)
+			if err != nil {
+				log.Fatal(err)
+			}
+			row := WorkspaceRow{ID: id, Owner: owner, Slug: slug, Name: name}
+
+			workspaces = append(workspaces, row)
+		}
+
+		if len(workspaces) > 0 {
+			js, err := json.Marshal(workspaces[0])
+
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.Write(js)
+		} else {
+			http.NotFound(w, r)
+		}
+
+	})
+
 	http.HandleFunc("/get-workspaces", func(w http.ResponseWriter, r *http.Request) {
 
 		cookieEmail, err1 := r.Cookie("email")
 		cookieToken, err2 := r.Cookie("token")
 
 		if err1 == nil && err2 == nil && checkLoggedIn(cookieEmail.Value, cookieToken.Value, db) {
+
 			workspaces := []WorkspaceRow{}
 
 			userId := getUserId(r, db)
 
-			rows, err := db.Query("SELECT id, owner, slug FROM workspaces WHERE owner = ?", userId)
+			rows, err := db.Query("SELECT id, owner, slug, name FROM workspaces WHERE owner = ?", userId)
 
 			var (
 				id    int
 				owner int
 				slug  string
+				name  string
 			)
 
 			for rows.Next() {
-				err := rows.Scan(&id, &owner, &slug)
+				err := rows.Scan(&id, &owner, &slug, &name)
 				if err != nil {
 					log.Fatal(err)
 				}
-				row := WorkspaceRow{Id: id, Owner: owner, Slug: slug}
+				row := WorkspaceRow{ID: id, Owner: owner, Slug: slug, Name: name}
 
 				workspaces = append(workspaces, row)
 			}
@@ -411,14 +477,15 @@ func main() {
 			userId := getUserId(r, db)
 
 			// create database entry
-			db.Query("INSERT INTO workspaces (owner, slug) VALUES (?,?)", userId, uuidString)
+			db.Query("INSERT INTO workspaces (owner, slug, name) VALUES (?,?,?)", userId, uuidString, "Untitled")
 
 			// create files
-			os.MkdirAll(dirName, 0750)
-			os.MkdirAll(dirName+"/sheetdata", 0750)
-			os.MkdirAll(dirName+"/userfolder", 0750)
+			os.MkdirAll(dirName, 0777)
+			os.MkdirAll(dirName+"/sheetdata", 0777)
+			os.MkdirAll(dirName+"/userfolder", 0777)
 
-			chownCommand := exec.Command("/bin/sh", "-c", "chown rick:rick "+dirName+"; "+"chown rick:rick "+dirName+"/sheetdata; "+"chown rick:rick "+dirName+"/userfolder; "+"chmod 0750 "+dirName+"; "+"chmod 0750 "+dirName+"/sheetdata; "+"chmod 0750 "+dirName+"/userfolder;")
+			// chownCommand := exec.Command("/bin/sh", "-c", "chown ricklamers:staff "+dirName+"; "+"chown ricklamers:staff "+dirName+"/sheetdata; "+"chown ricklamers:staff "+dirName+"/userfolder; "+"chmod 0666 "+dirName+"; "+"chmod 0666 "+dirName+"/sheetdata; "+"chmod 0666 "+dirName+"/userfolder;")
+			chownCommand := exec.Command("/bin/sh", "-c", "chmod 0777 "+dirName+"; "+"chmod 0777 "+dirName+"/sheetdata; "+"chmod 0777 "+dirName+"/userfolder;")
 			chownCommand.Start()
 
 		}
@@ -447,11 +514,11 @@ func main() {
 		if runtime.GOOS == "linux" {
 			// TODO: add GPU docker - big change - will be done later
 			// dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true", "-v", "/home/rick/workspace/grid-docker/grid-app:/home/source", "-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "--device=/dev/nvidia0:/dev/nvidia0", "--device=/dev/nvidiactl:/dev/nvidiactl", "--device=/dev/nvidia-uvm:/dev/nvidia-uvm", "--device=/dev/nvidia-modeset:/dev/nvidia-modeset", "goserver")
-			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true", "-v", "/home/rick/workspace/grid-docker/grid-app:/home/source", "-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "-d=true", "goserver")
+			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true", "-v", "/home/rick/workspace/grid-docker/grid-app:/home/source", "-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "-d=false", "goserver")
 		} else if runtime.GOOS == "windows" {
 			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true", "-v", "C:\\Users\\Rick\\workspace\\grid-docker\\grid-app:/home/source", "-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "goserver")
 		} else {
-			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true", "-v", "/Users/ricklamers/workspace/grid-docker/grid-app:/home/source", "-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "-d=true", "goserver")
+			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true", "-v", "/Users/ricklamers/workspace/grid-docker/proxy/userdata/workspace-"+uuidString+"/userfolder:/home/user", "-v", "/Users/ricklamers/workspace/grid-docker/grid-app:/home/source", "-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "-d=false", "goserver")
 		}
 
 		dockerCmd.Stdout = os.Stdout
@@ -465,14 +532,14 @@ func main() {
 
 			time.Sleep(time.Second / 2)
 
-			if checkQuickHttpResponse("http://127.0.0.1:" + strconv.Itoa(ds.Port) + "/upcheck") {
+			if checkQuickHTTPResponse("http://127.0.0.1:" + strconv.Itoa(ds.Port) + "/upcheck") {
 				if !creatingNew {
-					// copy files to docker container
-					copyCmds := []string{"cp", "/home/rick/workspace/grid-docker/proxy/" + dirName + "/userfolder/.", "grid" + strconv.Itoa(ds.Port) + ":/home/user/"}
-					dockerCopyCmd := exec.Command("docker", copyCmds...)
+					// // copy files to docker container
+					// copyCmds := []string{"cp", "/home/rick/workspace/grid-docker/proxy/" + dirName + "/userfolder/.", "grid" + strconv.Itoa(ds.Port) + ":/home/user/"}
+					// dockerCopyCmd := exec.Command("docker", copyCmds...)
 
-					fmt.Println(copyCmds)
-					dockerCopyCmd.Run()
+					// fmt.Println(copyCmds)
+					// dockerCopyCmd.Run()
 				}
 
 				http.Redirect(w, r, "/workspace/"+uuidString+"/", 302)
@@ -524,7 +591,7 @@ func main() {
 		// append port based on UUID
 		splitUrl := strings.Split(r.URL.Path, "/")
 
-		fmt.Println(splitUrl)
+		// fmt.Println(splitUrl)
 
 		if len(splitUrl) < 3 {
 			http.Redirect(w, r, "/dashboard/", 302)
@@ -533,7 +600,7 @@ func main() {
 
 		uuid := splitUrl[2]
 
-		fmt.Println("Following UUID requested at root: " + uuid)
+		// fmt.Println("Following UUID requested at root: " + uuid)
 
 		ds := usersessions[uuid]
 
@@ -550,7 +617,7 @@ func main() {
 			workspacePrefix := "workspace/" + uuid + "/"
 			requestString := r.RequestURI
 
-			fmt.Println("requestString (before replace): " + requestString)
+			// fmt.Println("requestString (before replace): " + requestString)
 
 			if strings.Contains(requestString, "/terminals") {
 				httpRedirPort = ds.TermPort
@@ -560,8 +627,8 @@ func main() {
 				requestString = strings.Replace(requestString, workspacePrefix, "", -1)
 			}
 
-			fmt.Println("workspacePrefix: " + workspacePrefix)
-			fmt.Println("requestString (after replace): " + requestString)
+			// fmt.Println("workspacePrefix: " + workspacePrefix)
+			// fmt.Println("requestString (after replace): " + requestString)
 
 			base, err := url.Parse("http://127.0.0.1:" + strconv.Itoa(httpRedirPort) + requestString)
 			if err != nil {
@@ -586,7 +653,7 @@ func main() {
 			}
 
 			resp, err := httpClient.Do(proxyReq)
-			fmt.Println("Send request to " + base.String() + " from " + r.UserAgent())
+			// fmt.Println("Send request to " + base.String() + " from " + r.UserAgent())
 
 			for h, val := range resp.Header {
 				w.Header().Set(h, strings.Join(val, ","))

@@ -98,7 +98,7 @@ Terminal.applyAddon(winptyCompat);
         term.open(terminalContainer);
         term.winptyCompatInit();
         term.fit();
-        term.focus();
+        // term.focus();
     
         var paramFetchUrl = fetchUrl+'terminals?cols=' + term.cols + '&rows=' + term.rows;
     

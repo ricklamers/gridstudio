@@ -102,7 +102,7 @@ func parseInit() {
 }
 
 func getData(ref1 DynamicValue, grid *Grid) DynamicValue {
-	return (grid.data)[ref1.DataString]
+	return (grid.Data)[ref1.DataString]
 }
 
 func findInMap(amap map[int]string, value string) bool {
@@ -390,8 +390,6 @@ func referencesToUpperCase(formula string) string {
 func cellRangeToCells(reference string) []string {
 	references := []string{}
 
-	fmt.Println(reference)
-
 	cells := strings.Split(reference, ":")
 
 	cell1Row := getReferenceRowIndex(cells[0])
@@ -438,15 +436,18 @@ func setDependencies(index string, dv DynamicValue, grid *Grid) DynamicValue {
 		if inSet {
 			if ref == index {
 				// cell is dependent on self
-				log.Fatal("Circular reference error")
+				fmt.Println("Circular reference error!")
+				dv.ValueType = DynamicValueTypeString
+				dv.DataFormula = "\"#CIRCULARREF\""
+			} else {
+
+				(*dv.DependIn)[ref] = true
+				(*(grid.Data)[ref].DependOut)[index] = true
+
+				// copy
+				copyToDirty((grid.Data)[ref], ref, grid)
+
 			}
-			(*dv.DependIn)[ref] = true
-
-			(*(grid.data)[ref].DependOut)[index] = true
-
-			// copy
-			copyToDirty((grid.data)[ref], ref, grid)
-
 		}
 	}
 
@@ -457,7 +458,7 @@ func setDependencies(index string, dv DynamicValue, grid *Grid) DynamicValue {
 	for ref, inSet := range *dv.DependOut {
 		if inSet {
 
-			dv := (grid.data)[ref]
+			dv := (grid.Data)[ref]
 			copyToDirty(dv, ref, grid)
 		}
 	}
@@ -468,7 +469,7 @@ func setDependencies(index string, dv DynamicValue, grid *Grid) DynamicValue {
 func copyToDirty(dv DynamicValue, index string, grid *Grid) {
 
 	// only add if not already in
-	if _, ok := (grid.dirtyCells)[index]; !ok {
+	if _, ok := (grid.DirtyCells)[index]; !ok {
 
 		// copy the DependIn/DependOut maps to retain original
 		DependInTemp := make(map[string]bool)
@@ -478,19 +479,19 @@ func copyToDirty(dv DynamicValue, index string, grid *Grid) {
 		dv.DependOutTemp = &DependOutTemp
 
 		// copy in
-		(grid.dirtyCells)[index] = dv
+		(grid.DirtyCells)[index] = dv
 	}
 
 	// always copy dependencies
 	for ref, inSet := range *dv.DependIn {
-		(*(grid.dirtyCells)[index].DependInTemp)[ref] = inSet
+		(*(grid.DirtyCells)[index].DependInTemp)[ref] = inSet
 	}
 	for ref, inSet := range *dv.DependOut {
-		(*(grid.dirtyCells)[index].DependOutTemp)[ref] = inSet
+		(*(grid.DirtyCells)[index].DependOutTemp)[ref] = inSet
 
 		// if outgoing dependency not in dirtCells, add it now
-		if _, ok := (grid.dirtyCells)[ref]; !ok {
-			copyToDirty((grid.data)[ref], ref, grid)
+		if _, ok := (grid.DirtyCells)[ref]; !ok {
+			copyToDirty((grid.Data)[ref], ref, grid)
 		}
 
 	}
@@ -1157,7 +1158,7 @@ func getDataRange(dv DynamicValue, grid *Grid) []DynamicValue {
 
 		for x := column1; x <= column2; x++ {
 			for y := row1; y <= row2; y++ {
-				dvs = append(dvs, (grid.data)[indexToLetters(x)+strconv.Itoa(y)])
+				dvs = append(dvs, (grid.Data)[indexToLetters(x)+strconv.Itoa(y)])
 			}
 		}
 
@@ -1467,7 +1468,7 @@ func olsExplosive(arguments []DynamicValue, grid *Grid, targetRef string) Dynami
 	residualsLabelIndex := indexToLetters(targetCellColumn+2) + strconv.Itoa(targetCellRow)
 	explosionSetValue(residualsLabelIndex, DynamicValue{ValueType: DynamicValueTypeString, DataString: "residuals"}, grid)
 
-	olsDv := grid.data[targetRef]
+	olsDv := grid.Data[targetRef]
 	olsDv.DataString = "OLS Regression"
 
 	// OLS also returns a DynamicValue itself
@@ -1476,7 +1477,7 @@ func olsExplosive(arguments []DynamicValue, grid *Grid, targetRef string) Dynami
 
 func explosionSetValue(index string, dataDv DynamicValue, grid *Grid) {
 
-	OriginalDependOut := grid.data[index].DependOut
+	OriginalDependOut := grid.Data[index].DependOut
 
 	NewDependIn := make(map[string]bool)
 	dataDv.DependIn = &NewDependIn       // new dependin (new formula)
@@ -1496,7 +1497,7 @@ func explosionSetValue(index string, dataDv DynamicValue, grid *Grid) {
 		}
 	}
 
-	grid.data[index] = setDependencies(index, dataDv, grid)
+	grid.Data[index] = setDependencies(index, dataDv, grid)
 
 }
 

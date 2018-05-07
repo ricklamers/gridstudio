@@ -1,13 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"encoding/csv"
+	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"math"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -57,10 +61,10 @@ type Client struct {
 }
 
 type Grid struct {
-	data        map[string]DynamicValue
-	dirtyCells  map[string]DynamicValue
-	rowCount    int
-	columnCount int
+	Data        map[string]DynamicValue
+	DirtyCells  map[string]DynamicValue
+	RowCount    int
+	ColumnCount int
 }
 
 // readPump pumps messages from the websocket connection to the hub (?)
@@ -109,19 +113,19 @@ func (c *Client) readPump() {
 func computeDirtyCells(grid *Grid, cellsToSend *[][]string) {
 
 	// for every DV in dirtyCells clean up the DependInTemp list with refs not in DirtyCells
-	for _, thisDv := range grid.dirtyCells {
+	for _, thisDv := range grid.DirtyCells {
 
 		for ref := range *thisDv.DependInTemp {
 
 			// if ref is not in dirty cells, remove from depend in
-			if _, ok := (grid.dirtyCells)[ref]; !ok {
+			if _, ok := (grid.DirtyCells)[ref]; !ok {
 				delete(*thisDv.DependInTemp, ref)
 			}
 		}
 
 	}
 
-	for len((grid.dirtyCells)) != 0 {
+	for len((grid.DirtyCells)) != 0 {
 
 		var dv DynamicValue
 		var index string
@@ -130,7 +134,7 @@ func computeDirtyCells(grid *Grid, cellsToSend *[][]string) {
 		// This step is done in computeDirtyCells because at this point
 		// we are certain whether cells are dirty or not
 
-		for ref, thisDv := range grid.dirtyCells {
+		for ref, thisDv := range grid.DirtyCells {
 
 			if len(*thisDv.DependInTemp) == 0 {
 				dv = thisDv
@@ -144,8 +148,8 @@ func computeDirtyCells(grid *Grid, cellsToSend *[][]string) {
 			if inSet {
 
 				// only delete dirty dependencies for cells marked in dirtycells
-				if _, ok := (grid.dirtyCells)[ref]; ok {
-					delete(*(grid.dirtyCells)[ref].DependInTemp, index)
+				if _, ok := (grid.DirtyCells)[ref]; ok {
+					delete(*(grid.DirtyCells)[ref].DependInTemp, index)
 				}
 
 			}
@@ -156,7 +160,7 @@ func computeDirtyCells(grid *Grid, cellsToSend *[][]string) {
 		// DO COMPUTE HERE
 		// stringBefore := convertToString((*grid)[index])
 
-		originalDv := (grid.data)[index]
+		originalDv := (grid.Data)[index]
 
 		originalIsString := false
 		if originalDv.ValueType == DynamicValueTypeString {
@@ -175,7 +179,7 @@ func computeDirtyCells(grid *Grid, cellsToSend *[][]string) {
 			newDv.DependIn = originalDv.DependIn
 			newDv.DependOut = originalDv.DependOut
 
-			(grid.data)[index] = newDv
+			(grid.Data)[index] = newDv
 
 		}
 
@@ -194,7 +198,7 @@ func computeDirtyCells(grid *Grid, cellsToSend *[][]string) {
 
 		*cellsToSend = append(*cellsToSend, []string{index, stringAfter.DataString, formulaString})
 
-		delete(grid.dirtyCells, index)
+		delete(grid.DirtyCells, index)
 
 	}
 }
@@ -214,7 +218,7 @@ func sendCells(cellsToSend *[][]string, c *Client) {
 }
 
 func sendSheetSize(c *Client, grid *Grid) {
-	jsonData := []string{"SHEETSIZE", strconv.Itoa(grid.rowCount), strconv.Itoa(grid.columnCount)}
+	jsonData := []string{"SHEETSIZE", strconv.Itoa(grid.RowCount), strconv.Itoa(grid.ColumnCount)}
 	json, _ := json.Marshal(jsonData)
 	c.send <- json
 }
@@ -237,46 +241,147 @@ func sendCellsInRange(cellRange string, grid *Grid, c *Client) {
 	cellsToSend := [][]string{}
 
 	for _, refString := range cells {
-		dv := grid.data[refString]
+		dv := grid.Data[refString]
 
 		// cell to string
 		stringAfter := convertToString(dv)
 
-		cellsToSend = append(cellsToSend, []string{refString, stringAfter.DataString, dv.DataFormula})
+		cellsToSend = append(cellsToSend, []string{refString, stringAfter.DataString, "=" + dv.DataFormula})
 	}
 
 	sendCells(&cellsToSend, c)
 }
 
-func (c *Client) writePump() {
-	ticker := time.NewTicker(pingPeriod)
+// go binary encoder
+func ToGOB64(grid Grid) []byte {
+	b := bytes.Buffer{}
+	e := gob.NewEncoder(&b)
+	err := e.Encode(grid)
+	if err != nil {
+		fmt.Println(`failed gob Encode`, err)
+	}
+	return b.Bytes()
+}
 
-	// initialize the datastructure for the matrix
-	columnCount := 26
-	rowCount := 10000
+// go binary decoder
+func FromGOB64(binary []byte) Grid {
+	grid := Grid{}
+	r := bytes.NewReader(binary)
+	d := gob.NewDecoder(r)
+	err := d.Decode(&grid)
+	if err != nil {
+		fmt.Println(`failed gob Decode`, err)
+	}
+	return grid
+}
 
-	grid := Grid{data: make(map[string]DynamicValue), dirtyCells: make(map[string]DynamicValue), rowCount: rowCount, columnCount: columnCount}
+func generateCSV(grid *Grid) string {
 
-	c.grid = &grid
+	// determine number of columns
+	numberOfColumns := 0
+	numberOfRows := 0
 
-	cellCount := 1
+	for r := 0; r < grid.RowCount; r++ {
+		for c := 0; c < grid.ColumnCount; c++ {
 
-	for x := 1; x <= columnCount; x++ {
-		for y := 1; y <= rowCount; y++ {
-			dv := makeDv("")
+			cell := grid.Data[doubleIndexToStringRef(r, c)]
 
-			// DEBUG: fill with incrementing numbers
-			// dv.ValueType = DynamicValueTypeInteger
-			// dv.DataInteger = int32(cellCount)
-			// dv.DataFormula = strconv.Itoa(cellCount)
+			cellFormula := cell.DataFormula
 
-			grid.data[indexToLetters(x)+strconv.Itoa(y)] = dv
+			cellFormula = strings.Replace(cellFormula, "\"", "", -1)
 
-			cellCount++
+			// if len(cellFormula) > 0 {
+			// 	fmt.Println(cellFormula)
+			// }
+
+			if len(cellFormula) != 0 && c >= numberOfColumns {
+				numberOfColumns = c + 1
+			}
+
+			if len(cellFormula) != 0 && r >= numberOfRows {
+				numberOfRows = r + 1
+			}
 		}
 	}
 
-	fmt.Printf("Initialized client with grid of length: %d\n", len(grid.data))
+	var buffer bytes.Buffer
+
+	for r := 0; r < numberOfRows; r++ {
+		for c := 0; c < numberOfColumns; c++ {
+
+			cell := grid.Data[doubleIndexToStringRef(r, c)]
+
+			// fmt.Println("Ref: " + doubleIndexToStringRef(r, c))
+			// fmt.Println("cell.DataFormula: " + cell.DataFormula)
+
+			stringDv := convertToString(cell)
+
+			// fmt.Println("stringDv.DataString: " + stringDv.DataString)
+
+			if c+1 == numberOfColumns {
+				buffer.WriteString(stringDv.DataString)
+				buffer.WriteString("\r\n")
+			} else {
+				buffer.WriteString(stringDv.DataString)
+				buffer.WriteString(",")
+			}
+		}
+	}
+
+	return buffer.String()
+}
+
+func doubleIndexToStringRef(row int, col int) string {
+	return indexToLetters(col+1) + strconv.Itoa(row+1)
+}
+
+func (c *Client) writePump() {
+	ticker := time.NewTicker(pingPeriod)
+
+	var grid Grid
+
+	// if Grid serialized file exists try to load that
+	sheetFile := "/home/user/sheet.serialized"
+	if _, err := os.Stat(sheetFile); os.IsNotExist(err) {
+
+		// initialize the datastructure for the matrix
+		columnCount := 26
+		rowCount := 10000
+
+		grid = Grid{Data: make(map[string]DynamicValue), DirtyCells: make(map[string]DynamicValue), RowCount: rowCount, ColumnCount: columnCount}
+
+		cellCount := 1
+
+		for x := 1; x <= columnCount; x++ {
+			for y := 1; y <= rowCount; y++ {
+				dv := makeDv("")
+
+				// DEBUG: fill with incrementing numbers
+				// dv.ValueType = DynamicValueTypeInteger
+				// dv.DataInteger = int32(cellCount)
+				// dv.DataFormula = strconv.Itoa(cellCount)
+
+				grid.Data[indexToLetters(x)+strconv.Itoa(y)] = dv
+
+				cellCount++
+			}
+		}
+
+		fmt.Printf("Initialized client with grid of length: %d\n", len(grid.Data))
+
+	} else {
+
+		gridData, err := ioutil.ReadFile(sheetFile)
+		if err != nil {
+			fmt.Println(err)
+		}
+		grid = FromGOB64(gridData)
+
+		fmt.Println("Loaded Grid struct from sheet.serialized")
+
+	}
+
+	c.grid = &grid
 
 	defer func() {
 		ticker.Stop()
@@ -297,6 +402,12 @@ func (c *Client) writePump() {
 			json.Unmarshal(actions, &res)
 
 			parsed := res.Arguments
+
+			if len(actions) > 100 {
+				fmt.Println("Received WS in Client actions: " + string(actions[:100]) + "... [truncated]")
+			} else {
+				fmt.Println("Received WS in Client actions: " + string(actions))
+			}
 
 			switch parsed[0] {
 			case "RANGE":
@@ -334,7 +445,7 @@ func (c *Client) writePump() {
 					// first add all to grid
 					for _, ref := range references {
 
-						OriginalDependOut := grid.data[ref].DependOut
+						OriginalDependOut := grid.Data[ref].DependOut
 
 						dv := DynamicValue{
 							ValueType:   DynamicValueTypeFormula,
@@ -352,7 +463,7 @@ func (c *Client) writePump() {
 						newDvs[ref] = dv
 
 						// set to grid for access during setDependencies
-						grid.data[ref] = dv
+						grid.Data[ref] = dv
 
 						incrementAmount++
 
@@ -360,7 +471,7 @@ func (c *Client) writePump() {
 
 					// then setDependencies for all
 					for ref, dv := range newDvs {
-						grid.data[ref] = setDependencies(ref, dv, &grid)
+						grid.Data[ref] = setDependencies(ref, dv, &grid)
 					}
 
 					// now compute all dirty
@@ -384,7 +495,7 @@ func (c *Client) writePump() {
 					valuesIndex := 0
 					for _, ref := range references {
 
-						OriginalDependOut := grid.data[ref].DependOut
+						OriginalDependOut := grid.Data[ref].DependOut
 
 						dv := DynamicValue{
 							ValueType:   DynamicValueTypeFormula,
@@ -402,7 +513,7 @@ func (c *Client) writePump() {
 						newDvs[ref] = dv
 
 						// set to grid for access during setDependencies
-						grid.data[ref] = dv
+						grid.Data[ref] = dv
 
 						valuesIndex++
 
@@ -412,7 +523,7 @@ func (c *Client) writePump() {
 
 					// even though all values, has to be ran for all new values because fields might depend on new input data
 					for ref, dv := range newDvs {
-						grid.data[ref] = setDependencies(ref, dv, &grid)
+						grid.Data[ref] = setDependencies(ref, dv, &grid)
 					}
 
 					// now compute all dirty
@@ -428,6 +539,8 @@ func (c *Client) writePump() {
 				// check if formula or normal entry
 				if len(parsed[2]) > 0 && parsed[2][0:1] == "=" {
 
+					// TODO: regex check if input is legal
+
 					// for SET commands with formula values update formula to uppercase any references
 					formula := parsed[2][1:]
 					formula = referencesToUpperCase(formula)
@@ -438,7 +551,7 @@ func (c *Client) writePump() {
 					if isExplosive {
 
 						// original Dependends can stay on
-						OriginalDependOut := grid.data[parsed[1]].DependOut
+						OriginalDependOut := grid.Data[parsed[1]].DependOut
 
 						dv := DynamicValue{
 							ValueType:   DynamicValueTypeExplosiveFormula,
@@ -459,18 +572,16 @@ func (c *Client) writePump() {
 						dv.DataFormula = formula                        // re-assigning of formula is usually saved for computeDirty but this will be skipped there
 
 						// add OLS cell to dirty (which needs DependInTemp etc)
-						grid.data[parsed[1]] = setDependencies(parsed[1], dv, &grid)
+						grid.Data[parsed[1]] = setDependencies(parsed[1], dv, &grid)
 
 						// dependencies will be fulfilled for all cells created by explosion
-
-						// grid.data[parsed[1]] = setDependencies(parsed[1], dv, &grid)
 
 					} else {
 						// set value for cells
 						// cut off = for parsing
 
 						// original Dependends
-						OriginalDependOut := grid.data[parsed[1]].DependOut
+						OriginalDependOut := grid.Data[parsed[1]].DependOut
 
 						dv := DynamicValue{
 							ValueType:   DynamicValueTypeFormula,
@@ -481,7 +592,7 @@ func (c *Client) writePump() {
 						dv.DependIn = &NewDependIn       // new dependin (new formula)
 						dv.DependOut = OriginalDependOut // dependout remain
 
-						grid.data[parsed[1]] = setDependencies(parsed[1], dv, &grid)
+						grid.Data[parsed[1]] = setDependencies(parsed[1], dv, &grid)
 					}
 
 				} else {
@@ -490,7 +601,7 @@ func (c *Client) writePump() {
 					// if user enters non string value, client is reponsible for adding the equals sign.
 					// Anything without it won't be parsed as formula.
 
-					OriginalDependOut := grid.data[parsed[1]].DependOut
+					OriginalDependOut := grid.Data[parsed[1]].DependOut
 
 					dv := DynamicValue{
 						ValueType:   DynamicValueTypeString,
@@ -504,7 +615,7 @@ func (c *Client) writePump() {
 
 					newDv := setDependencies(parsed[1], dv, &grid)
 					newDv.ValueType = DynamicValueTypeString
-					grid.data[parsed[1]] = newDv
+					grid.Data[parsed[1]] = newDv
 
 				}
 
@@ -569,14 +680,14 @@ func (c *Client) writePump() {
 							newDv.DataFloat = floatValue
 						}
 
-						oldDv := grid.data[cellIndex]
+						oldDv := grid.Data[cellIndex]
 						if oldDv.DependOut != nil {
 							newDv.DependOut = oldDv.DependOut // regain external dependencies, in case of oldDv
 						}
 
 						// this will add it to dirtyCells for re-compute
-						// grid.data[cellIndex] = setDependencies(cellIndex, newDv, &grid)
-						grid.data[cellIndex] = newDv
+						// grid.Data[cellIndex] = setDependencies(cellIndex, newDv, &grid)
+						grid.Data[cellIndex] = newDv
 
 					}
 					// fmt.Println()
@@ -586,21 +697,51 @@ func (c *Client) writePump() {
 
 				minRowSize := lineCount
 
-				newRowCount := grid.rowCount
-				newColumnCount := grid.columnCount
+				newRowCount := grid.RowCount
+				newColumnCount := grid.ColumnCount
 
-				if minRowSize > grid.rowCount {
+				if minRowSize > grid.RowCount {
 					newRowCount = minRowSize
 				}
-				if minColumnSize > grid.columnCount {
+				if minColumnSize > grid.ColumnCount {
 					newColumnCount = minColumnSize
 				}
 
-				grid.rowCount = newRowCount
-				grid.columnCount = newColumnCount
+				grid.RowCount = newRowCount
+				grid.ColumnCount = newColumnCount
 
 				sendSheetSize(c, &grid)
 				computeAndSend(&grid, c)
+			case "EXPORT-CSV":
+
+				fmt.Println("Generating CSV...")
+
+				csvString := generateCSV(&grid)
+
+				fmt.Println("Generating of CSV completed.")
+
+				jsonData := []string{"EXPORT-CSV", csvString}
+
+				json, err := json.Marshal(jsonData)
+
+				if err != nil {
+					fmt.Println(err)
+				}
+
+				c.send <- json
+
+			case "SAVE":
+				fmt.Println("Saving workspace...")
+
+				serializedGrid := ToGOB64(grid)
+
+				err := ioutil.WriteFile("/home/user/sheet.serialized", serializedGrid, 0644)
+
+				if err != nil {
+					fmt.Println(err)
+				}
+
+				c.send <- []byte("[\"SAVED\"]")
 			}
 
 		case message, ok := <-c.send:

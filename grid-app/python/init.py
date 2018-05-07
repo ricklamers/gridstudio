@@ -9,6 +9,11 @@ import matplotlib.pyplot as plt
 
 sheet_data = {}
 
+real_print = print
+
+def print(text):
+    real_print("#INTERPRETER#" + str(text) + "#ENDPARSE#", end='', flush=True)
+
 def cell(cell, value = None):
     if value is not None:
         # set value
@@ -26,9 +31,9 @@ def plot():
 
     image_string = str(encoded_string)
     data = {'arguments': ["IMAGE", image_string[2:len(image_string)-1]]}
-    data = ''.join(['#IMAGE#', json.dumps(data)])
+    data = ''.join(['#IMAGE#', json.dumps(data),'#ENDPARSE#'])
 
-    print(data, flush=True)
+    real_print(data, flush=True, end='')
 
 def getReferenceRowIndex(reference):
     return int(re.findall(r'\d+', reference)[0])
@@ -106,24 +111,25 @@ def sheet(cell_range, data = None):
             
         if type(data) is list:
             
+            newData = []
             # if data is string without starting with =, add escape quotes
             for index, element in enumerate(data):
 
                 if isinstance(element, str):
                     # string meant as string, escape
                     element = "\"" + element + "\""
-                    data[index] = element
+                    newData.append(element)
                 else:
-                    data[index] = str(element)
+                    newData.append(str(element))
 
             arguments =  ['RANGE', 'SETLIST', cell_range]
 
             # append list
-            arguments = arguments + data
+            arguments = arguments + newData
 
-            data = {'arguments':arguments}
-            data = ''.join(['#PARSE#', json.dumps(data)])
-            print(data, flush=True)
+            json_object = {'arguments':arguments}
+            json_string = ''.join(['#PARSE#', json.dumps(json_object),'#ENDPARSE#'])
+            real_print(json_string, flush=True, end='')
 
         else:
 
@@ -137,8 +143,8 @@ def sheet(cell_range, data = None):
                 data = "\"" + data + "\""
 
             data = {'arguments': ['RANGE', 'SETSINGLE', cell_range, ''.join(["=",str(data)])]}
-            data = ''.join(['#PARSE#', json.dumps(data)])
-            print(data, flush=True)
+            data = ''.join(['#PARSE#', json.dumps(data)],'#ENDPARSE#')
+            real_print(data, flush=True, end='')
     
     # get data from sheet
     else:
@@ -147,7 +153,7 @@ def sheet(cell_range, data = None):
             cell_range = ':'.join([cell_range, cell_range])
 
         # in blocking fashion get latest data of range from Go
-        print("#DATA#" + cell_range, flush=True)
+        real_print("#DATA#" + cell_range + '#ENDPARSE#', end='', flush=True)
         getAndExecuteInputOnce()
         # if everything works, the exec command has filled sheet_data with the appropriate data
         # return data range as arrays

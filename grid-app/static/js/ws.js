@@ -90,6 +90,9 @@
                         }else if(json[0] == "SHEETSIZE"){
                             _this.app.setSheetSize(parseInt(json[1]),parseInt(json[2]));
                         }
+                        else if(json[0] == "SAVED"){
+                			alert("Saved workspace");
+                        }
                         else if(json.arguments && json.arguments[0] == "IMAGE"){
                             
                             var img = document.createElement('img');
@@ -99,6 +102,13 @@
 
                             _this.app.termManager.showTab("plots");
                             
+                        }
+                        else if(json[0] == "EXPORT-CSV"){
+                            download(json[1],"sheet.csv");
+                        }
+                        else{
+                            console.warn("Received WS message without case: ")
+                            console.warn(json)
                         }
 
                     }
@@ -115,7 +125,6 @@
         }
 
         this.send = function(value){
-            // console.log("sent:" + value);
             if(this.ws.readyState == this.ws.OPEN){
                 this.ws.send(value);
             }else{
@@ -123,6 +132,24 @@
             }
         }
 
+    }
+
+    function download(data, filename, type) {
+        var file = new Blob([data], {type: type});
+        if (window.navigator.msSaveOrOpenBlob) // IE10+
+            window.navigator.msSaveOrOpenBlob(file, filename);
+        else { // Others
+            var a = document.createElement("a"),
+                    url = URL.createObjectURL(file);
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(function() {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);  
+            }, 0); 
+        }
     }
 
     window.WSManager = WSManager;

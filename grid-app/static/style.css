@@ -25,6 +25,21 @@ body header {
   width: 100%;
   z-index: 1;
   user-select: none;
+  position: relative;
+}
+body header .workspaceName {
+  position: absolute;
+  width: 200px;
+  left: 50%;
+  margin-left: -100px;
+  top: 10px;
+}
+body header .workspaceName input {
+  width: 100%;
+  text-align: center;
+  border: 0;
+  background: 0;
+  font-size: 16px;
 }
 body header div-menu {
   display: flex;

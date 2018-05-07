@@ -194,6 +194,10 @@
 		}
 
 		this.set_formula = function(position, value, update) {
+			if(value == "="){
+				return;
+			}
+
 			if(!this.dataFormulas[position[0]]){
 				this.dataFormulas[position[0]] = [];
 			}
@@ -294,10 +298,33 @@
 			});
 		}
 
+		this.getWorkspaceDetails = function(){
+			var slug = window.location.href.split("/")[4];
+			$.post("/get-workspace-details",{workspaceSlug: slug}, function(data){
+				$('.workspaceName input[name="workspaceName"]').val(data.name);
+				$('.workspaceName input[name="id"]').val(data.id);
+			});
+
+			$(document).on("change", ".workspaceName input", function(){
+
+				var val = $(this).val();
+				var id = $(this).parent().find("input[name='id']").val();
+
+				$.post("/workspace-change-name", {workspaceId: id, workspaceNewName: val }, function(data, error){
+					if(error != "success"){
+						console.error(error);
+					}
+				})
+			});
+		}
+
 		this.init = function(){
 
 			// initialize editor
 			this.editor.init();
+
+			// get workspace details
+			this.getWorkspaceDetails();
 
 			// initialize wsManager
 			this.wsManager.init();
@@ -338,8 +365,16 @@
 			});
 			
 			this.isFocusedOnElement = function(){
+
+				var focused_on_input = false;
+
+				$('input').each(function(){
+					if($(this).is(":focus")){
+						focused_on_input = true;
+					}
+				});
 				
-				if(!_this.input_field.is(':focus') && !_this.formula_input.is(":focus") && !_this.editor.ace.isFocused() && !_this.termManager.isFocused()){
+				if(!focused_on_input && !_this.input_field.is(':focus') && !_this.formula_input.is(":focus") && !_this.editor.ace.isFocused() && !_this.termManager.isFocused()){
 					return false;
 				}else{
 					return true;
@@ -661,7 +696,7 @@
 				// delete
 				else if(e.keyCode == 46 || e.keyCode == 8){
 					// delete value in current cell
-					if(!_this.input_field.is(":focus") && !_this.formula_input.is(':focus')){
+					if(!_this.isFocusedOnElement()){
 						_this.deleteSelection();
 						_this.formula_input.val('');
 					}else{
@@ -1422,12 +1457,28 @@
 			
 		}
 
+		this.saveWorkspace = function(){
+			this.wsManager.send(JSON.stringify({arguments:["SAVE"]}));
+		}
+
+		this.exportCSV = function(){
+			this.wsManager.send(JSON.stringify({arguments:["EXPORT-CSV"]}));
+		}
+
 		this.menuInit = function(){
 
 			var menu = $(this.dom).find('div-menu');
 
 			menu.find('menu-item.about').click(function(){
 				alert("This is a web-based Spreadsheet program built by R. Lamers");
+			});
+
+			menu.find('menu-item.save-workspace').click(function(){
+				_this.saveWorkspace();
+			});
+
+			menu.find('menu-item.export-csv').click(function(){
+				_this.exportCSV();
 			});
 
 			menu.find('menu-item.close-workspace').click(function(e){

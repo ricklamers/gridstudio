@@ -10,11 +10,14 @@
 	</head>
 	<body>
 		<header>
+			<div class="workspaceName"><input type="hidden" name='id' value='' /><input type="text" name="workspaceName" value="" /></div>
 			<div-menu>
 				<menu-item> 
 					File
 					<menu-list>
 						<menu-item class='load-csv'>Load CSV<input type='file' class="csv-input" /></menu-item>
+						<menu-item class='export-csv'>Export as CSV</menu-item>
+						<menu-item class='save-workspace'>Save workspace</menu-item>
 						<menu-item class='upload-file'>Upload file<input type='file' class="file-input" /></menu-item>
 						<menu-item class='about'>About</menu-item>
 						<menu-item class='close-workspace'><a href="#">Close workspace</a></menu-item>

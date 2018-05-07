@@ -79,83 +79,79 @@ func streamPythonOut(stdoutPipe io.ReadCloser, pythonIn io.WriteCloser, c *Clien
 
 				bufferString += string(buffer)
 
-				if strings.HasSuffix(bufferString, "\n") {
+				if strings.HasSuffix(bufferString, "#ENDPARSE#") {
 
-					// detect whether Python process has outputted new data
-					if len(buffer) > 0 {
+					parseStrings := strings.Split(bufferString, "#ENDPARSE#")
 
-						newString := bufferString
+					for _, e := range parseStrings {
 
-						// only change bufferSize if ending is #PONG#
-						// print string from b that is size of newBufferLength that starts at oldSize
+						// detect whether Python process has outputted new data
+						if len(e) > 0 {
 
-						// check first 7 chars in substring
-						if len(newString) > 6 && newString[:7] == "#PARSE#" {
+							newString := e
 
-							// could receive double JSON message
-							commands := strings.Split(newString, "#PARSE#")
+							// only change bufferSize if ending is #PONG#
+							// print string from b that is size of newBufferLength that starts at oldSize
 
-							// remove first element
-							commands = commands[1:]
+							// check first 7 chars in substring
+							if len(newString) > 6 && newString[:7] == "#PARSE#" {
 
-							for _, e := range commands {
-								c.actions <- []byte(e)
-							}
+								c.actions <- []byte(newString[7:])
 
-						} else if len(newString) > 6 && newString[:7] == "#IMAGE#" {
-							commands := strings.Split(newString, "#IMAGE#")
+							} else if len(newString) > 6 && newString[:7] == "#IMAGE#" {
+								commands := strings.Split(newString, "#IMAGE#")
 
-							// remove first element
-							commands = commands[1:2]
+								// remove first element
+								commands = commands[1:2]
 
-							// send JSON bytes directly to client websocket connection
-							for _, e := range commands {
-								c.send <- []byte(e)
-							}
-						} else if len(newString) > 5 && newString[:6] == "#DATA#" {
-
-							// data receive request
-							cellRangeString := newString[6:]
-
-							cells := cellRangeToCells(cellRangeString)
-
-							var commandBuf bytes.Buffer
-
-							for _, e := range cells {
-
-								valueDv := c.grid.data[e]
-								value := convertToString(valueDv).DataString
-								// for each cell get data
-								commandBuf.WriteString("sheet_data[\"")
-								commandBuf.WriteString(e)
-								commandBuf.WriteString("\"] = ")
-
-								if valueDv.ValueType == DynamicValueTypeString {
-									commandBuf.WriteString("\"")
-									commandBuf.WriteString(value)
-									commandBuf.WriteString("\"")
-								} else {
-									if len(value) == 0 {
-										commandBuf.WriteString("\"\"")
-									} else {
-										commandBuf.WriteString(value)
-									}
+								// send JSON bytes directly to client websocket connection
+								for _, e := range commands {
+									c.send <- []byte(e)
 								}
+							} else if len(newString) > 5 && newString[:6] == "#DATA#" {
 
+								// data receive request
+								cellRangeString := newString[6:]
+
+								cells := cellRangeToCells(cellRangeString)
+
+								var commandBuf bytes.Buffer
+
+								for _, e := range cells {
+
+									valueDv := c.grid.Data[e]
+									value := convertToString(valueDv).DataString
+									// for each cell get data
+									commandBuf.WriteString("sheet_data[\"")
+									commandBuf.WriteString(e)
+									commandBuf.WriteString("\"] = ")
+
+									if valueDv.ValueType == DynamicValueTypeString {
+										commandBuf.WriteString("\"")
+										commandBuf.WriteString(value)
+										commandBuf.WriteString("\"")
+									} else {
+										if len(value) == 0 {
+											commandBuf.WriteString("\"\"")
+										} else {
+											commandBuf.WriteString(value)
+										}
+									}
+
+									commandBuf.WriteString("\n")
+								}
+								// empty line to finish command
 								commandBuf.WriteString("\n")
-							}
-							// empty line to finish command
-							commandBuf.WriteString("\n")
-							pythonIn.Write(commandBuf.Bytes())
+								pythonIn.Write(commandBuf.Bytes())
 
-						} else {
+							} else if len(newString) > 12 && newString[:13] == "#INTERPRETER#" {
 
-							if len(newString) > 0 {
 								jsonData := []string{"INTERPRETER"}
-								jsonData = append(jsonData, newString)
+								jsonData = append(jsonData, newString[13:])
 								json, _ := json.Marshal(jsonData)
 								c.send <- json
 							}
+
 						}
 
 					}
