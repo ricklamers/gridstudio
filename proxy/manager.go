@@ -24,8 +24,8 @@ import (
 
 	"./dockermanager"
 	"./websocketproxy"
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/websocket"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/twinj/uuid"
 )
 
@@ -125,6 +125,7 @@ func getUserId(r *http.Request, db *sql.DB) int {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer ownerQuery.Close()
 
 	if ownerQuery.Next() {
 
@@ -140,10 +141,10 @@ func getUserId(r *http.Request, db *sql.DB) int {
 func checkLoggedIn(email string, token string, db *sql.DB) bool {
 
 	rows, err := db.Query("SELECT id FROM users WHERE email = ? AND token = ?", email, token)
-
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer rows.Close()
 
 	if rows.Next() {
 		return true
@@ -200,10 +201,16 @@ func main() {
 	usersessions = make(map[string]dockermanager.DockerSession)
 	usedports = make(map[int]bool)
 
-	db, err := sql.Open("mysql", "root:manneomanneo@/grid")
+	// db, err := sql.Open("mysql", "root:manneomanneo@/grid")
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+
+	db, err := sql.Open("sqlite3", "db/manager.db")
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer db.Close()
 
 	// index.html to initialize
 	httpClient := http.Client{}
@@ -246,12 +253,16 @@ func main() {
 
 			// check token validity
 			rows, err := db.Query("SELECT id FROM users WHERE email = ? AND password = ?", email, passwordHashed)
-
 			if err != nil {
 				log.Fatal(err)
 			}
 
 			if rows.Next() {
+
+				rows.Close()
+
+				fmt.Println("Login, found user matching hashed PW.")
+
 				// log in
 				expiration := time.Now().Add(365 * 24 * time.Hour)
 
@@ -265,8 +276,7 @@ func main() {
 				http.SetCookie(w, &emailCookie)
 
 				// update token in sql
-				_, err := db.Query("UPDATE users SET token = ? WHERE email = ?", token, email)
-
+				_, err := db.Exec("UPDATE users SET token = ? WHERE email = ?", token, email)
 				if err != nil {
 					log.Fatal(err)
 				}
@@ -333,7 +343,7 @@ func main() {
 			id := r.Form.Get("workspaceId")
 			newName := r.Form.Get("workspaceNewName")
 
-			_, err := db.Query("UPDATE workspaces SET name=? WHERE id = ?", newName, id)
+			_, err := db.Exec("UPDATE workspaces SET name=? WHERE id = ?", newName, id)
 			if err != nil {
 				fmt.Println(err)
 			}
@@ -352,6 +362,7 @@ func main() {
 		if err != nil {
 			fmt.Println(err)
 		}
+		defer rows.Close()
 
 		var (
 			id    int
@@ -398,6 +409,7 @@ func main() {
 			userId := getUserId(r, db)
 
 			rows, err := db.Query("SELECT id, owner, slug, name FROM workspaces WHERE owner = ?", userId)
+			defer rows.Close()
 
 			var (
 				id    int
@@ -474,10 +486,13 @@ func main() {
 		dirName = "userdata/workspace-" + uuidString
 
 		if creatingNew {
-			userId := getUserId(r, db)
+			userID := getUserId(r, db)
 
 			// create database entry
-			db.Query("INSERT INTO workspaces (owner, slug, name) VALUES (?,?,?)", userId, uuidString, "Untitled")
+			_, err := db.Exec("INSERT INTO workspaces (owner, slug, name) VALUES (?,?,?)", userID, uuidString, "Untitled")
+			if err != nil {
+				fmt.Println(err)
+			}
 
 			// create files
 			os.MkdirAll(dirName, 0777)
@@ -514,9 +529,15 @@ func main() {
 		if runtime.GOOS == "linux" {
 			// TODO: add GPU docker - big change - will be done later
 			// dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true", "-v", "/home/rick/workspace/grid-docker/grid-app:/home/source", "-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "--device=/dev/nvidia0:/dev/nvidia0", "--device=/dev/nvidiactl:/dev/nvidiactl", "--device=/dev/nvidia-uvm:/dev/nvidia-uvm", "--device=/dev/nvidia-modeset:/dev/nvidia-modeset", "goserver")
-			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true", "-v", "/home/rick/workspace/grid-docker/grid-app:/home/source", "-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "-d=false", "goserver")
+			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true",
+				"-v", "/home/rick/workspace/grid-docker/grid-app:/home/source",
+				"/home/rick/workspace/grid-docker/grid-app/proxy/userdata/workspace-"+uuidString+"/userfolder:/home/user", "-v",
+				"-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "-d=false", "goserver")
 		} else if runtime.GOOS == "windows" {
-			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true", "-v", "C:\\Users\\Rick\\workspace\\grid-docker\\grid-app:/home/source", "-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "goserver")
+			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true",
+				"-v", "C:\\Users\\Rick\\workspace\\grid-docker\\grid-app:/home/source",
+				"-v", "C:\\Users\\Rick\\workspace\\grid-docker\\proxy\\userdata\\workspace-"+uuidString+"\\userfolder:/home/user",
+				"-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "goserver")
 		} else {
 			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true", "-v", "/Users/ricklamers/workspace/grid-docker/proxy/userdata/workspace-"+uuidString+"/userfolder:/home/user", "-v", "/Users/ricklamers/workspace/grid-docker/grid-app:/home/source", "-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "-d=false", "goserver")
 		}

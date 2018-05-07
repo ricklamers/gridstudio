@@ -93,6 +93,9 @@
                         else if(json[0] == "SAVED"){
                 			alert("Saved workspace");
                         }
+                        else if(json[0] == "VIEW-INVALIDATED"){
+                			_this.app.refreshView();
+                        }
                         else if(json.arguments && json.arguments[0] == "IMAGE"){
                             
                             var img = document.createElement('img');

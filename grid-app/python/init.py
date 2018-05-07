@@ -21,8 +21,7 @@ def cell(cell, value = None):
     else:
         # just return value
         cell_range = ':'.join([cell, cell])
-        sheet(cell_range)
-        return sheet_data[cell]
+        return sheet(cell_range)
 
 def plot():
     plt.savefig("tmp.png")
@@ -111,21 +110,21 @@ def sheet(cell_range, data = None):
             
         if type(data) is list:
             
-            newData = []
-            # if data is string without starting with =, add escape quotes
-            for index, element in enumerate(data):
+            # newData = []
+            # # if data is string without starting with =, add escape quotes
+            # for index, element in enumerate(data):
 
-                if isinstance(element, str):
-                    # string meant as string, escape
-                    element = "\"" + element + "\""
-                    newData.append(element)
-                else:
-                    newData.append(str(element))
+            #     if isinstance(element, str):
+            #         # string meant as string, escape
+            #         element = "\"" + element + "\""
+            #         newData.append(element)
+            #     else:
+            #         newData.append(str(element))
 
             arguments =  ['RANGE', 'SETLIST', cell_range]
 
             # append list
-            arguments = arguments + newData
+            arguments = arguments + data
 
             json_object = {'arguments':arguments}
             json_string = ''.join(['#PARSE#', json.dumps(json_object),'#ENDPARSE#'])
@@ -143,7 +142,7 @@ def sheet(cell_range, data = None):
                 data = "\"" + data + "\""
 
             data = {'arguments': ['RANGE', 'SETSINGLE', cell_range, ''.join(["=",str(data)])]}
-            data = ''.join(['#PARSE#', json.dumps(data)],'#ENDPARSE#')
+            data = ''.join(['#PARSE#', json.dumps(data),'#ENDPARSE#'])
             real_print(data, flush=True, end='')
     
     # get data from sheet

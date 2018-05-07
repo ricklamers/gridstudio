@@ -223,6 +223,13 @@ func sendSheetSize(c *Client, grid *Grid) {
 	c.send <- json
 }
 
+func invalidateView(grid *Grid, c *Client) {
+
+	jsonData := []string{"VIEW-INVALIDATED"}
+	json, _ := json.Marshal(jsonData)
+	c.send <- json
+}
+
 func computeAndSend(grid *Grid, c *Client) {
 
 	cellsToSend := [][]string{}
@@ -484,7 +491,7 @@ func (c *Client) writePump() {
 					values := parsed[3:]
 
 					// parsed[3] contains the value (formula)
-					newDvs := make(map[string]DynamicValue)
+					// newDvs := make(map[string]DynamicValue)
 
 					// starting row
 
@@ -510,24 +517,29 @@ func (c *Client) writePump() {
 						//dv.DataFormula = incrementSingleReferences(dv.DataFormula, incrementAmount)
 
 						// range auto reference manipulation, increment row automatically for references in this formula for each iteration
-						newDvs[ref] = dv
+						// newDvs[ref] = dv
 
 						// set to grid for access during setDependencies
-						grid.Data[ref] = dv
+						parsedDv := parse(dv, &grid, ref)
+						parsedDv.DataFormula = values[valuesIndex]
+
+						grid.Data[ref] = parsedDv
 
 						valuesIndex++
 
 					}
 
+					invalidateView(&grid, c)
+
 					// then setDependencies for all
 
 					// even though all values, has to be ran for all new values because fields might depend on new input data
-					for ref, dv := range newDvs {
-						grid.Data[ref] = setDependencies(ref, dv, &grid)
-					}
+					// for ref, dv := range newDvs {
+					// 	grid.Data[ref] = setDependencies(ref, dv, &grid)
+					// }
 
 					// now compute all dirty
-					computeAndSend(&grid, c)
+					// computeAndSend(&grid, c)
 
 				}
 			case "GET":

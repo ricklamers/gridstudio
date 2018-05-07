@@ -204,7 +204,7 @@ func (c *Client) pythonInterpreter() {
 				return
 			}
 
-			fmt.Println("Write for Python interpreter received: " + command)
+			// fmt.Println("Write for Python interpreter received: " + command)
 
 			pythonIn.Write([]byte(command + "\n\n"))
 
