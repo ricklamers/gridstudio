@@ -19,7 +19,7 @@
         
         this.init = function(){
 
-            this.ace = ace.edit("editor");
+            this.ace = ace.edit("editor-ace");
             var editor = this.ace;
             
             editor.$blockScrolling = Infinity
@@ -100,11 +100,36 @@
                 }
             }
 
+            var animationDiv = $(document.createElement("div"));
+            animationDiv.addClass('computing-indicator');
+            animationDiv.attr("title","Computing, please be patient.");
+            animationDiv.hide();
+            $('#editor').prepend(animationDiv);
+
+        }
+
+        this.hideScriptExecuting = function(){
+            $('#editor .computing-indicator').hide();
+        }
+
+        this.showScriptExecuting = function(){
+            $('#editor .computing-indicator').show();
+        }
+
+        this.commandComplete = function(){
+            this.hideScriptExecuting();
         }
 
         this.evalScript = function(script){
-            if(script.trim().length > 0){
-                this.app.wsManager.send("#PARSE#" + script);
+            var parsedScript = script.trim();
+
+            parsedScript = parsedScript.replace(/^\s*\n/gm, '');
+
+            console.log(parsedScript);
+
+            if(parsedScript.length > 0){
+                this.showScriptExecuting();
+                this.app.wsManager.send("#PARSE#" + parsedScript);
             }
         }
     }

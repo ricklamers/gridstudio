@@ -9,6 +9,13 @@
 
 	</head>
 	<body>
+		<div class="context-menu">
+			<div class="context-menu-item copy">Copy</div>
+			<div class="context-menu-item cut">Cut</div>
+			<div class="context-menu-item paste">Paste</div>
+			<div class="context-menu-item sort-asc">Sort ascending</div>
+			<div class="context-menu-item sort-desc">Sort descending</div>
+		</div>
 		<header>
 			<div class="workspaceName"><input type="hidden" name='id' value='' /><input type="text" name="workspaceName" value="" /></div>
 			<div-menu>
@@ -19,7 +26,6 @@
 						<menu-item class='export-csv'>Export as CSV</menu-item>
 						<menu-item class='save-workspace'>Save workspace</menu-item>
 						<menu-item class='upload-file'>Upload file<input type='file' class="file-input" /></menu-item>
-						<menu-item class='about'>About</menu-item>
 						<menu-item class='close-workspace'><a href="#">Close workspace</a></menu-item>
 					</menu-list>
 				</menu-item>
@@ -40,6 +46,7 @@
 				<menu-item class='code'>  
 					Code
 				</menu-item>
+				<menu-item class='about'>About</menu-item>
 			</div-menu>
 			<div class="formula-bar">
 				<input type="text" />
@@ -51,7 +58,11 @@
 				<div class="sheet-sizer"></div>
 			</div-sheet>
 			<div class='code-editor'>
-				<div id="editor"></div>
+				<div id="editor">
+					<div id="editor-ace">
+						
+					</div>
+				</div>
 				<div class="dev-tabs">
 					<div class="tabs"><div class="tab" data-tab='plots'>Plots</div><div class="tab current" data-tab='terminal'>Terminal</div><div data-tab='console' class="tab">Python out</div></div>
 					<div class="terminal" id="terminal-container"></div>

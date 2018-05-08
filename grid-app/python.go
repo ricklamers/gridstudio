@@ -44,8 +44,12 @@ func streamPythonEOut(stdoutPipe io.ReadCloser, pythonIn io.WriteCloser, c *Clie
 
 				jsonData := []string{"INTERPRETER"}
 				jsonData = append(jsonData, "[error]"+errorString)
-				json, _ := json.Marshal(jsonData)
-				c.send <- json
+				jsonString, _ := json.Marshal(jsonData)
+				c.send <- jsonString
+
+				jsonData2 := []string{"COMMANDCOMPLETE"}
+				jsonString2, _ := json.Marshal(jsonData2)
+				c.send <- jsonString2
 
 				bufferString = ""
 			}
@@ -56,9 +60,9 @@ func streamPythonEOut(stdoutPipe io.ReadCloser, pythonIn io.WriteCloser, c *Clie
 }
 
 func streamPythonOut(stdoutPipe io.ReadCloser, pythonIn io.WriteCloser, c *Client, closeChannel chan string) {
-	buffer := make([]byte, 100, 1000)
+	buffer := make([]byte, 100000)
 
-	bufferString := ""
+	var bufferHolder bytes.Buffer
 
 	for {
 
@@ -71,96 +75,130 @@ func streamPythonOut(stdoutPipe io.ReadCloser, pythonIn io.WriteCloser, c *Clien
 		default:
 			for {
 				n, err := stdoutPipe.Read(buffer)
-				if err == io.EOF {
-					stdoutPipe.Close()
-					break
+
+				if err != nil {
+					fmt.Println(err)
 				}
-				buffer = buffer[0:n]
+				// n, err := io.ReadFull(stdoutPipe, buffer)
 
-				bufferString += string(buffer)
+				if n != len(buffer) {
+					// error implies that the buffer could not be fully filled, hence some sort of end was found in stdoutPipe
+					subbuffer := buffer[:n]
 
-				if strings.HasSuffix(bufferString, "#ENDPARSE#") {
+					bufferHolder.Write(subbuffer)
 
-					parseStrings := strings.Split(bufferString, "#ENDPARSE#")
+					parsePythonOutput(bufferHolder, pythonIn, c)
 
-					for _, e := range parseStrings {
-
-						// detect whether Python process has outputted new data
-						if len(e) > 0 {
-
-							newString := e
-
-							// only change bufferSize if ending is #PONG#
-							// print string from b that is size of newBufferLength that starts at oldSize
-
-							// check first 7 chars in substring
-							if len(newString) > 6 && newString[:7] == "#PARSE#" {
-
-								c.actions <- []byte(newString[7:])
-
-							} else if len(newString) > 6 && newString[:7] == "#IMAGE#" {
-								commands := strings.Split(newString, "#IMAGE#")
-
-								// remove first element
-								commands = commands[1:2]
-
-								// send JSON bytes directly to client websocket connection
-								for _, e := range commands {
-									c.send <- []byte(e)
-								}
-							} else if len(newString) > 5 && newString[:6] == "#DATA#" {
-
-								// data receive request
-								cellRangeString := newString[6:]
-
-								cells := cellRangeToCells(cellRangeString)
-
-								var commandBuf bytes.Buffer
-
-								for _, e := range cells {
-
-									valueDv := c.grid.Data[e]
-									value := convertToString(valueDv).DataString
-									// for each cell get data
-									commandBuf.WriteString("sheet_data[\"")
-									commandBuf.WriteString(e)
-									commandBuf.WriteString("\"] = ")
-
-									if valueDv.ValueType == DynamicValueTypeString {
-										commandBuf.WriteString("\"")
-										commandBuf.WriteString(value)
-										commandBuf.WriteString("\"")
-									} else {
-										if len(value) == 0 {
-											commandBuf.WriteString("\"\"")
-										} else {
-											commandBuf.WriteString(value)
-										}
-									}
-
-									commandBuf.WriteString("\n")
-								}
-								// empty line to finish command
-								commandBuf.WriteString("\n")
-								pythonIn.Write(commandBuf.Bytes())
-
-							} else if len(newString) > 12 && newString[:13] == "#INTERPRETER#" {
-
-								jsonData := []string{"INTERPRETER"}
-								jsonData = append(jsonData, newString[13:])
-								json, _ := json.Marshal(jsonData)
-								c.send <- json
-							}
-
-						}
-
-					}
-
-					bufferString = ""
+					bufferHolder.Reset()
+				} else {
+					bufferHolder.Write(buffer)
 				}
+
+				// try Read a second time, if it n == 0, no more bytes to be read and call to parsePythonOutput can be made
+				// n2, err2 := stdoutPipe.Read(buffer)
+				// if err2 == io.EOF {
+				// 	stdoutPipe.Close()
+				// 	break
+				// }
+				// buffer = buffer[0:n2]
+
+				// bufferHolder.Write(buffer)
+
+				// if n2 == 0 {
+				// 	parsePythonOutput(bufferHolder, pythonIn, c)
+				// }
 
 			}
 		}
+	}
+}
+
+func parsePythonOutput(bufferHolder bytes.Buffer, pythonIn io.WriteCloser, c *Client) {
+
+	if strings.HasSuffix(bufferHolder.String(), "#ENDPARSE#") {
+
+		parseStrings := strings.Split(bufferHolder.String(), "#ENDPARSE#")
+
+		for _, e := range parseStrings {
+
+			// detect whether Python process has outputted new data
+			if len(e) > 0 {
+
+				newString := e
+
+				// only change bufferSize if ending is #PONG#
+				// print string from b that is size of newBufferLength that starts at oldSize
+
+				// check first 7 chars in substring
+
+				if len(newString) > 16 && newString[:17] == "#COMMANDCOMPLETE#" {
+
+					jsonData := []string{"COMMANDCOMPLETE"}
+					json, _ := json.Marshal(jsonData)
+					c.send <- json
+
+				} else if len(newString) > 6 && newString[:7] == "#PARSE#" {
+
+					c.actions <- []byte(newString[7:])
+
+				} else if len(newString) > 6 && newString[:7] == "#IMAGE#" {
+					commands := strings.Split(newString, "#IMAGE#")
+
+					// remove first element
+					commands = commands[1:2]
+
+					// send JSON bytes directly to client websocket connection
+					for _, e := range commands {
+						c.send <- []byte(e)
+					}
+				} else if len(newString) > 5 && newString[:6] == "#DATA#" {
+
+					// data receive request
+					cellRangeString := newString[6:]
+
+					cells := cellRangeToCells(cellRangeString)
+
+					var commandBuf bytes.Buffer
+
+					for _, e := range cells {
+
+						valueDv := c.grid.Data[e]
+						value := convertToString(valueDv).DataString
+						// for each cell get data
+						commandBuf.WriteString("sheet_data[\"")
+						commandBuf.WriteString(e)
+						commandBuf.WriteString("\"] = ")
+
+						if valueDv.ValueType == DynamicValueTypeString {
+							commandBuf.WriteString("\"")
+							commandBuf.WriteString(value)
+							commandBuf.WriteString("\"")
+						} else {
+							if len(value) == 0 {
+								commandBuf.WriteString("\"\"")
+							} else {
+								commandBuf.WriteString(value)
+							}
+						}
+
+						commandBuf.WriteString("\n")
+					}
+					// empty line to finish command
+					commandBuf.WriteString("\n")
+					pythonIn.Write(commandBuf.Bytes())
+
+				} else if len(newString) > 12 && newString[:13] == "#INTERPRETER#" {
+
+					jsonData := []string{"INTERPRETER"}
+					jsonData = append(jsonData, newString[13:])
+					json, _ := json.Marshal(jsonData)
+					c.send <- json
+				}
+
+			}
+
+		}
+
 	}
 }
 

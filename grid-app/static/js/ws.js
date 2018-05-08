@@ -96,6 +96,9 @@
                         else if(json[0] == "VIEW-INVALIDATED"){
                 			_this.app.refreshView();
                         }
+                        else if(json[0] == "COMMANDCOMPLETE"){
+                			_this.app.editor.commandComplete();
+                        }
                         else if(json.arguments && json.arguments[0] == "IMAGE"){
                             
                             var img = document.createElement('img');

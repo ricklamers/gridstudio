@@ -15,7 +15,6 @@ import (
 
 const DynamicValueTypeFormula int8 = 0
 const DynamicValueTypeReference int8 = 1
-const DynamicValueTypeInteger int8 = 2
 const DynamicValueTypeFloat int8 = 3
 const DynamicValueTypeString int8 = 4
 const DynamicValueTypeBool int8 = 5
@@ -25,7 +24,6 @@ const DynamicValueTypeOperator int8 = 7
 type DynamicValue struct {
 	ValueType     int8
 	DataFloat     float64
-	DataInteger   int32
 	DataString    string
 	DataBool      bool
 	DataFormula   string
@@ -289,6 +287,15 @@ func findReferences(formula string) map[string]bool {
 		references = append(references, buf.String())
 	}
 
+	// filter references for known keywords such as TRUE/FALSE
+	for k, reference := range references {
+		if len(references) > 0 {
+			if reference == "TRUE" || reference == "FALSE" {
+				references = append(references[:k], references[k+1:]...)
+			}
+		}
+	}
+
 	// expand references when necessary
 	for k, reference := range references {
 
@@ -387,16 +394,10 @@ func referencesToUpperCase(formula string) string {
 	return formula
 }
 
-func cellRangeToCells(reference string) []string {
+func cellRangeToCells(cellRange string) []string {
 	references := []string{}
 
-	cells := strings.Split(reference, ":")
-
-	cell1Row := getReferenceRowIndex(cells[0])
-	cell2Row := getReferenceRowIndex(cells[1])
-
-	cell1Column := getReferenceColumnIndex(cells[0])
-	cell2Column := getReferenceColumnIndex(cells[1])
+	cell1Row, cell1Column, cell2Row, cell2Column := cellRangeBoundaries(cellRange)
 
 	// illegal argument, cell1Row should always be lower
 	if cell1Row > cell2Row {
@@ -509,7 +510,7 @@ func contains(s []string, e string) bool {
 
 func parse(formula DynamicValue, grid *Grid, targetRef string) DynamicValue {
 
-	if formula.ValueType == DynamicValueTypeFloat || formula.ValueType == DynamicValueTypeInteger {
+	if formula.ValueType == DynamicValueTypeFloat {
 		return formula
 	}
 	if formula.ValueType == DynamicValueTypeFormula && len(formula.DataFormula) == 0 {
@@ -736,6 +737,12 @@ func parse(formula DynamicValue, grid *Grid, targetRef string) DynamicValue {
 
 				return DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: float64(floatValue)}
 
+			} else if singleElement.DataFormula == "FALSE" || singleElement.DataFormula == "TRUE" {
+				newDv := DynamicValue{ValueType: DynamicValueTypeBool, DataBool: false}
+				if singleElement.DataFormula == "TRUE" {
+					newDv.DataBool = true
+				}
+				return newDv
 			} else {
 
 				singleElement.ValueType = DynamicValueTypeReference
@@ -784,8 +791,7 @@ func parse(formula DynamicValue, grid *Grid, targetRef string) DynamicValue {
 						result = booleanCompare(LHS, RHS, elements[operatorLocation].DataFormula)
 					} else {
 						// otherwise run numeric operator evaluation
-						if (LHS.ValueType == DynamicValueTypeInteger || LHS.ValueType == DynamicValueTypeFloat) &&
-							(RHS.ValueType == DynamicValueTypeInteger || RHS.ValueType == DynamicValueTypeFloat) {
+						if LHS.ValueType == DynamicValueTypeFloat && RHS.ValueType == DynamicValueTypeFloat {
 
 							// convert LHS and RHS to float
 							LHS = convertToFloat(LHS)
@@ -853,8 +859,6 @@ func dynamicToBool(A DynamicValue) bool {
 		return A.DataBool
 	} else if A.ValueType == DynamicValueTypeFloat {
 		return A.DataFloat > 0
-	} else if A.ValueType == DynamicValueTypeInteger {
-		return A.DataInteger > 0
 	} else if A.ValueType == DynamicValueTypeString {
 		return len(A.DataString) > 0
 	} else {
@@ -867,60 +871,54 @@ func booleanCompare(LHS DynamicValue, RHS DynamicValue, operator string) Dynamic
 	// for now, cast all values to float for comparison
 
 	var result DynamicValue
+	result.ValueType = DynamicValueTypeBool
 
-	var A float64
-	var B float64
+	// var A float64
+	// var B float64
 
-	// boolean operators
-	if LHS.ValueType == DynamicValueTypeBool {
-		A = 0
-		if LHS.DataBool {
-			A = 1
-		}
-	}
-	if LHS.ValueType == DynamicValueTypeFloat {
-		A = LHS.DataFloat
-	}
-	if LHS.ValueType == DynamicValueTypeInteger {
-		A = float64(LHS.DataInteger)
-	}
+	// // boolean operators
+	// if LHS.ValueType == DynamicValueTypeBool {
+	// 	A = 0
+	// 	if LHS.DataBool {
+	// 		A = 1
+	// 	}
+	// }
+	// if LHS.ValueType == DynamicValueTypeFloat {
+	// 	A = LHS.DataFloat
+	// }
+	// if LHS.ValueType == DynamicValueTypeInteger {
+	// 	A = float64(LHS.DataInteger)
+	// }
 
-	// parse RHS dynamically
-	if RHS.ValueType == DynamicValueTypeBool {
-		B = 0
-		if RHS.DataBool {
-			B = 1
-		}
-	}
-	if RHS.ValueType == DynamicValueTypeFloat {
-		B = RHS.DataFloat
-	}
-	if RHS.ValueType == DynamicValueTypeInteger {
-		B = float64(RHS.DataInteger)
-	}
+	// // parse RHS dynamically
+	// if RHS.ValueType == DynamicValueTypeBool {
+	// 	B = 0
+	// 	if RHS.DataBool {
+	// 		B = 1
+	// 	}
+	// }
+	// if RHS.ValueType == DynamicValueTypeFloat {
+	// 	B = RHS.DataFloat
+	// }
+	// if RHS.ValueType == DynamicValueTypeInteger {
+	// 	B = float64(RHS.DataInteger)
+	// }
 
 	switch operator {
 	case ">":
-		result.DataBool = A > B
-		result.ValueType = DynamicValueTypeBool
+		result.DataBool = compareDvsBigger(LHS, RHS)
 	case "<":
-		result.DataBool = A < B
-		result.ValueType = DynamicValueTypeBool
+		result.DataBool = compareDvsSmaller(LHS, RHS)
 	case ">=":
-		result.DataBool = A >= B
-		result.ValueType = DynamicValueTypeBool
+		result.DataBool = compareDvsBigger(LHS, RHS) || (!compareDvsSmaller(LHS, RHS) && !compareDvsBigger(LHS, RHS))
 	case "<=":
-		result.DataBool = A <= B
-		result.ValueType = DynamicValueTypeBool
+		result.DataBool = compareDvsSmaller(LHS, RHS) || (!compareDvsSmaller(LHS, RHS) && !compareDvsBigger(LHS, RHS))
 	case "==":
-		result.DataBool = A == B
-		result.ValueType = DynamicValueTypeBool
+		result.DataBool = (!compareDvsSmaller(LHS, RHS) && !compareDvsBigger(LHS, RHS))
 	case "!=":
-		result.DataBool = A != B
-		result.ValueType = DynamicValueTypeBool
+		result.DataBool = compareDvsSmaller(LHS, RHS) || compareDvsBigger(LHS, RHS)
 	case "<>":
-		result.DataBool = A != B
-		result.ValueType = DynamicValueTypeBool
+		result.DataBool = compareDvsSmaller(LHS, RHS) || compareDvsBigger(LHS, RHS)
 	}
 
 	return result
@@ -1010,6 +1008,10 @@ func toChar(i int) rune {
 	return rune('A' - 1 + i)
 }
 
+func indexesToReference(row int, col int) string {
+	return indexToLetters(col) + strconv.Itoa(row)
+}
+
 func indexToLetters(index int) string {
 
 	base := float64(26)
@@ -1058,12 +1060,32 @@ func lettersToIndex(letters string) int {
 	return sum
 }
 
+func convertToBool(dv DynamicValue) DynamicValue {
+
+	boolDv := DynamicValue{ValueType: DynamicValueTypeBool, DataBool: false}
+
+	if dv.ValueType == DynamicValueTypeBool {
+		return dv
+	} else if dv.ValueType == DynamicValueTypeFloat {
+		if dv.DataFloat != 0 {
+			boolDv.DataBool = true
+		}
+	} else if dv.ValueType == DynamicValueTypeString {
+		if len(dv.DataString) != 0 {
+			boolDv.DataBool = true
+		}
+	}
+
+	return boolDv
+
+}
+
 func convertToString(dv DynamicValue) DynamicValue {
 
 	if dv.ValueType == DynamicValueTypeBool {
-		dv.DataString = "false"
+		dv.DataString = "FALSE"
 		if dv.DataBool {
-			dv.DataString = "true"
+			dv.DataString = "TRUE"
 		}
 	} else if dv.ValueType == DynamicValueTypeFloat {
 		dv.DataString = strconv.FormatFloat(float64(dv.DataFloat), 'f', -1, 64)
@@ -1073,8 +1095,6 @@ func convertToString(dv DynamicValue) DynamicValue {
 			dv.DataString = strconv.FormatFloat(float64(dv.DataFloat), 'f', 10, 64)
 		}
 
-	} else if dv.ValueType == DynamicValueTypeInteger {
-		dv.DataString = strconv.Itoa(int(dv.DataInteger))
 	}
 
 	return dv
@@ -1084,16 +1104,11 @@ func convertToFloat(dv DynamicValue) DynamicValue {
 
 	if !(dv.ValueType == DynamicValueTypeBool ||
 		dv.ValueType == DynamicValueTypeFloat ||
-		dv.ValueType == DynamicValueTypeInteger ||
 		dv.ValueType == DynamicValueTypeString) {
 
 		fmt.Println("Can't convert any other type to float")
 
 		return DynamicValue{ValueType: DynamicValueTypeFloat}
-	}
-
-	if dv.ValueType == DynamicValueTypeInteger {
-		dv.DataFloat = float64(dv.DataInteger)
 	}
 
 	if dv.ValueType == DynamicValueTypeString {
@@ -1181,14 +1196,14 @@ func getReferenceRowIndex(ref string) int {
 
 func count(arguments []DynamicValue, grid *Grid) DynamicValue {
 
-	var countValue int32
+	var countValue float64
 	for _, dv := range arguments {
 
 		// check if argument is range
 		if dv.ValueType == DynamicValueTypeReference {
 			dvs := getDataRange(dv, grid)
 			dv = count(dvs, grid)
-			countValue += dv.DataInteger
+			countValue += dv.DataFloat
 		} else {
 			dv = convertToString(dv)
 		}
@@ -1198,7 +1213,7 @@ func count(arguments []DynamicValue, grid *Grid) DynamicValue {
 		}
 	}
 
-	return DynamicValue{ValueType: DynamicValueTypeInteger, DataInteger: countValue}
+	return DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: countValue}
 }
 
 func sum(arguments []DynamicValue, grid *Grid) DynamicValue {
@@ -1223,10 +1238,10 @@ func sum(arguments []DynamicValue, grid *Grid) DynamicValue {
 func ifFunc(arguments []DynamicValue) DynamicValue {
 
 	if len(arguments) != 3 {
-		log.Fatal("IF function requires 3 arguments")
+		return DynamicValue{ValueType: DynamicValueTypeString, DataString: "IF requires 3 params"}
 	}
 	if arguments[0].ValueType != DynamicValueTypeBool {
-		log.Fatal("IF 1st parameter must be boolean")
+		arguments[0] = convertToBool(arguments[0])
 	}
 
 	if arguments[0].DataBool {
@@ -1240,7 +1255,7 @@ func ifFunc(arguments []DynamicValue) DynamicValue {
 func mathConstant(arguments []DynamicValue) DynamicValue {
 
 	if len(arguments) != 1 {
-		log.Fatal("MATH.C only takes one argument")
+		return DynamicValue{ValueType: DynamicValueTypeString, DataString: "MATH.C only takes one argument"}
 	}
 
 	switch constant := arguments[0].DataString; constant {
@@ -1251,15 +1266,13 @@ func mathConstant(arguments []DynamicValue) DynamicValue {
 	}
 
 	// couldn't find constant (didn't return before)
-	log.Fatal("constant requested not found" + arguments[0].DataString)
+	return DynamicValue{ValueType: DynamicValueTypeString, DataString: "constant requested not found: " + arguments[0].DataString}
 
-	// will never be reached, will error before
-	return DynamicValue{}
 }
 
 func sqrt(arguments []DynamicValue) DynamicValue {
 	if len(arguments) != 1 {
-		log.Fatal("SQRT only takes one argument")
+		return DynamicValue{ValueType: DynamicValueTypeString, DataString: "SQRT only takes one argument"}
 	}
 
 	floatDv := convertToFloat(arguments[0])
@@ -1281,7 +1294,7 @@ func concatenate(arguments []DynamicValue) DynamicValue {
 func number(arguments []DynamicValue) DynamicValue {
 
 	if len(arguments) != 1 {
-		log.Fatal("NUMBER only supports one argument")
+		return DynamicValue{ValueType: DynamicValueTypeString, DataString: "NUMBER only supports one argument"}
 	}
 
 	return convertToFloat(arguments[0])
@@ -1290,15 +1303,13 @@ func number(arguments []DynamicValue) DynamicValue {
 func floor(arguments []DynamicValue) DynamicValue {
 
 	if len(arguments) != 1 {
-		log.Fatal("LEN only supports one argument")
+		return DynamicValue{ValueType: DynamicValueTypeString, DataString: "FLOOR only supports one argument"}
 	}
 
 	dv := convertToFloat(arguments[0])
 
 	dv.DataFloat = math.Floor(dv.DataFloat)
-
-	dv.DataInteger = int32(dv.DataFloat)
-	dv.ValueType = DynamicValueTypeInteger
+	dv.ValueType = DynamicValueTypeFloat
 
 	return dv
 }
@@ -1306,28 +1317,24 @@ func floor(arguments []DynamicValue) DynamicValue {
 func ceil(arguments []DynamicValue) DynamicValue {
 
 	if len(arguments) != 1 {
-		log.Fatal("LEN only supports one argument")
+		return DynamicValue{ValueType: DynamicValueTypeString, DataString: "CEIL only supports one argument"}
 	}
 
 	dv := convertToFloat(arguments[0])
 
 	dv.DataFloat = math.Ceil(dv.DataFloat)
-
-	dv.DataInteger = int32(dv.DataFloat)
-	dv.ValueType = DynamicValueTypeInteger
-
 	return dv
 }
 
 func length(arguments []DynamicValue) DynamicValue {
 
 	if len(arguments) != 1 {
-		log.Fatal("LEN only supports one argument")
+		return DynamicValue{ValueType: DynamicValueTypeString, DataString: "LEN only supports one argument"}
 	}
 
 	stringValue := convertToString(arguments[0]).DataString
 
-	return DynamicValue{ValueType: DynamicValueTypeInteger, DataInteger: int32(len(stringValue))}
+	return DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: float64(len(stringValue))}
 }
 
 func random() DynamicValue {
@@ -1488,8 +1495,6 @@ func explosionSetValue(index string, dataDv DynamicValue, grid *Grid) {
 		dataDv.DataFormula = "\"" + dataDv.DataString + "\""
 	} else if dataDv.ValueType == DynamicValueTypeFloat {
 		dataDv.DataFormula = strconv.FormatFloat(dataDv.DataFloat, 'f', -1, 64)
-	} else if dataDv.ValueType == DynamicValueTypeInteger {
-		dataDv.DataFormula = strconv.Itoa(int(dataDv.DataInteger))
 	} else if dataDv.ValueType == DynamicValueTypeBool {
 		dataDv.DataFormula = "false"
 		if dataDv.DataBool {
@@ -1503,7 +1508,7 @@ func explosionSetValue(index string, dataDv DynamicValue, grid *Grid) {
 
 func abs(arguments []DynamicValue) DynamicValue {
 	if len(arguments) != 1 {
-		fmt.Println("ABS requires 1 argument")
+		return DynamicValue{ValueType: DynamicValueTypeString, DataString: "ABS only supports one argument"}
 	}
 	dv := arguments[0]
 	dv = convertToFloat(dv)
@@ -1542,6 +1547,5 @@ func executeCommand(command string, arguments []DynamicValue, grid *Grid, target
 	case "OLS":
 		return olsExplosive(arguments, grid, targetRef)
 	}
-
-	return DynamicValue{ValueType: DynamicValueTypeInteger, DataInteger: 0}
+	return DynamicValue{ValueType: DynamicValueTypeString, DataString: ""}
 }

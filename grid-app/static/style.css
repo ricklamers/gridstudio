@@ -103,6 +103,24 @@ body div-sheet canvas {
 .plotly-notifier {
   font-family: "Open Sans", sans-serif !important;
 }
+.context-menu {
+  position: absolute;
+  background: #fff;
+  box-shadow: 0px 0px 12px rgba(0, 0, 0, 0.1);
+  display: none;
+  z-index: 99;
+  font-size: 12px;
+}
+.context-menu .context-menu-item {
+  padding: 8px;
+  cursor: pointer;
+}
+.context-menu .context-menu-item:hover {
+  background: rgba(50, 110, 255, 0.1);
+}
+.context-menu.shown {
+  display: block;
+}
 .main-body {
   position: relative;
   height: 100%;
@@ -213,13 +231,14 @@ body div-sheet canvas {
   background: #000;
 }
 .code-editor .dev-tabs .tabs {
-  margin-top: -30px;
+  margin-top: -46px;
   right: 0;
   background: #eee;
   position: absolute;
 }
 .code-editor .dev-tabs .tabs .tab {
-  padding: 6px;
+  padding: 15px;
+  padding-bottom: 14px;
   float: left;
   cursor: pointer;
 }
@@ -248,6 +267,25 @@ body div-sheet canvas {
   position: absolute;
   width: 100%;
   height: 70%;
+  padding-bottom: 45px;
+  background: #eee;
+}
+#editor #editor-ace {
+  background: #fff;
+  height: 100%;
+  width: 100%;
+  border-bottom: 1px solid #ccc;
+}
+#editor .computing-indicator {
+  position: absolute;
+  bottom: 0;
+  width: 26px;
+  height: 26px;
+  background: #717171;
+  background-image: url("image/loading.gif");
+  background-size: 100%;
+  z-index: 99;
+  margin: 10px;
 }
 input:focus {
   outline: none;

@@ -93,6 +93,14 @@ def cell_range_to_indexes(cell_range):
 
     return references
 
+def convert_to_json_string(element):
+
+    if isinstance(element, str):
+        # string meant as string, escape
+        return "\"" + element + "\""
+    else:
+        return format(element, '.12f')
+
 def sheet(cell_range, data = None):
 
     # input data into sheet
@@ -110,21 +118,12 @@ def sheet(cell_range, data = None):
             
         if type(data) is list:
             
-            # newData = []
-            # # if data is string without starting with =, add escape quotes
-            # for index, element in enumerate(data):
-
-            #     if isinstance(element, str):
-            #         # string meant as string, escape
-            #         element = "\"" + element + "\""
-            #         newData.append(element)
-            #     else:
-            #         newData.append(str(element))
+            newList = list(map(convert_to_json_string, mylist))
 
             arguments =  ['RANGE', 'SETLIST', cell_range]
 
             # append list
-            arguments = arguments + data
+            arguments = arguments + newList
 
             json_object = {'arguments':arguments}
             json_string = ''.join(['#PARSE#', json.dumps(json_object),'#ENDPARSE#'])
@@ -192,6 +191,7 @@ def getAndExecuteInput():
         if code_input == "":
             try:
                 exec(command_buffer, globals(), globals())
+                real_print("#COMMANDCOMPLETE##ENDPARSE#", end='', flush = True)
             except:
                 traceback.print_exc()
             command_buffer = ""

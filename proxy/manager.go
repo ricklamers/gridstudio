@@ -442,10 +442,17 @@ func main() {
 
 	})
 
-	http.HandleFunc("/create-debug", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/create-debug/", func(w http.ResponseWriter, r *http.Request) {
 
 		// start user session and set cookie
-		uuid := uuid.NewV4().String()
+		splitURL := strings.Split(r.URL.Path, "/")
+
+		if len(splitURL) < 3 {
+			http.Redirect(w, r, "/dashboard/", 302)
+			return
+		}
+
+		uuid := splitURL[2]
 
 		ds := dockermanager.DockerSession{Port: getFreePort(usedports, startPort)}
 
@@ -458,12 +465,8 @@ func main() {
 		cookie := http.Cookie{Name: "session_uuid", Value: uuid, Expires: expiration}
 		http.SetCookie(w, &cookie)
 
-		// ws_port to 4000 for debug
-		// cookieWs := http.Cookie{Name: "ws_port", Value: "4000", Expires: expiration}
-		// http.SetCookie(w, &cookieWs)
-
 		// redirect to app
-		http.Redirect(w, r, "/", 302)
+		http.Redirect(w, r, "/workspace/"+uuid+"/", 302)
 	})
 
 	http.HandleFunc("/initialize", func(w http.ResponseWriter, r *http.Request) {
@@ -650,6 +653,8 @@ func main() {
 
 			// fmt.Println("workspacePrefix: " + workspacePrefix)
 			// fmt.Println("requestString (after replace): " + requestString)
+
+			fmt.Println("HTTP proxy: " + "http://127.0.0.1:" + strconv.Itoa(httpRedirPort) + requestString)
 
 			base, err := url.Parse("http://127.0.0.1:" + strconv.Itoa(httpRedirPort) + requestString)
 			if err != nil {

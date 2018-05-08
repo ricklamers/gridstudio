@@ -8,7 +8,8 @@ $(document).ready(function(){
             workspaceList.html(" ");
 
             for(var x = 0; x < data.length; x++){
-                workspaceList.append("<li><input type='name' name='workspaceName' value='"+data[x].name+"' /><form action='/initialize' method='post'><input type='hidden' value='"+data[x].slug+"' name='uuid' /><input type='hidden' value='"+data[x].id+"' name='id' />"+data[x].slug+"<button>Open</button></form></li><br>");
+                var workspaceNameEscaped = data[x].name.replace("'","&#39;");
+                workspaceList.append("<li><input type='name' name='workspaceName' value='"+workspaceNameEscaped+"' /><form action='/initialize' method='post'><input type='hidden' value='"+data[x].slug+"' name='uuid' /><input type='hidden' value='"+data[x].id+"' name='id' />"+data[x].slug+"<button>Open</button></form></li><br>");
             }
 
         })

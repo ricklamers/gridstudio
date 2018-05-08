@@ -83,6 +83,8 @@
 		
 		this.plots = {};
 
+		this.lastMousePosition = [0,0];
+
 		this.minColRowSize = 20;
 
 		this.sidebarSize = 25;
@@ -99,8 +101,8 @@
 		this.data = [];
 		this.dataFormulas = [];
 
-		this.rowHeights = [];
-		this.columnWidths = [];
+		this.rowHeightsCache = [];
+		this.columnWidthsCache = [];
 
 		this.init_input_field_backup_value = undefined;
 		
@@ -195,7 +197,7 @@
 
 		this.set_formula = function(position, value, update) {
 			if(value == "="){
-				return;
+				value = "";
 			}
 
 			if(!this.dataFormulas[position[0]]){
@@ -268,10 +270,17 @@
 			this.ctx.scale(this.pixelRatio,this.pixelRatio);
 
 			// determine width based on columnWidths
-			var sizerWidth = this.columnWidths.reduce(function(total, num){ return total + num; }, 0) + this.sidebarSize;
+			var sizerWidth = this.numColumns * this.cellWidth;
+
+			if(sizerWidth > 40000){
+				sizerWidth = 40000;
+			}
 
 			// determine height based on rowHeights
-			var sizerHeight = this.rowHeights.reduce(function(total, num){ return total + num; }, 0) + this.sidebarSize;
+			var sizerHeight = this.numRows * this.cellHeight;
+			if(sizerHeight > 40000){
+				sizerHeight = 40000;
+			}
 
 			this.sheetSizer.style.height = sizerHeight + "px";
 			this.sheetSizer.style.width = sizerWidth + "px";
@@ -318,6 +327,50 @@
 			});
 		}
 
+		this.sortRange = function(direction, range){
+
+			var rangeString = this.cellZeroIndexToString(range[0][0], range[0][1]) + ":" + this.cellZeroIndexToString(range[1][0], range[1][1]);
+
+			var currentCellLocation = this.positionToCellLocation(this.lastMousePosition[0], this.lastMousePosition[1]);
+			var column = this.indexToLetters(currentCellLocation[1] + 1);
+
+			_this.wsManager.send(JSON.stringify({arguments: ["SORT", direction, rangeString, column]}));
+		}
+
+		this.registerContextMenu = function(){
+			$('div-sheet').bind("contextmenu", function (event) {
+    
+				// Avoid the real one
+				event.preventDefault();
+				
+				// Show contextmenu
+				$(".context-menu").toggleClass("shown").css({
+					left: event.clientX + "px",
+					top: event.clientY + "px"
+				});
+			});
+
+			$(".context-menu .context-menu-item").click(function(e){
+				e.preventDefault();
+
+				if($(this).hasClass('sort-asc')){
+					_this.sortRange("ASC", _this.selectionToLowerUpper(_this.selectedCells));
+				}else if($(this).hasClass('sort-desc')){
+					_this.sortRange("DESC", _this.selectionToLowerUpper(_this.selectedCells));
+				}else{
+					alert("Sorry, this is not implemented yet.");
+				}
+
+				$('.context-menu').removeClass("shown");
+
+			});
+
+			$('div-sheet').bind("mousedown",function(){
+				$(".context-menu").removeClass('shown');
+			})
+			
+		}
+
 		this.init = function(){
 
 			// initialize editor
@@ -331,6 +384,8 @@
 			this.wsManager.onconnect = function(){
 				_this.refreshView();
 			}
+
+			this.registerContextMenu();
 
 			// initialize terminal
 			this.termManager.init();
@@ -409,11 +464,11 @@
 							
 							if(type == 'column'){
 
-								_this.columnWidths[cell[1]] = _this.cellWidth;
+								_this.columnWidths(cell[1],_this.cellWidth);
 								
 							}else{
 
-								_this.rowHeights[cell[0]] = _this.cellHeight;
+								_this.rowHeights(cell[0], _this.cellHeight);
 
 							}
 
@@ -520,6 +575,8 @@
 			// mouse move listener
 			this.sheetDom.addEventListener('mousemove',function(e){
 
+				_this.lastMousePosition = [e.offsetX, e.offsetY];
+
 				if(_this.mouse_down_canvas){
 
 					if(_this.resizingIndicator){
@@ -529,19 +586,19 @@
 						if(_this.resizingIndicatorType == 'column'){
 							// resizing column
 							var index =_this.resizingIndicatorCell[1];
-							_this.columnWidths[index] += diff[0];
+							_this.columnWidths(index, _this.columnWidths(index) + diff[0]);
 							
-							if(_this.columnWidths[index] < _this.minColRowSize){
-								_this.columnWidths[index] = _this.minColRowSize;
+							if(_this.columnWidths(index) < _this.minColRowSize){
+								_this.columnWidths(index, _this.minColRowSize);
 							}
 						}else{
 							// resizing row
 							var index =_this.resizingIndicatorCell[0];
 							
-							_this.rowHeights[index] += diff[1];
+							_this.rowHeights(index, _this.rowHeights(index) + diff[1]);
 							
-							if(_this.rowHeights[index] < _this.minColRowSize){
-								_this.rowHeights[index] = _this.minColRowSize;
+							if(_this.rowHeights(index) < _this.minColRowSize){
+								_this.rowHeights(index,  _this.minColRowSize);
 							}
 						}
 
@@ -756,27 +813,6 @@
 			this.numRows = rows;
 			this.numColumns = columns;
 
-			// limit columnWidth and rowHeight to respective rows and columns
-			if(columns < this.columnWidths.length){
-				this.columnWidths = this.columnWidths.slice(0, columns)
-			}else{
-				// generate enough new columnWidths
-				var nToGenerate = columns - this.columnWidths.length;
-				for(var x = 0; x < nToGenerate; x++){
-					this.columnWidths.push(this.cellWidth);
-				}
-			}
-
-			if(rows < this.rowHeights.length){
-				this.rowHeights = this.rowHeights.slice(0, rows)
-			}else{
-				// generate enough new columnHeights
-				var nToGenerate = rows - this.rowHeights.length;
-				for(var x = 0; x < nToGenerate; x++){
-					this.rowHeights.push(this.cellHeight);
-				}
-			}
-
 			this.computeScrollBounds();
 
 			this.sizeSizer();
@@ -826,8 +862,8 @@
 			var cellPosition = this.cellLocationToPosition(this.selectedCells[0]);
 
 			// size this cell
-			var cellWidth = this.columnWidths[this.selectedCells[0][1]]; // index 0, 1 is column
-			var cellHeight = this.rowHeights[this.selectedCells[0][0]]; // index 0, 0 is row
+			var cellWidth = this.columnWidths(this.selectedCells[0][1]); // index 0, 1 is column
+			var cellHeight = this.rowHeights(this.selectedCells[0][0]); // index 0, 0 is row
 
 			// special sizing due to Canvas+HTML combination
 			this.input_field.css({width: cellWidth-1, height: cellHeight-1});
@@ -843,7 +879,22 @@
 		this.deleteSelection = function(){
 			var lower_upper_cells = this.selectionToLowerUpper(this.selectedCells);
 
-			this.set_range(lower_upper_cells[0], lower_upper_cells[1], '');
+			var startCell = this.cellZeroIndexToString(lower_upper_cells[0][0],lower_upper_cells[0][1]);
+			var endCell =  this.cellZeroIndexToString(lower_upper_cells[1][0],lower_upper_cells[1][1]);
+
+			// clear data from cache (? - not sure if scales well to large data sets)
+			for(var r = lower_upper_cells[0][0]; r <= lower_upper_cells[1][0]; r++){
+				for(var c = lower_upper_cells[0][1]; c <= lower_upper_cells[1][1]; c++){
+					if(this.data[r]){
+						this.data[r][c] = undefined;
+					}
+					if(this.dataFormulas[r]){
+						this.dataFormulas[r][c] = undefined;
+					}
+				}
+			}
+
+			_this.wsManager.send(JSON.stringify({arguments: ["RANGE","SETSINGLE",  startCell+":"+endCell, ""]}));
 		}
 
 		this.selectionToLowerUpper = function(selectedCells){
@@ -1032,7 +1083,7 @@
 			// endless loop until maximum last row
 			while(viewEndRow < this.numRows){
 
-				measuredHeight += this.rowHeights[viewEndRow];
+				measuredHeight += this.rowHeights(viewEndRow);
 				
 				// increment to next row
 				if (measuredHeight >= (sheetViewHeight - this.sidebarSize)){
@@ -1052,7 +1103,7 @@
 			// endless loop until maximum last row
 			while(viewEndColumn < this.numColumns){
 
-				measureWidth += this.columnWidths[viewEndColumn];
+				measureWidth += this.columnWidths(viewEndColumn);
 
 				// increment to next row
 				if (measureWidth >= (sheetViewWidth - this.sidebarSize)){
@@ -1075,7 +1126,7 @@
 				// endless loop until maximum last row
 				while(minimumFirstRow >= 0){
 
-					measuredHeight += this.rowHeights[minimumFirstRow];
+					measuredHeight += this.rowHeights(minimumFirstRow);
 					
 					// increment to next row
 					if (measuredHeight >= (sheetViewHeight - this.sidebarSize)){
@@ -1102,7 +1153,7 @@
 				// endless loop until maximum last row
 				while(minimumFirstColumn >= 0){
 
-					measureWidth += this.columnWidths[minimumFirstColumn];
+					measureWidth += this.columnWidths(minimumFirstColumn);
 					
 					// increment to next row
 					if (measureWidth >= (sheetViewWidth - this.sidebarSize)){
@@ -1173,7 +1224,7 @@
 					return undefined;
 				}
 
-				currentRowHeight += this.rowHeights[i];
+				currentRowHeight += this.rowHeights(i);
 			}
 
 			// calculate x axis (the column)
@@ -1191,7 +1242,7 @@
 					return undefined;
 				}
 
-				currentColumnWidth += this.columnWidths[i];
+				currentColumnWidth += this.columnWidths(i);
 			}
 
 			return [x, y];
@@ -1205,7 +1256,7 @@
 
 			for(var i = 0; i < this.numColumns; i++){
 
-				currentColumnWidth += this.columnWidths[i];
+				currentColumnWidth += this.columnWidths(i);
 				if(currentColumnWidth >= rowX){
 					columnIndex = i;
 					break;
@@ -1217,7 +1268,7 @@
 			var currentRowHeight = 0;
 
 			for(var i = 0; i < this.numRows; i++){
-				currentRowHeight += this.rowHeights[i];
+				currentRowHeight += this.rowHeights(i);
 				if(currentRowHeight >= rowY){
 					rowIndex = i;
 					break;					
@@ -1239,12 +1290,12 @@
 	
 				for(var i = 0; i < this.numColumns; i++){
 	
-					currentColumnWidth += this.columnWidths[i];
+					currentColumnWidth += this.columnWidths(i);
 					if(currentColumnWidth >= rowX){
 						columnIndex = i;
 	
 						var dist1 = Math.abs(rowX - currentColumnWidth);
-						var dist2 = Math.abs(rowX - (currentColumnWidth - this.columnWidths[i]));
+						var dist2 = Math.abs(rowX - (currentColumnWidth - this.columnWidths(i)));
 	
 						// if currentColumndWidth -= this.columnsWidths[i] is closer, choose that column
 						if(dist2 < dist1){
@@ -1259,14 +1310,14 @@
 				var currentRowHeight = 0;
 	
 				for(var i = 0; i < this.numRows; i++){
-					currentRowHeight += this.rowHeights[i];
+					currentRowHeight += this.rowHeights(i);
 					if(currentRowHeight >= rowY){
 						rowIndex = i;
 	
 						var dist1 = Math.abs(rowY - currentRowHeight);
-						var dist2 = Math.abs(rowY - (currentRowHeight - this.rowHeights[i]));
+						var dist2 = Math.abs(rowY - (currentRowHeight - this.rowHeights(i)));
 	
-						// if currentRowHeight -= this.rowHeights[i] is closer, choose that row
+						// if currentRowHeight -= this.rowHeights(i) is closer, choose that row
 						if(dist2 < dist1){
 							rowIndex = i - 1;
 						}
@@ -1279,27 +1330,37 @@
 			return [rowIndex, columnIndex];
 		}
 
+		this.rowHeights = function(index, value){
+			if(value === undefined){
+				if(this.rowHeightsCache[index] === undefined){
+					return this.cellHeight;
+				}else{
+					return this.rowHeightsCache[index];
+				}
+			}else{
+				this.rowHeightsCache[index] = value;
+			}
+		}
+
+		this.columnWidths = function(index, value){
+			if(value === undefined){
+				if(this.columnWidthsCache[index] === undefined){
+					return this.cellWidth;
+				}else{
+					return this.columnWidthsCache[index];
+				}
+			}else{
+				this.columnWidthsCache[index] = value;
+			}
+		}
+
 		this.initRowCols = function(){
 
 			// config
 			this.cellHeight = 20;
 			this.cellWidth = 100;
 
-			for(var y = 0; y < this.numRows; y++){
-				this.rowHeights.push(this.cellHeight);
-				// this.rowHeights.push(Math.round(Math.random()*50) + 20);
-			}
-
-			for(var x = 0; x < this.numColumns; x++){
-				this.columnWidths.push(this.cellWidth);
-				// this.columnWidths.push(Math.round(Math.random()*200) + 50);
-			}
-
 			// add for testing
-			// this.columnWidths[3] = 200;
-			// this.rowHeights[2] = 50;
-			// this.rowHeights[3] = 50;
-
 			this.computeRowHeight();
 			this.computeColumnWidth();
 
@@ -1319,7 +1380,7 @@
 
 			for(var y = this.numRows-1; y >= 0; y--){
 
-				totalHeight += this.rowHeights[y];
+				totalHeight += this.rowHeights(y);
 				if(totalHeight < height-this.sidebarSize){
 					finalRow = y; // choose starting cell that guarantees that it will be in view
 				}else{
@@ -1331,7 +1392,7 @@
 			// interpolate linearly between 0 and finalRow
 			for(var x = this.numColumns-1; x >= 0; x--){
 
-				totalWidth += this.columnWidths[x];
+				totalWidth += this.columnWidths(x);
 				if(totalWidth < width-this.sidebarSize){
 					finalColumn = x + 1;
 				}else{
@@ -1470,7 +1531,7 @@
 			var menu = $(this.dom).find('div-menu');
 
 			menu.find('menu-item.about').click(function(){
-				alert("This is a web-based Spreadsheet program built by R. Lamers");
+				alert("Grid is a data science environment for the browser. Powered by Python & Go.");
 			});
 
 			menu.find('menu-item.save-workspace').click(function(){
@@ -1858,16 +1919,12 @@
 		}
 
 		this.computeColumnWidth = function(){
-			var sum = this.columnWidths.reduce(function(total, num){ return total + num; }, 0);
-			this.computedColumnWidth = sum;
-			return sum;
+			return this.numColumns * this.cellWidth;
 		}
 		this.computedColumnWidth = this.computeColumnWidth();
 		
 		this.computeRowHeight = function(){
-			var sum = this.rowHeights.reduce(function(total, num){ return total + num; }, 0);
-			this.computedRowHeight = sum;
-			return sum;
+			return this.numRows * this.cellHeight;
 		}
 		this.computedRowHeight = this.computeRowHeight();
 
@@ -1908,7 +1965,7 @@
 				if(x == drawColumnStart){
 					break;
 				}
-				measureWidth += this.columnWidths[x];
+				measureWidth += this.columnWidths(x);
 				
 			}
 
@@ -1916,7 +1973,7 @@
 				if(x == drawRowStart){
 					break;
 				}
-				measureHeight += this.rowHeights[x];
+				measureHeight += this.rowHeights(x);
 				
 			}
 			
@@ -1963,7 +2020,7 @@
 				this.ctx.a_moveTo(0, currentY + firstCellHeightOffset + this.sidebarSize);
 				this.ctx.a_lineTo(width, currentY + firstCellHeightOffset + this.sidebarSize);
 
-				currentY += this.rowHeights[i];
+				currentY += this.rowHeights(i);
 
 				i++;
 			}
@@ -1982,7 +2039,7 @@
 				this.ctx.a_moveTo(currentX + firstCellWidthOffset + this.sidebarSize, 0);
 				this.ctx.a_lineTo(currentX + firstCellWidthOffset + this.sidebarSize, height);
 
-				currentX += this.columnWidths[d];
+				currentX += this.columnWidths(d);
 
 				d++;
 			}
@@ -2026,7 +2083,7 @@
 			}
 
 			// render cell data
-			this.renderCells(drawRowStart, drawColumnStart, i, d, firstCellHeightOffset, firstCellWidthOffset);
+			this.renderCells(drawRowStart, drawColumnStart, i-1, d-1, firstCellHeightOffset, firstCellWidthOffset);
 
 			
 			// also re-render the input_formula field
@@ -2081,7 +2138,7 @@
 
 					if(xCellDistance < 0){
 						for(var x = 0; x >= xCellDistance;x--){
-							highlightWidth -= this.columnWidths[cellsForSelected[0][1] + x];						
+							highlightWidth -= this.columnWidths(cellsForSelected[0][1] + x);
 							
 							if(x == 0){
 								shiftX = Math.abs(highlightWidth);
@@ -2089,13 +2146,13 @@
 						}
 					}else{
 						for(var x = 0; x <= xCellDistance; x ++){
-							highlightWidth += this.columnWidths[cellsForSelected[0][1] + x];
+							highlightWidth += this.columnWidths(cellsForSelected[0][1] + x);
 						}
 					}
 
 					if(yCellDistance < 0){
 						for(var y = 0; y >= yCellDistance; y--){
-							highlightHeight -= this.rowHeights[cellsForSelected[0][0] + y];
+							highlightHeight -= this.rowHeights(cellsForSelected[0][0] + y);
 
 							if(y == 0){
 								shiftY = Math.abs(highlightHeight);
@@ -2103,7 +2160,7 @@
 						}
 					}else{
 						for(var y = 0; y <= yCellDistance; y ++){
-							highlightHeight += this.rowHeights[cellsForSelected[0][0] + y];
+							highlightHeight += this.rowHeights(cellsForSelected[0][0] + y);
 						}
 					}
 					
@@ -2152,28 +2209,18 @@
 			var currentY = 0;
 			var startX = 0;
 
-			// if(startRow >= 1){
-			// 	startRow--;
-			// 	currentY -= this.rowHeights[startRow];
-			// }
-			// if(startColumn >= 1){
-			// 	startColumn--;
-			// 	startX -= this.columnWidths[startColumn];
-			// 	currentX = startX;
-			// }
-			
 			// render one more 
 			for(var i = startRow; i < endRow; i++){
 
 				for(var d = startColumn; d < endColumn; d++){
 
 					// compensate for borders (1px)
-					var centeringOffset = ((this.rowHeights[i] + 2 - this.fontHeight)/2) + 1;
+					var centeringOffset = ((this.rowHeights(i) + 2 - this.fontHeight)/2) + 1;
 
 					// get data
 					var cell_data = this.get([i, d]);
 
-					var cellMaxWidth = this.columnWidths[d] - this.textPadding - 2; // minus borders
+					var cellMaxWidth = this.columnWidths(d) - this.textPadding - 2; // minus borders
 
 					if(cell_data !== undefined && cell_data.length > 0){
 
@@ -2188,25 +2235,25 @@
 					if (i == startRow) {
 						this.ctx.textAlign = 'center';
 
-						var centerOffset = this.columnWidths[d]/2;
+						var centerOffset = this.columnWidths(d)/2;
 						var centeringOffset = ((this.sidebarSize + 2 - this.fontHeight)/2) + 1;
 					
 						this.ctx.fillText(this.indexToLetters(d+1), currentX + firstCellWidthOffset + this.sidebarSize + centerOffset, centeringOffset);
 					}
 
-					currentX += this.columnWidths[d];
+					currentX += this.columnWidths(d);
 					
 					
 				}
 
 				this.ctx.textAlign = 'center';
 				var centerOffset = this.sidebarSize/2;
-				var centeringOffset = ((this.rowHeights[i] + 2 - (this.fontHeight-3))/2) + 1;
+				var centeringOffset = ((this.rowHeights(i) + 2 - (this.fontHeight-3))/2) + 1;
 				this.ctx.font = "9px Arial";
 				this.ctx.fillText(i+1, firstCellWidthOffset + centerOffset, currentY + firstCellHeightOffset + this.sidebarSize + centeringOffset);
 				this.ctx.font = this.fontStyle;
 
-				currentY += this.rowHeights[i];
+				currentY += this.rowHeights(i);
 
 				// reset currentX for next iteration
 				currentX = startX;

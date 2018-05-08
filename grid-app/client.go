@@ -12,6 +12,7 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -110,7 +111,7 @@ func (c *Client) readPump() {
 	}
 }
 
-func computeDirtyCells(grid *Grid, cellsToSend *[][]string) {
+func computeDirtyCells(grid *Grid) {
 
 	// for every DV in dirtyCells clean up the DependInTemp list with refs not in DirtyCells
 	for _, thisDv := range grid.DirtyCells {
@@ -162,10 +163,10 @@ func computeDirtyCells(grid *Grid, cellsToSend *[][]string) {
 
 		originalDv := (grid.Data)[index]
 
-		originalIsString := false
-		if originalDv.ValueType == DynamicValueTypeString {
-			originalIsString = true
-		}
+		// originalIsString := false
+		// if originalDv.ValueType == DynamicValueTypeString {
+		// originalIsString = true
+		// }
 
 		newDv := originalDv
 
@@ -185,18 +186,16 @@ func computeDirtyCells(grid *Grid, cellsToSend *[][]string) {
 
 		// do always send (also explosive formulas)
 		// restore state after compute
-		stringAfter := convertToString(newDv)
+		// stringAfter := convertToString(newDv)
 
 		// adjusting to client needs here
 
 		// details: originalIsString is maintained because parse() affects the original Dv's ValueType
-		formulaString := "=" + newDv.DataFormula
+		// formulaString := "=" + newDv.DataFormula
 
-		if originalIsString {
-			formulaString = newDv.DataString
-		}
-
-		*cellsToSend = append(*cellsToSend, []string{index, stringAfter.DataString, formulaString})
+		// if originalIsString {
+		// formulaString = newDv.DataString
+		// }
 
 		delete(grid.DirtyCells, index)
 
@@ -230,15 +229,9 @@ func invalidateView(grid *Grid, c *Client) {
 	c.send <- json
 }
 
-func computeAndSend(grid *Grid, c *Client) {
-
-	cellsToSend := [][]string{}
-
+func compute(grid *Grid, c *Client) {
 	// compute dirty cells as a result of adding a cell above
-	computeDirtyCells(grid, &cellsToSend)
-
-	sendCells(&cellsToSend, c)
-
+	computeDirtyCells(grid)
 }
 
 func sendCellsInRange(cellRange string, grid *Grid, c *Client) {
@@ -248,12 +241,12 @@ func sendCellsInRange(cellRange string, grid *Grid, c *Client) {
 	cellsToSend := [][]string{}
 
 	for _, refString := range cells {
-		dv := grid.Data[refString]
 
-		// cell to string
-		stringAfter := convertToString(dv)
-
-		cellsToSend = append(cellsToSend, []string{refString, stringAfter.DataString, "=" + dv.DataFormula})
+		if dv, ok := grid.Data[refString]; ok {
+			// cell to string
+			stringAfter := convertToString(dv)
+			cellsToSend = append(cellsToSend, []string{refString, stringAfter.DataString, "=" + dv.DataFormula})
+		}
 	}
 
 	sendCells(&cellsToSend, c)
@@ -311,9 +304,16 @@ func generateCSV(grid *Grid) string {
 		}
 	}
 
-	var buffer bytes.Buffer
+	// fmt.Println("Detected minimum rectangle: " + strconv.Itoa(numberOfRows) + "x" + strconv.Itoa(numberOfColumns))
+
+	buffer := bytes.Buffer{}
+
+	w := csv.NewWriter(&buffer)
 
 	for r := 0; r < numberOfRows; r++ {
+
+		var record []string
+
 		for c := 0; c < numberOfColumns; c++ {
 
 			cell := grid.Data[doubleIndexToStringRef(r, c)]
@@ -324,22 +324,163 @@ func generateCSV(grid *Grid) string {
 			stringDv := convertToString(cell)
 
 			// fmt.Println("stringDv.DataString: " + stringDv.DataString)
+			record = append(record, stringDv.DataString)
+		}
 
-			if c+1 == numberOfColumns {
-				buffer.WriteString(stringDv.DataString)
-				buffer.WriteString("\r\n")
-			} else {
-				buffer.WriteString(stringDv.DataString)
-				buffer.WriteString(",")
-			}
+		if err := w.Write(record); err != nil {
+			log.Fatalln("error writing record to csv:", err)
 		}
 	}
+
+	w.Flush()
 
 	return buffer.String()
 }
 
 func doubleIndexToStringRef(row int, col int) string {
 	return indexToLetters(col+1) + strconv.Itoa(row+1)
+}
+
+type SortGridItem struct {
+	reference string
+	dv        DynamicValue
+}
+
+type GridItemSorter struct {
+	gridItems []SortGridItem
+	by        func(p1, p2 *SortGridItem) bool // Closure used in the Less method.
+}
+
+func (s GridItemSorter) Swap(i, j int) {
+	s.gridItems[i], s.gridItems[j] = s.gridItems[j], s.gridItems[i]
+}
+func (s GridItemSorter) Len() int {
+	return len(s.gridItems)
+}
+func (s GridItemSorter) Less(i, j int) bool {
+	return s.by(&s.gridItems[i], &s.gridItems[j])
+}
+
+func cellRangeBoundaries(cellRange string) (int, int, int, int) {
+	cells := strings.Split(cellRange, ":")
+
+	lowerRow := getReferenceRowIndex(cells[0])
+	upperRow := getReferenceRowIndex(cells[1])
+
+	lowerColumn := getReferenceColumnIndex(cells[0])
+	upperColumn := getReferenceColumnIndex(cells[1])
+
+	return lowerRow, lowerColumn, upperRow, upperColumn
+}
+
+func compareDvsBigger(dv1 DynamicValue, dv2 DynamicValue) bool {
+	if dv1.ValueType == DynamicValueTypeString && dv2.ValueType == DynamicValueTypeString {
+		return dv1.DataString > dv2.DataString
+	} else if dv1.ValueType == DynamicValueTypeString && dv2.ValueType == DynamicValueTypeFloat {
+		return true
+	} else if dv1.ValueType == DynamicValueTypeFloat && dv2.ValueType == DynamicValueTypeString {
+		return false
+	} else if dv1.ValueType == DynamicValueTypeFloat && dv2.ValueType == DynamicValueTypeFloat {
+		return dv1.DataFloat > dv2.DataFloat
+	} else if dv1.ValueType == DynamicValueTypeBool && dv2.ValueType == DynamicValueTypeBool {
+		return dv1.DataBool == true && dv2.DataBool == false
+	} else {
+		return false
+	}
+}
+
+func compareDvsSmaller(dv1 DynamicValue, dv2 DynamicValue) bool {
+	if dv1.ValueType == DynamicValueTypeString && dv2.ValueType == DynamicValueTypeString {
+		return dv1.DataString < dv2.DataString
+	} else if dv1.ValueType == DynamicValueTypeString && dv2.ValueType == DynamicValueTypeFloat {
+		return false
+	} else if dv1.ValueType == DynamicValueTypeFloat && dv2.ValueType == DynamicValueTypeString {
+		return true
+	} else if dv1.ValueType == DynamicValueTypeFloat && dv2.ValueType == DynamicValueTypeFloat {
+		return dv1.DataFloat < dv2.DataFloat
+	} else if dv1.ValueType == DynamicValueTypeBool && dv2.ValueType == DynamicValueTypeBool {
+		return dv1.DataBool == false && dv2.DataBool == true
+	} else {
+		return false
+	}
+}
+
+func sortRange(direction string, cellRange string, sortColumn string, grid *Grid) {
+
+	// references := cellRangeToCells(cellRange)
+
+	// get lowerRow, lower column and upper row and upper column from cellRange
+	lowerRow, lowerColumn, upperRow, upperColumn := cellRangeBoundaries(cellRange)
+
+	sortColumnIndex := getReferenceColumnIndex(sortColumn)
+
+	nonSortingColumns := []int{}
+
+	for c := lowerColumn; c <= upperColumn; c++ {
+		if c != sortColumnIndex {
+			nonSortingColumns = append(nonSortingColumns, c)
+		}
+	}
+
+	// get key value pair of column to be sorted [("A1", "2.12"), ("A2","1.5"), ("A3", "2.9")]
+	var sortGridItemArray []SortGridItem
+
+	for r := lowerRow; r <= upperRow; r++ {
+		reference := indexesToReference(r, sortColumnIndex)
+		sortGridItemArray = append(sortGridItemArray, SortGridItem{reference: reference, dv: grid.Data[reference]})
+	}
+
+	// sort struct {reference: "A1", stringValue: "2.12"}
+	// sort this key value pair through string sorting
+	var sortByReference func(p1, p2 *SortGridItem) bool
+
+	if direction == "ASC" {
+		sortByReference = func(p1, p2 *SortGridItem) bool {
+			return compareDvsSmaller(p1.dv, p2.dv)
+		}
+	} else {
+		sortByReference = func(p1, p2 *SortGridItem) bool {
+			return compareDvsBigger(p1.dv, p2.dv)
+		}
+	}
+
+	gis := GridItemSorter{gridItems: sortGridItemArray, by: sortByReference}
+	sort.Sort(gis)
+
+	// use the sorted array to iterator through the rows and swap appropriately
+	// e.g. after sorting [("A3", "2.9"), ("A1","2.12"), ("A2", "1.5")]
+	// then on the first iteration the following swaps are performed (assuming A1:B3 was the sorting region)
+
+	// newGrid (map)
+
+	// newGrid["A1"] = grid["A3"]
+	// otherColumns = ["B"] -- create from sorted[0].reference
+	// newGrid["B1"] = grid["B3"]
+
+	newGrid := make(map[string]DynamicValue)
+
+	currentRow := lowerRow
+
+	for _, sortGridItem := range sortGridItemArray {
+
+		newRef := indexesToReference(currentRow, sortColumnIndex)
+		newGrid[newRef] = grid.Data[sortGridItem.reference]
+
+		oldRowIndex := getReferenceRowIndex(sortGridItem.reference)
+
+		for _, nonSortingColumnIndex := range nonSortingColumns {
+			oldRef := indexesToReference(oldRowIndex, nonSortingColumnIndex)
+			newRef := indexesToReference(currentRow, nonSortingColumnIndex)
+			newGrid[newRef] = grid.Data[oldRef]
+		}
+
+		currentRow++
+	}
+
+	// then finally assign newGrid to grid
+	for k, v := range newGrid {
+		grid.Data[k] = v
+	}
 }
 
 func (c *Client) writePump() {
@@ -436,8 +577,13 @@ func (c *Client) writePump() {
 				switch parsed[1] {
 				case "SETSINGLE":
 
-					formula := parsed[3][1:]
-					formula = referencesToUpperCase(formula)
+					var formula string
+					if len(parsed[3]) > 0 {
+						formula = parsed[3][1:]
+						formula = referencesToUpperCase(formula)
+					} else {
+						formula = parsed[3]
+					}
 
 					// parsed[3] contains the value (formula)
 					newDvs := make(map[string]DynamicValue)
@@ -482,7 +628,9 @@ func (c *Client) writePump() {
 					}
 
 					// now compute all dirty
-					computeAndSend(&grid, c)
+					compute(&grid, c)
+					invalidateView(&grid, c)
+
 				case "SETLIST":
 
 					// Note: SETLIST doesn't support formula insert, only raw data. E.g. numbers or strings
@@ -522,6 +670,8 @@ func (c *Client) writePump() {
 						// set to grid for access during setDependencies
 						parsedDv := parse(dv, &grid, ref)
 						parsedDv.DataFormula = values[valuesIndex]
+						parsedDv.DependIn = &NewDependIn
+						parsedDv.DependOut = OriginalDependOut
 
 						grid.Data[ref] = parsedDv
 
@@ -631,7 +781,9 @@ func (c *Client) writePump() {
 
 				}
 
-				computeAndSend(&grid, c)
+				compute(&grid, c)
+				invalidateView(&grid, c)
+
 			case "CSV":
 				fmt.Println("Received CSV! Size: " + strconv.Itoa(len(parsed[1])))
 
@@ -723,7 +875,9 @@ func (c *Client) writePump() {
 				grid.ColumnCount = newColumnCount
 
 				sendSheetSize(c, &grid)
-				computeAndSend(&grid, c)
+				compute(&grid, c)
+				invalidateView(&grid, c)
+
 			case "EXPORT-CSV":
 
 				fmt.Println("Generating CSV...")
@@ -754,6 +908,9 @@ func (c *Client) writePump() {
 				}
 
 				c.send <- []byte("[\"SAVED\"]")
+			case "SORT":
+				sortRange(parsed[1], parsed[2], parsed[3], &grid) // direction (ASC,DESC), range ("A1:B20"), column ("B")
+				invalidateView(&grid, c)
 			}
 
 		case message, ok := <-c.send:
