@@ -118,7 +118,7 @@ def sheet(cell_range, data = None):
             
         if type(data) is list:
             
-            newList = list(map(convert_to_json_string, mylist))
+            newList = list(map(convert_to_json_string, data))
 
             arguments =  ['RANGE', 'SETLIST', cell_range]
 
