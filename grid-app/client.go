@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/gorilla/websocket"
 )
@@ -483,6 +484,232 @@ func sortRange(direction string, cellRange string, sortColumn string, grid *Grid
 	}
 }
 
+func copySourceToDestination(sourceRange string, destinationRange string, grid *Grid) {
+
+	// case 1: sourceRange and destinationRange have equal size
+	// solution: copy every cell to every destinationRange cell
+	// case 2: sourceRange is smaller then destinationRange
+	// solution: repeat but only if it fits exactly in destinationRange
+	// case 3: sourceRange is bigger then destinationRange
+	// solution: copy everything from source to destination starting at destinationRange cell 1
+
+	// mapping: determine which cell's contents will go where
+
+	// e.g. copy A1:A3 to B1:B3 then B1<-A1, B2<-A2, B3<-A3
+	// e.g. copy A3 to B1:B3 then (edge case - when source is one cell, map that cell to each cell in destinationRange)
+	// so, B1<-A3, B2<-A3, B3<-A3
+
+	// key is the destinationCell, the value is the cell is should take the value from
+	destinationMapping := make(map[string]string)
+	// todo create destinationMapping
+	// possible: only write for 1 to 1 mapping to check if bug free, then extend for case 2 & 3
+	sourceCells := cellRangeToCells(sourceRange)
+	destinationCells := cellRangeToCells(destinationRange)
+
+	if len(sourceCells) == len(destinationCells) {
+		for key, value := range sourceCells {
+			destinationMapping[destinationCells[key]] = value
+		}
+	} else {
+
+		sourceRowStart := getReferenceRowIndex(sourceCells[0])
+		sourceColumnStart := getReferenceColumnIndex(sourceCells[0])
+
+		sourceRowEnd := getReferenceRowIndex(sourceCells[len(sourceCells)-1])
+		sourceColumnEnd := getReferenceColumnIndex(sourceCells[len(sourceCells)-1])
+
+		destinationRowStart := getReferenceRowIndex(destinationCells[0])
+		destinationColumnStart := getReferenceColumnIndex(destinationCells[0])
+
+		destinationRowEnd := getReferenceRowIndex(destinationCells[len(destinationCells)-1])
+		destinationColumnEnd := getReferenceColumnIndex(destinationCells[len(destinationCells)-1])
+
+		// start looping over all destination cells and co-iterate on source cells
+		// whenever sourceCells run out, loop back around
+
+		if len(sourceCells) < len(destinationCells) {
+
+			sRow := sourceRowStart
+			sColumn := sourceColumnStart
+
+			for dColumn := destinationColumnStart; dColumn <= destinationColumnEnd; dColumn++ {
+				for dRow := destinationRowStart; dRow <= destinationRowEnd; dRow++ {
+
+					destinationRef := indexesToReference(dRow, dColumn)
+					sourceRef := indexesToReference(sRow, sColumn)
+
+					destinationMapping[destinationRef] = sourceRef
+
+					if sRow < sourceRowEnd {
+						sRow++
+					} else {
+						sRow = sourceRowStart
+					}
+				}
+
+				if sColumn < sourceColumnEnd {
+					sColumn++
+				} else {
+					sColumn = sourceColumnStart
+				}
+			}
+
+		} else {
+
+			dRow := destinationRowStart
+			dColumn := destinationColumnStart
+
+			for sColumn := sourceColumnStart; sColumn <= sourceColumnEnd; sColumn++ {
+				for sRow := sourceRowStart; sRow <= sourceRowEnd; sRow++ {
+
+					destinationRef := indexesToReference(dRow, dColumn)
+					sourceRef := indexesToReference(sRow, sColumn)
+
+					destinationMapping[destinationRef] = sourceRef
+
+					dRow++
+				}
+				dRow = destinationRowStart
+				dColumn++
+			}
+
+		}
+	}
+
+	for destinationRef, sourceRef := range destinationMapping {
+
+		referenceMapping := make(map[string]string)
+
+		destinationRefRow := getReferenceRowIndex(destinationRef)
+		destinationRefColumn := getReferenceColumnIndex(destinationRef)
+
+		sourceFormula := grid.Data[sourceRef].DataFormula
+		sourceReferences := findReferences(sourceFormula)
+
+		for reference, _ := range sourceReferences {
+			rowDifference, columnDifference := getReferenceDifference(reference, sourceRef)
+
+			newRelativeReference := indexesToReference(destinationRefRow+rowDifference, destinationRefColumn+columnDifference)
+			referenceMapping[reference] = newRelativeReference
+		}
+
+		newFormula := replaceReferencesInFormula(sourceFormula, referenceMapping)
+
+		destinationDv := grid.Data[destinationRef]
+		destinationDv.DataFormula = newFormula
+
+		// for each cell mapping, copy contents after substituting the references
+		// all cells in destination should be added to dirty
+		grid.Data[destinationRef] = setDependencies(destinationRef, destinationDv, grid)
+	}
+
+	computeDirtyCells(grid)
+
+}
+
+func getReferenceDifference(reference string, sourceReference string) (int, int) {
+
+	// Relative references TODO: support partial relative references with $A1, $A$1, A$1, A1
+
+	rowIndex := getReferenceRowIndex(reference)
+	columnIndex := getReferenceColumnIndex(reference)
+
+	sourceRowIndex := getReferenceRowIndex(sourceReference)
+	sourceColumnIndex := getReferenceColumnIndex(sourceReference)
+
+	rowDifference := rowIndex - sourceRowIndex
+	columnDifference := columnIndex - sourceColumnIndex
+
+	return rowDifference, columnDifference
+}
+
+func replaceReferencesInFormula(formula string, referenceMap map[string]string) string {
+
+	// take into account replacements that elongate the string while in the loop
+	// e.g. A9 => A10, after replacing the index should be incremented by one (use IsDigit from unicode package)
+
+	// loop through formula string and only replace references in the map that are
+	index := 0
+
+	referenceStartIndex := 0
+	referenceEndIndex := 0
+	haveValidReference := false
+	inQuoteSection := false
+
+	for {
+
+		// set default characters
+		character := ' '
+		// get character
+		if index < len(formula) {
+			character = rune(formula[index])
+		}
+
+		if inQuoteSection {
+
+			if character == '"' && formula[index-1] != '\\' {
+				// exit quote section
+				inQuoteSection = false
+				referenceStartIndex = index + 1
+				referenceEndIndex = index + 1
+			}
+
+		} else if character == '"' {
+			inQuoteSection = true
+		} else if haveValidReference {
+
+			if unicode.IsDigit(character) {
+				// append digit to valid reference
+				referenceEndIndex = index
+			} else {
+				// replace reference
+				leftSubstring := formula[:referenceStartIndex]
+				rightSubstring := formula[referenceEndIndex+1:]
+
+				reference := formula[referenceStartIndex : referenceEndIndex+1]
+				newReference := referenceMap[reference]
+
+				sizeDifference := len(reference) - len(newReference)
+
+				index += sizeDifference
+
+				// replace
+				formula = leftSubstring + newReference + rightSubstring
+
+				haveValidReference = false
+				referenceStartIndex = index + 1
+				referenceEndIndex = index + 1
+			}
+
+		} else if unicode.IsLetter(character) {
+
+			referenceEndIndex = index + 1
+
+		} else if unicode.IsDigit(character) {
+			if referenceEndIndex-referenceStartIndex > 0 {
+				// non zero reference is built up, append digit
+				referenceEndIndex = index
+				haveValidReference = true
+			} else {
+				referenceStartIndex = index + 1
+				referenceEndIndex = index + 1
+				haveValidReference = false
+			}
+		} else {
+			referenceStartIndex = index + 1
+			referenceEndIndex = index + 1
+			haveValidReference = false
+		}
+
+		index++
+		if index >= len(formula) && !haveValidReference {
+			break
+		}
+	}
+
+	return formula
+}
+
 func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 
@@ -695,6 +922,14 @@ func (c *Client) writePump() {
 			case "GET":
 
 				sendCellsInRange(parsed[1], &grid, c)
+
+			case "COPY":
+
+				sourceRange := parsed[1]
+				destinationRange := parsed[2]
+
+				copySourceToDestination(sourceRange, destinationRange, &grid)
+				invalidateView(&grid, c)
 
 			case "SET":
 

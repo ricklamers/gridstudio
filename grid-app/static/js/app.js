@@ -97,6 +97,7 @@
 		this.pixelRatio = window.devicePixelRatio;
 
 		this.selectedCells = [[0,0],[0,0]];
+		this.copySelection;
 
 		this.data = [];
 		this.dataFormulas = [];
@@ -644,10 +645,10 @@
 			document.body.addEventListener('paste', function(e){
 
 				if(!_this.isFocusedOnElement()){
-					_this.set_range(_this.selectedCells[0], _this.selectedCells[1], event.clipboardData.getData('Text'));
+					// _this.set_range(_this.selectedCells[0], _this.selectedCells[1], event.clipboardData.getData('Text'));
 					
-					// redraw
-					_this.drawSheet();
+					// // redraw
+					// _this.drawSheet();
 				}
 				
 			});
@@ -727,6 +728,28 @@
 					
 				}
 				else if(e.keyCode == 9){
+					
+					if(_this.isFocusedOnElement()){
+						
+						if(_this.input_field.is(":focus")){
+							// defocus, e.g. submit to currently selected field
+							_this.deselect_input_field(true);
+						}
+
+						var nextCell = _this.selectedCells[0];
+						nextCell[1]++;
+						_this.selectCell(nextCell);
+						
+					}else{
+						var nextCell = _this.selectedCells[0];
+						nextCell[1]++;
+						_this.selectCell(nextCell);
+
+						_this.drawSheet();
+					}
+					
+				}
+				else if(e.keyCode == 9){
 
 					if(_this.input_field.is(":focus")){
 						
@@ -784,12 +807,44 @@
 						
 						// copy
 						// set input with current cell's value
-						_this.input_field.val(_this.get(_this.selectedCells[0]));
-						_this.input_field.show();
+						// _this.input_field.val(_this.get(_this.selectedCells[0]));
+						// _this.input_field.show();
 						
-						_this.input_field[0].select();
-						document.execCommand("Copy");
-						_this.input_field.hide();
+						// _this.input_field[0].select();
+						// document.execCommand("Copy");
+						// _this.input_field.hide();
+						_this.copySelection = _this.getSelectedCellsInOrder();
+
+					}else{
+						keyRegistered = false;
+					}
+						
+					
+				}
+				else if(
+					(e.ctrlKey && (e.keyCode == 86)) ||
+					(e.metaKey && (e.keyCode == 86))) {
+
+					if(!_this.isFocusedOnElement()){
+						
+						// copy
+						// set input with current cell's value
+						// _this.input_field.val(_this.get(_this.selectedCells[0]));
+						// _this.input_field.show();
+						
+						// _this.input_field[0].select();
+						// document.execCommand("Copy");
+						// _this.input_field.hide();
+
+						if(_this.copySelection){
+
+							// send copy command
+							var sourceRange = _this.cellArrayToStringRange(_this.copySelection);
+							var destinationRange = _this.cellArrayToStringRange(_this.getSelectedCellsInOrder());
+
+							_this.wsManager.send(JSON.stringify({arguments: ["COPY", sourceRange, destinationRange]}))
+						}
+
 					}else{
 						keyRegistered = false;
 					}
@@ -822,16 +877,19 @@
 			this.refreshView();
 		}
 
+		this.cellArrayToStringRange = function(cellRange){
+			var cellIndexStringStart = this.cellZeroIndexToString(cellRange[0][0], cellRange[0][1]);
+			var cellIndexStringEnd = this.cellZeroIndexToString(cellRange[1][0], cellRange[1][1]);
+			return cellIndexStringStart + ":" + cellIndexStringEnd;
+		}
+
 		this.refreshView = function(){
 			
 			// first get the view based on current scroll position 
 			// (horizontally which columns are in view, vertically which rows are in view)
 
 			// send websocket request for this range
-			var cellIndexStringStart = this.cellZeroIndexToString(this.drawRowStart, this.drawColumnStart);
-			var cellIndexStringEnd = this.cellZeroIndexToString(this.drawRowEnd, this.drawColumnEnd);
-
-			var rangeString = cellIndexStringStart + ":" + cellIndexStringEnd;
+			var rangeString = this.cellArrayToStringRange([[this.drawRowStart, this.drawColumnStart],[this.drawRowEnd, this.drawColumnEnd]]);
 
 			this.wsManager.send('{"arguments":["GET","'+rangeString+'"]}')
 		}
@@ -1751,14 +1809,16 @@
 		this.getSelectedCellsInOrder = function() {
 
 			var selectedCellsCopy = [this.selectedCells[0],this.selectedCells[1]];
-			if(selectedCellsCopy[0][0] >= selectedCellsCopy[1][0] && selectedCellsCopy[0][1] >= selectedCellsCopy[1][1]){
-				// swap
-				var tmp = selectedCellsCopy[0];
-				selectedCellsCopy[0] = selectedCellsCopy[1];
-				selectedCellsCopy[1] = tmp;
-			}
 
-			return selectedCellsCopy;
+			return this.selectionToLowerUpper(selectedCellsCopy);
+
+			// if(selectedCellsCopy[0][0] >= selectedCellsCopy[1][0] && selectedCellsCopy[0][1] >= selectedCellsCopy[1][1]){
+			// 	// swap
+			// 	var tmp = selectedCellsCopy[0];
+			// 	selectedCellsCopy[0] = selectedCellsCopy[1];
+			// 	selectedCellsCopy[1] = tmp;
+			// }
+
 		}
 		
 		this.get_range_float = function(range){
