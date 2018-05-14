@@ -29,33 +29,11 @@ Terminal.applyAddon(winptyCompat);
       this.app = app;
     
       this.init = function(){
-        this.uiInit();
         this.createTerminal();
       }
             
       this.isFocused = function(){
         return this.term.isFocused;
-      }
-    
-      this.showTab = function(selector){
-
-        $('.dev-tabs .tab[data-tab="'+selector+'"]').addClass('current').siblings().removeClass('current');
-
-        // hide both
-        $('.dev-tabs .terminal, .dev-tabs .console').hide();
-    
-        // show selected
-        $('.dev-tabs .' + selector).show();
-      }
-    
-      this.uiInit = function(){
-        // Tabbed area
-        $('.dev-tabs .tab').click(function(){
-
-          var selector = $(this).attr('data-tab');
-          _this.showTab(selector);
-          
-        });
       }
     
       this.runRealTerminal = function(){

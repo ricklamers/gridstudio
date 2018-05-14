@@ -103,6 +103,11 @@ func getData(ref1 DynamicValue, grid *Grid) DynamicValue {
 	return (grid.Data)[ref1.DataString]
 }
 
+func getDataFromRef(ref string, grid *Grid) DynamicValue {
+	ref = strings.Replace(ref, "$", "", -1)
+	return grid.Data[ref]
+}
+
 func findInMap(amap map[int]string, value string) bool {
 	for _, e := range amap {
 		if e == value {
@@ -110,99 +115,6 @@ func findInMap(amap map[int]string, value string) bool {
 		}
 	}
 	return false
-}
-
-func incrementSingleReferences(formula string, incrementAmount int) string {
-
-	// strategy
-
-	// create a hash map of old vs new references, after scanning the formula, do mass replace action (deals with increment in reference length issue)
-	references := make(map[string]string)
-
-	// loop over string, if double quote is found, ignore input for references,
-	quoteLevel := 0
-	previousChar := ""
-
-	var buf bytes.Buffer
-
-	for _, c := range formula {
-		char := string(c)
-
-		if char == "\"" && previousChar != "\\" {
-			if quoteLevel == 0 {
-				quoteLevel++
-			} else {
-				buf.Reset()
-				quoteLevel--
-				continue
-			}
-		}
-
-		if quoteLevel == 0 {
-
-			// assume everything not in quotes is a reference
-			// if we find open brace it must be a function name
-			if char == "(" {
-				buf.Reset()
-				continue
-			} else if contains(breakChars, char) {
-
-				if buf.Len() > 0 {
-					// found space, previous is reference
-
-					// check whether singular or plural reference
-					reference := buf.String()
-
-					if !strings.Contains(reference, ":") {
-						// ignore the plural references (for now)
-
-						// increment reference
-						addToReferenceReplaceMap(reference, incrementAmount, &references)
-					}
-
-					buf.Reset()
-				}
-				// never add break char to reference
-				continue
-			}
-
-			// edge case for number, if first char of buffer is number, can't be reference
-			if buf.Len() == 0 {
-				_, err := strconv.Atoi(char)
-				if err == nil || char == "." { // check for both numbers and . character
-					// found number can't be reference
-					buf.Reset()
-					continue
-				}
-			}
-
-			buf.WriteString(char)
-
-		}
-
-		previousChar = char
-
-	}
-
-	// at the end also add as reference
-	if buf.Len() > 0 {
-
-		reference := buf.String()
-
-		if !strings.Contains(reference, ":") {
-			// ignore the plural references (for now)
-
-			// increment reference
-			addToReferenceReplaceMap(reference, incrementAmount, &references)
-		}
-	}
-
-	// parse references
-	for oldReference, newReference := range references {
-		formula = strings.Replace(formula, oldReference, newReference, -1)
-	}
-
-	return formula
 }
 
 func addToReferenceReplaceMap(reference string, incrementAmount int, references *map[string]string) {
@@ -434,12 +346,16 @@ func setDependencies(index string, dv DynamicValue, grid *Grid) DynamicValue {
 	}
 
 	for ref, inSet := range references {
+
+		// for dependency checking get rid of dollar signs in references
+		ref = strings.Replace(ref, "$", "", -1)
+
 		if inSet {
 			if ref == index {
 				// cell is dependent on self
 				fmt.Println("Circular reference error!")
 				dv.ValueType = DynamicValueTypeString
-				dv.DataFormula = "\"#CIRCULARREF\""
+				dv.DataFormula = "\"#Error, circular reference: " + dv.DataFormula + "\""
 			} else {
 
 				(*dv.DependIn)[ref] = true
@@ -745,10 +661,8 @@ func parse(formula DynamicValue, grid *Grid, targetRef string) DynamicValue {
 				return newDv
 			} else {
 
-				singleElement.ValueType = DynamicValueTypeReference
-				singleElement.DataString = singleElement.DataFormula
-
-				return getData(singleElement, grid)
+				// when references contain dollar signs, remove them here
+				return getDataFromRef(singleElement.DataFormula, grid)
 
 			}
 
@@ -1012,6 +926,20 @@ func indexesToReference(row int, col int) string {
 	return indexToLetters(col) + strconv.Itoa(row)
 }
 
+func indexesToReferenceWithFixed(row int, col int, fixedRow bool, fixedColumn bool) string {
+	firstPrefix := ""
+	if fixedColumn {
+		firstPrefix = "$"
+	}
+
+	secondPrefix := ""
+	if fixedRow {
+		secondPrefix = "$"
+	}
+
+	return firstPrefix + indexToLetters(col) + secondPrefix + strconv.Itoa(row)
+}
+
 func indexToLetters(index int) string {
 
 	base := float64(26)
@@ -1187,9 +1115,11 @@ func getDataRange(dv DynamicValue, grid *Grid) []DynamicValue {
 }
 
 func getReferenceColumnIndex(ref string) int {
+	ref = strings.Replace(ref, "$", "", -1)
 	return lettersToIndex(numberOnlyReg.FindAllString(ref, -1)[0])
 }
 func getReferenceRowIndex(ref string) int {
+	ref = strings.Replace(ref, "$", "", -1)
 	row, _ := strconv.Atoi(numberOnlyReg.ReplaceAllString(ref, ""))
 	return row
 }

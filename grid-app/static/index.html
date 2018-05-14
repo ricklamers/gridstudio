@@ -59,15 +59,30 @@
 			</div-sheet>
 			<div class='code-editor'>
 				<div id="editor">
-					<div id="editor-ace">
-						
+					<div class="file-editor">
+						<div class="file-name-holder"><div class="file-name"></div><div class="close"><img width="12px" src="image/cross.svg"/></div></div>
+						<div class="ace-editor-holder">
+							<div id="editor-ace"></div>
+						</div>
 					</div>
 				</div>
+				
 				<div class="dev-tabs">
-					<div class="tabs"><div class="tab" data-tab='plots'>Plots</div><div class="tab current" data-tab='terminal'>Terminal</div><div data-tab='console' class="tab">Python out</div></div>
-					<div class="terminal" id="terminal-container"></div>
-					<div class="console" style="display:none;"></div>
-					<div class="plots" style="display:none;"></div>
+					<div class="tabs">
+						<div class="tab" data-tab='filemanager'>Files</div>
+						<div class="tab" data-tab='plots'>Plots</div>
+						<div class="tab current" data-tab='terminal'>Terminal</div>
+						<div data-tab='console' class="tab">Python out</div>
+					</div>
+					<div class="view terminal" id="terminal-container"></div>
+					<div class="view console" style="display:none;"></div>
+					<div class="view plots" style="display:none;"></div>
+					<div class="view filemanager" style="display:none;">
+						<div class="path"></div>
+						<div class="files">
+
+						</div>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -77,6 +92,7 @@
 		<script src="js/jquery-3.3.1.min.js"></script>
 		<script src="js/editor/ace.js"></script>
 		<script src="js/editor.js"></script>
+		<script src="js/filemanager.js"></script>
 		<script src="xterm/dist/main.js"></script>
 		<script src="js/plotly-finance-latest.min.js" charset="utf-8"></script>
 		<script src="js/ws.js"></script>

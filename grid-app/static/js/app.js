@@ -57,6 +57,7 @@
 		var _this = this;
 
 		this.wsManager = new WSManager(this);
+		this.fileManager = new FileManager(this);
 		this.editor = new Editor(this);
 		this.termManager = new TermManager(this);
 		
@@ -226,6 +227,32 @@
 			this.data[position[0]][position[1]] = value.toString();
 		}
 
+		this.initTabs = function(){
+
+			 // Tabbed area
+			 $('.dev-tabs .tab').click(function(){
+
+				var selector = $(this).attr('data-tab');
+				_this.showTab(selector);
+				
+			});
+		}
+
+		this.showTab = function(selector){
+
+			$('.dev-tabs .tab[data-tab="'+selector+'"]').addClass('current').siblings().removeClass('current');
+	
+			// hide both
+			$('.dev-tabs .view').hide();
+		
+			// show selected
+			$('.dev-tabs .' + selector).show();
+
+			if(selector == "filemanager"){
+				_this.fileManager.refresh();
+			}
+		  }
+
 		// add test data (2nd row, 2nd to 5th column, 10,20,30,40)
 		// var i = 0;
 		// for(var x = 0; x < 50; x++){
@@ -384,13 +411,16 @@
 			this.wsManager.init();
 			this.wsManager.onconnect = function(){
 				_this.refreshView();
+				_this.fileManager.init();
 			}
 
 			this.registerContextMenu();
 
 			// initialize terminal
 			this.termManager.init();
-			
+
+			this.initTabs();
+
 			this.menuInit();
 
 			// init input
@@ -1561,7 +1591,8 @@
 				},
 				success: function (data) {
 					// your callback here
-					alert("Upload successfully!");
+					_this.showTab("filemanager");
+					_this.fileManager.getDir("/home/user");
 				},
 				error: function (error) {
 					// handle error

@@ -200,6 +200,17 @@ body div-sheet canvas {
   border-left: 1px solid #bbb;
   overflow: hidden;
 }
+.code-editor .computing-indicator {
+  position: absolute;
+  bottom: 0;
+  width: 26px;
+  height: 26px;
+  background: #717171;
+  background-image: url("image/loading.gif");
+  background-size: 100%;
+  z-index: 99;
+  margin: 10px;
+}
 .code-editor .dev-tabs {
   position: absolute;
   width: 100%;
@@ -209,6 +220,32 @@ body div-sheet canvas {
   bottom: 0;
   border-top: 1px solid #bbb;
   z-index: 999;
+}
+.code-editor .dev-tabs .filemanager {
+  height: 100%;
+  overflow-y: auto;
+}
+.code-editor .dev-tabs .filemanager .path {
+  background: #ccc;
+  padding: 3px;
+}
+.code-editor .dev-tabs .filemanager .icon {
+  display: block;
+  margin-right: 5px;
+  background-size: contain;
+  width: 26px;
+  height: 26px;
+  float: left;
+  margin-top: -4px;
+}
+.code-editor .dev-tabs .filemanager li {
+  overflow: auto;
+  list-style: none;
+  padding: 3px;
+  padding-top: 6px;
+}
+.code-editor .dev-tabs .filemanager li:hover {
+  background: #eee;
 }
 .code-editor .dev-tabs .plots {
   display: flex;
@@ -241,6 +278,7 @@ body div-sheet canvas {
   padding-bottom: 14px;
   float: left;
   cursor: pointer;
+  user-select: none;
 }
 .code-editor .dev-tabs .tabs .tab:hover,
 .code-editor .dev-tabs .tabs .tab.current {
@@ -263,29 +301,36 @@ body div-sheet canvas {
   color: #999;
   margin-left: -13px;
 }
-#editor {
+.file-editor {
   position: absolute;
   width: 100%;
   height: 70%;
   padding-bottom: 45px;
   background: #eee;
+  display: flex;
+  flex-flow: column;
 }
-#editor #editor-ace {
+.file-editor .file-name-holder {
+  padding: 5px;
+  min-height: 26px;
+}
+.file-editor .file-name-holder .close {
+  position: absolute;
+  right: 5px;
+  top: 5px;
+  cursor: pointer;
+}
+.file-editor .file-name-holder .file-name.unsaved:after {
+  content: "*";
+}
+.file-editor .ace-editor-holder {
+  flex: 1;
+}
+.file-editor #editor-ace {
   background: #fff;
   height: 100%;
   width: 100%;
   border-bottom: 1px solid #ccc;
-}
-#editor .computing-indicator {
-  position: absolute;
-  bottom: 0;
-  width: 26px;
-  height: 26px;
-  background: #717171;
-  background-image: url("image/loading.gif");
-  background-size: 100%;
-  z-index: 99;
-  margin: 10px;
 }
 input:focus {
   outline: none;

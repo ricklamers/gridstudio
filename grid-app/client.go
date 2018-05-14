@@ -1,5 +1,7 @@
 package main
 
+import b64 "encoding/base64"
+
 import (
 	"bytes"
 	"encoding/csv"
@@ -112,7 +114,186 @@ func (c *Client) readPump() {
 	}
 }
 
-func computeDirtyCells(grid *Grid) {
+func isValidFormula(formula string) bool {
+	currentOperator := ""
+	operatorsFound := []string{}
+
+	parenDepth := 0
+	quoteDepth := 0
+	previousChar := ""
+
+	// inFunction := false
+	inReference := false
+	referenceFoundRange := false
+	validReference := false
+	inDecimal := false
+	inNumber := false
+	validDecimal := false
+	inOperator := false
+	inFunction := false
+
+	var buffer bytes.Buffer
+
+	// skipCharacters := 0
+
+	for _, r := range formula {
+
+		// fmt.Println("char index: " + strconv.Itoa(k))
+
+		c := string(r)
+
+		// check for quotes
+		if c == "\"" && quoteDepth == 0 && previousChar != "\\" {
+
+			quoteDepth++
+
+		} else if c == "\"" && quoteDepth == 1 && previousChar != "\\" {
+
+			quoteDepth--
+
+		}
+
+		if quoteDepth == 0 {
+
+			if c == "(" {
+
+				parenDepth++
+
+			} else if c == ")" {
+
+				parenDepth--
+
+				if parenDepth < 0 {
+					return false
+				}
+
+			}
+
+			/* reference checking */
+			if !inReference && unicode.IsLetter(r) {
+				inReference = true
+			}
+
+			if inReference && (r == ':' && []rune(previousChar)[0] != ':') {
+				inReference = false
+				validReference = false
+				referenceFoundRange = true
+			}
+
+			if inReference && validReference && unicode.IsLetter(r) {
+				return false
+			}
+
+			/* function checking */
+			if inReference && !validReference && r == '(' {
+				inFunction = true
+				inReference = false
+			}
+
+			if inFunction && r == ')' {
+				inFunction = false
+			}
+
+			if referenceFoundRange && !inReference && unicode.IsLetter(r) {
+				inReference = true
+			}
+
+			if referenceFoundRange && !inReference && unicode.IsDigit(r) {
+				return false
+			}
+
+			if inReference && unicode.IsDigit(r) {
+				validReference = true
+			}
+
+			if inReference && referenceFoundRange && !(unicode.IsDigit(r) || unicode.IsLetter(r)) {
+
+				if !validReference {
+					return false
+				}
+
+				inReference = false
+				validReference = false
+				referenceFoundRange = false
+			}
+
+			if inReference && !referenceFoundRange && !(unicode.IsDigit(r) || unicode.IsLetter(r) || r == ':') {
+
+				if !validReference {
+					return false
+				}
+
+				inReference = false
+				validReference = false
+			}
+
+			/* number checking */
+			if !inReference && !inDecimal && unicode.IsDigit(r) {
+				inNumber = true
+			}
+
+			/* decimal checking */
+			if !inReference && inNumber && r == '.' && unicode.IsDigit([]rune(previousChar)[0]) {
+				inDecimal = true
+			} else if inDecimal && !(unicode.IsDigit(r) || unicode.IsLetter(r)) && !validDecimal {
+				return false
+			} else if inDecimal && unicode.IsDigit(r) {
+				validDecimal = true
+			} else if inDecimal && unicode.IsLetter(r) {
+				return false
+			} else if !inDecimal && r == '.' {
+				return false
+			}
+
+			if !(unicode.IsLetter(r) || unicode.IsDigit(r)) && r != '.' {
+				inNumber = false
+				inDecimal = false
+			}
+
+			/* operator checking */
+			if !inReference && !inFunction && !inDecimal && !(unicode.IsDigit(r) || unicode.IsLetter(r)) && r != ' ' && r != '(' && r != ')' && r != ',' {
+				// if not in reference and operator is not space
+				currentOperator += c
+				inOperator = true
+			}
+
+			if inOperator && (unicode.IsDigit(r) || unicode.IsLetter(r) || r == ' ') {
+				inOperator = false
+				operatorsFound = append(operatorsFound, currentOperator)
+				currentOperator = ""
+			}
+
+		}
+
+		buffer.WriteString(c)
+
+		previousChar = c
+
+	}
+
+	for _, operator := range operatorsFound {
+		if !contains(availableOperators, operator) {
+			return false
+		}
+	}
+
+	if parenDepth != 0 {
+		return false
+	}
+	if quoteDepth != 0 {
+		return false
+	}
+
+	if inReference && !validReference {
+		return false
+	}
+
+	return true
+}
+
+func computeDirtyCells(grid *Grid) []string {
+
+	changedRefs := []string{}
 
 	// for every DV in dirtyCells clean up the DependInTemp list with refs not in DirtyCells
 	for _, thisDv := range grid.DirtyCells {
@@ -183,6 +364,8 @@ func computeDirtyCells(grid *Grid) {
 
 			(grid.Data)[index] = newDv
 
+			changedRefs = append(changedRefs, index)
+
 		}
 
 		// do always send (also explosive formulas)
@@ -201,6 +384,8 @@ func computeDirtyCells(grid *Grid) {
 		delete(grid.DirtyCells, index)
 
 	}
+
+	return changedRefs
 }
 
 func sendCells(cellsToSend *[][]string, c *Client) {
@@ -223,16 +408,20 @@ func sendSheetSize(c *Client, grid *Grid) {
 	c.send <- json
 }
 
+func sendDirtyOrInvalidate(changedCells []string, grid *Grid, c *Client) {
+	// magic number to speed up cell updating
+	if len(changedCells) < 100 {
+		sendCellsByRefs(changedCells, grid, c)
+	} else {
+		invalidateView(grid, c)
+	}
+}
+
 func invalidateView(grid *Grid, c *Client) {
 
 	jsonData := []string{"VIEW-INVALIDATED"}
 	json, _ := json.Marshal(jsonData)
 	c.send <- json
-}
-
-func compute(grid *Grid, c *Client) {
-	// compute dirty cells as a result of adding a cell above
-	computeDirtyCells(grid)
 }
 
 func sendCellsInRange(cellRange string, grid *Grid, c *Client) {
@@ -242,6 +431,22 @@ func sendCellsInRange(cellRange string, grid *Grid, c *Client) {
 	cellsToSend := [][]string{}
 
 	for _, refString := range cells {
+
+		if dv, ok := grid.Data[refString]; ok {
+			// cell to string
+			stringAfter := convertToString(dv)
+			cellsToSend = append(cellsToSend, []string{refString, stringAfter.DataString, "=" + dv.DataFormula})
+		}
+	}
+
+	sendCells(&cellsToSend, c)
+}
+
+func sendCellsByRefs(refs []string, grid *Grid, c *Client) {
+
+	cellsToSend := [][]string{}
+
+	for _, refString := range refs {
 
 		if dv, ok := grid.Data[refString]; ok {
 			// cell to string
@@ -587,15 +792,38 @@ func copySourceToDestination(sourceRange string, destinationRange string, grid *
 		sourceReferences := findReferences(sourceFormula)
 
 		for reference, _ := range sourceReferences {
-			rowDifference, columnDifference := getReferenceDifference(reference, sourceRef)
+			rowDifference, columnDifference, fixedRow, fixedColumn := getReferenceDifference(reference, sourceRef)
 
-			newRelativeReference := indexesToReference(destinationRefRow+rowDifference, destinationRefColumn+columnDifference)
+			newRefRow := destinationRefRow + rowDifference
+			if newRefRow < 1 {
+				newRefRow = 1
+			}
+			if newRefRow > grid.RowCount {
+				newRefRow = grid.RowCount
+			}
+
+			newRefColumn := destinationRefColumn + columnDifference
+			if newRefColumn < 1 {
+				newRefColumn = 1
+			}
+			if newRefColumn > grid.ColumnCount {
+				newRefColumn = grid.ColumnCount
+			}
+
+			if fixedRow {
+				newRefRow = getReferenceRowIndex(reference)
+			}
+			if fixedColumn {
+				newRefColumn = getReferenceColumnIndex(reference)
+			}
+
+			newRelativeReference := indexesToReferenceWithFixed(newRefRow, newRefColumn, fixedRow, fixedColumn)
 			referenceMapping[reference] = newRelativeReference
 		}
 
 		newFormula := replaceReferencesInFormula(sourceFormula, referenceMapping)
 
-		destinationDv := grid.Data[destinationRef]
+		destinationDv := getDataFromRef(destinationRef, grid)
 		destinationDv.DataFormula = newFormula
 
 		// for each cell mapping, copy contents after substituting the references
@@ -603,13 +831,9 @@ func copySourceToDestination(sourceRange string, destinationRange string, grid *
 		grid.Data[destinationRef] = setDependencies(destinationRef, destinationDv, grid)
 	}
 
-	computeDirtyCells(grid)
-
 }
 
-func getReferenceDifference(reference string, sourceReference string) (int, int) {
-
-	// Relative references TODO: support partial relative references with $A1, $A$1, A$1, A1
+func getReferenceDifference(reference string, sourceReference string) (int, int, bool, bool) {
 
 	rowIndex := getReferenceRowIndex(reference)
 	columnIndex := getReferenceColumnIndex(reference)
@@ -618,9 +842,107 @@ func getReferenceDifference(reference string, sourceReference string) (int, int)
 	sourceColumnIndex := getReferenceColumnIndex(sourceReference)
 
 	rowDifference := rowIndex - sourceRowIndex
+
+	fixedRow := false
+	fixedColumn := false
+
 	columnDifference := columnIndex - sourceColumnIndex
 
-	return rowDifference, columnDifference
+	if strings.Contains(reference[1:], "$") {
+		// dollar sign present and not in front
+		fixedRow = true
+	}
+
+	if reference[0:1] == "$" {
+		// dollar sign in front
+		fixedColumn = true
+	}
+
+	return rowDifference, columnDifference, fixedRow, fixedColumn
+}
+
+func setFile(path string, dataString string, c *Client) {
+
+	errFile := ioutil.WriteFile(path, []byte(dataString), 0644)
+	if errFile != nil {
+		fmt.Println("Error calling setFile for path: " + path)
+		fmt.Print(errFile)
+		return
+	}
+}
+
+func getFile(path string, c *Client) {
+
+	b, err := ioutil.ReadFile(path) // just pass the file name
+	if err != nil {
+		fmt.Println("Error calling getFile for path: " + path)
+		fmt.Print(err)
+		return
+	}
+
+	sEnc := b64.StdEncoding.EncodeToString(b)
+
+	jsonData := []string{"GET-FILE", path, sEnc}
+
+	json, err := json.Marshal(jsonData)
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	c.send <- json
+}
+
+func getDirectory(path string, c *Client) {
+
+	path = strings.TrimRight(path, "/")
+
+	if len(path) == 0 {
+		path = "/"
+	}
+
+	jsonData := []string{"GET-DIRECTORY"}
+
+	levelUp := ""
+
+	if len(path) > 0 {
+		pathComponents := strings.Split(path, "/")
+		pathComponents = pathComponents[:len(pathComponents)-1]
+		levelUp = strings.Join(pathComponents, "/")
+
+		if levelUp == "" {
+			levelUp = "/"
+		}
+	}
+
+	jsonData = append(jsonData, "directory", "..", levelUp)
+
+	files, err := ioutil.ReadDir(path)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	filePath := path
+	if path == "/" {
+		filePath = ""
+	}
+
+	for _, f := range files {
+		fileType := "file"
+		if f.IsDir() {
+			fileType = "directory"
+		}
+
+		jsonData = append(jsonData, fileType, f.Name(), filePath+"/"+f.Name())
+	}
+
+	json, err := json.Marshal(jsonData)
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	c.send <- json
 }
 
 func replaceReferencesInFormula(formula string, referenceMap map[string]string) string {
@@ -681,7 +1003,7 @@ func replaceReferencesInFormula(formula string, referenceMap map[string]string) 
 				referenceEndIndex = index + 1
 			}
 
-		} else if unicode.IsLetter(character) {
+		} else if unicode.IsLetter(character) || character == '$' {
 
 			referenceEndIndex = index + 1
 
@@ -827,17 +1149,23 @@ func (c *Client) writePump() {
 
 						OriginalDependOut := grid.Data[ref].DependOut
 
-						dv := DynamicValue{
-							ValueType:   DynamicValueTypeFormula,
-							DataFormula: formula,
+						var dv DynamicValue
+
+						if !isValidFormula(formula) {
+							dv = DynamicValue{
+								ValueType:   DynamicValueTypeString,
+								DataFormula: "\"Error in formula: " + formula + "\"",
+							}
+						} else {
+							dv = DynamicValue{
+								ValueType:   DynamicValueTypeFormula,
+								DataFormula: formula,
+							}
 						}
 
 						NewDependIn := make(map[string]bool)
 						dv.DependIn = &NewDependIn       // new dependin (new formula)
 						dv.DependOut = OriginalDependOut // dependout remain
-
-						// IMPORTANT AUTO (SINGLE) REFERENCE INCREMENT
-						//dv.DataFormula = incrementSingleReferences(dv.DataFormula, incrementAmount)
 
 						// range auto reference manipulation, increment row automatically for references in this formula for each iteration
 						newDvs[ref] = dv
@@ -855,8 +1183,8 @@ func (c *Client) writePump() {
 					}
 
 					// now compute all dirty
-					compute(&grid, c)
-					invalidateView(&grid, c)
+					changedCells := computeDirtyCells(&grid)
+					sendDirtyOrInvalidate(changedCells, &grid, c)
 
 				case "SETLIST":
 
@@ -879,17 +1207,23 @@ func (c *Client) writePump() {
 
 						OriginalDependOut := grid.Data[ref].DependOut
 
-						dv := DynamicValue{
-							ValueType:   DynamicValueTypeFormula,
-							DataFormula: values[valuesIndex],
+						var dv DynamicValue
+
+						if !isValidFormula(values[valuesIndex]) {
+							dv = DynamicValue{
+								ValueType:   DynamicValueTypeString,
+								DataFormula: "\"Error in formula: " + values[valuesIndex] + "\"",
+							}
+						} else {
+							dv = DynamicValue{
+								ValueType:   DynamicValueTypeFormula,
+								DataFormula: values[valuesIndex],
+							}
 						}
 
 						NewDependIn := make(map[string]bool)
 						dv.DependIn = &NewDependIn       // new dependin (new formula)
 						dv.DependOut = OriginalDependOut // dependout remain
-
-						// IMPORTANT AUTO (SINGLE) REFERENCE INCREMENT
-						//dv.DataFormula = incrementSingleReferences(dv.DataFormula, incrementAmount)
 
 						// range auto reference manipulation, increment row automatically for references in this formula for each iteration
 						// newDvs[ref] = dv
@@ -923,13 +1257,27 @@ func (c *Client) writePump() {
 
 				sendCellsInRange(parsed[1], &grid, c)
 
+			case "GET-FILE":
+
+				getFile(parsed[1], c)
+
+			case "SET-FILE":
+
+				setFile(parsed[1], parsed[2], c)
+
+			case "GET-DIRECTORY":
+
+				getDirectory(parsed[1], c)
+
 			case "COPY":
 
 				sourceRange := parsed[1]
 				destinationRange := parsed[2]
 
 				copySourceToDestination(sourceRange, destinationRange, &grid)
-				invalidateView(&grid, c)
+
+				changedCells := computeDirtyCells(&grid)
+				sendDirtyOrInvalidate(changedCells, &grid, c)
 
 			case "SET":
 
@@ -942,47 +1290,13 @@ func (c *Client) writePump() {
 					formula := parsed[2][1:]
 					formula = referencesToUpperCase(formula)
 
-					// check for explosive formulas
-					isExplosive := isExplosiveFormula(formula)
+					if !isValidFormula(formula) {
 
-					if isExplosive {
-
-						// original Dependends can stay on
 						OriginalDependOut := grid.Data[parsed[1]].DependOut
 
 						dv := DynamicValue{
-							ValueType:   DynamicValueTypeExplosiveFormula,
-							DataFormula: formula,
-						}
-
-						// Dependencies are not required, since this cell won't depend on anything given that it's explosive
-
-						// parse explosive formula (also, explosive formulas cannot be nested)
-						dv = parse(dv, &grid, parsed[1])
-
-						// don't need dependend information for parsing, hence assign after parse
-						NewDependIn := make(map[string]bool)
-
-						dv.DependIn = &NewDependIn                      // new dependin (new formula)
-						dv.DependOut = OriginalDependOut                // dependout remain
-						dv.ValueType = DynamicValueTypeExplosiveFormula // shouldn't be necessary, is return type of olsExplosive()
-						dv.DataFormula = formula                        // re-assigning of formula is usually saved for computeDirty but this will be skipped there
-
-						// add OLS cell to dirty (which needs DependInTemp etc)
-						grid.Data[parsed[1]] = setDependencies(parsed[1], dv, &grid)
-
-						// dependencies will be fulfilled for all cells created by explosion
-
-					} else {
-						// set value for cells
-						// cut off = for parsing
-
-						// original Dependends
-						OriginalDependOut := grid.Data[parsed[1]].DependOut
-
-						dv := DynamicValue{
-							ValueType:   DynamicValueTypeFormula,
-							DataFormula: formula,
+							ValueType:   DynamicValueTypeString,
+							DataFormula: "\"Error in formula: " + formula + "\"",
 						}
 
 						NewDependIn := make(map[string]bool)
@@ -990,6 +1304,59 @@ func (c *Client) writePump() {
 						dv.DependOut = OriginalDependOut // dependout remain
 
 						grid.Data[parsed[1]] = setDependencies(parsed[1], dv, &grid)
+
+					} else {
+
+						// check for explosive formulas
+						isExplosive := isExplosiveFormula(formula)
+
+						if isExplosive {
+
+							// original Dependends can stay on
+							OriginalDependOut := grid.Data[parsed[1]].DependOut
+
+							dv := DynamicValue{
+								ValueType:   DynamicValueTypeExplosiveFormula,
+								DataFormula: formula,
+							}
+
+							// Dependencies are not required, since this cell won't depend on anything given that it's explosive
+
+							// parse explosive formula (also, explosive formulas cannot be nested)
+							dv = parse(dv, &grid, parsed[1])
+
+							// don't need dependend information for parsing, hence assign after parse
+							NewDependIn := make(map[string]bool)
+
+							dv.DependIn = &NewDependIn                      // new dependin (new formula)
+							dv.DependOut = OriginalDependOut                // dependout remain
+							dv.ValueType = DynamicValueTypeExplosiveFormula // shouldn't be necessary, is return type of olsExplosive()
+							dv.DataFormula = formula                        // re-assigning of formula is usually saved for computeDirty but this will be skipped there
+
+							// add OLS cell to dirty (which needs DependInTemp etc)
+							grid.Data[parsed[1]] = setDependencies(parsed[1], dv, &grid)
+
+							// dependencies will be fulfilled for all cells created by explosion
+
+						} else {
+							// set value for cells
+							// cut off = for parsing
+
+							// original Dependends
+							OriginalDependOut := grid.Data[parsed[1]].DependOut
+
+							dv := DynamicValue{
+								ValueType:   DynamicValueTypeFormula,
+								DataFormula: formula,
+							}
+
+							NewDependIn := make(map[string]bool)
+							dv.DependIn = &NewDependIn       // new dependin (new formula)
+							dv.DependOut = OriginalDependOut // dependout remain
+
+							grid.Data[parsed[1]] = setDependencies(parsed[1], dv, &grid)
+						}
+
 					}
 
 				} else {
@@ -1016,8 +1383,8 @@ func (c *Client) writePump() {
 
 				}
 
-				compute(&grid, c)
-				invalidateView(&grid, c)
+				changedCells := computeDirtyCells(&grid)
+				sendDirtyOrInvalidate(changedCells, &grid, c)
 
 			case "CSV":
 				fmt.Println("Received CSV! Size: " + strconv.Itoa(len(parsed[1])))
@@ -1110,8 +1477,9 @@ func (c *Client) writePump() {
 				grid.ColumnCount = newColumnCount
 
 				sendSheetSize(c, &grid)
-				compute(&grid, c)
-				invalidateView(&grid, c)
+
+				changedCells := computeDirtyCells(&grid)
+				sendDirtyOrInvalidate(changedCells, &grid, c)
 
 			case "EXPORT-CSV":
 

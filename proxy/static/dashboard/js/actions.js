@@ -17,7 +17,6 @@ $(document).ready(function(){
 
     loadWorkspaces();
 
-
     $(document).on("change",".workspace-list li input[name=workspaceName]",function(){
 
         var val = $(this).val();
