@@ -9,7 +9,7 @@ $(document).ready(function(){
 
             for(var x = 0; x < data.length; x++){
                 var workspaceNameEscaped = data[x].name.replace("'","&#39;");
-                workspaceList.append("<li><input type='name' name='workspaceName' value='"+workspaceNameEscaped+"' /><form action='/initialize' method='post'><input type='hidden' value='"+data[x].slug+"' name='uuid' /><input type='hidden' value='"+data[x].id+"' name='id' />"+data[x].slug+"<button>Open</button></form></li><br>");
+                workspaceList.append("<li><input type='name' name='workspaceName' value='"+workspaceNameEscaped+"' /><form action='/initialize' method='post'><input type='hidden' value='"+data[x].slug+"' name='uuid' /><input type='hidden' value='"+data[x].id+"' name='id' />"+data[x].slug+"<button>Open</button></form><form action='/copy/"+data[x].slug+"' method='post'><button>Copy</button></form><form action='/remove/"+data[x].slug+"' method='post'><button>Remove</button></form></li><br>");
             }
 
         })

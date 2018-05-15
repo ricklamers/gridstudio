@@ -126,6 +126,8 @@ func parsePythonOutput(bufferHolder bytes.Buffer, pythonIn io.WriteCloser, c *Cl
 
 				newString := e
 
+				// fmt.Println(newString)
+
 				// only change bufferSize if ending is #PONG#
 				// print string from b that is size of newBufferLength that starts at oldSize
 

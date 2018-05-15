@@ -28,6 +28,7 @@
             this.dom.find('.close').click(function(){
                 _this.ace.setValue("",-1);
                 _this.setFilePath();
+                _this.dom.find(".file-name").removeClass("unsaved");
             });
 
             editor.setTheme("ace/theme/crimson_editor");
@@ -106,6 +107,7 @@
             editor.onPaste = function(e){
                 if(editor.isFocused()){
                     var session = editor.session;
+                    session.remove(session.selection);
                     session.insert(editor.getCursorPosition(), e)
                 }
             }

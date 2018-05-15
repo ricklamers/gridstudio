@@ -5,7 +5,10 @@ import matplotlib
 matplotlib.use('Agg')
 
 import base64
+import os
 import matplotlib.pyplot as plt
+
+os.chdir("/home/user")
 
 sheet_data = {}
 
@@ -93,6 +96,10 @@ def cell_range_to_indexes(cell_range):
 
     return references
 
+
+def has_number(s):
+    return any(i.isdigit() for i in s)
+
 def convert_to_json_string(element):
 
     if isinstance(element, str):
@@ -105,16 +112,24 @@ def sheet(cell_range, data = None):
 
     # input data into sheet
     if data is not None:
-        
-        # always convert cell to range
-        if ":" not in cell_range:
-            cell_range = cell_range + ":" + cell_range
-        
-        
+
         # convert numpy to array
         data_type_string = str(type(data))
         if data_type_string == "<class 'numpy.ndarray'>":
             data = data.tolist()
+
+        # always convert cell to range
+        if ":" not in cell_range:
+            if not has_number(cell_range):
+                if type(data) is list:
+                    cell_range = cell_range + "1:" + cell_range + str(len(data))
+                else :
+                    cell_range = cell_range + "1:" + cell_range + "1"
+            else:
+                cell_range = cell_range + ":" + cell_range
+        
+        
+        
             
         if type(data) is list:
             

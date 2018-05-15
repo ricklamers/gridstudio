@@ -233,10 +233,15 @@ body div-sheet canvas {
   display: block;
   margin-right: 5px;
   background-size: contain;
+  background-repeat: no-repeat;
   width: 26px;
   height: 26px;
   float: left;
   margin-top: -4px;
+}
+.code-editor .dev-tabs .filemanager li.directory .icon {
+  background-size: 18px;
+  background-position: center;
 }
 .code-editor .dev-tabs .filemanager li {
   overflow: auto;
@@ -307,12 +312,10 @@ body div-sheet canvas {
   height: 70%;
   padding-bottom: 45px;
   background: #eee;
-  display: flex;
-  flex-flow: column;
 }
 .file-editor .file-name-holder {
   padding: 5px;
-  min-height: 26px;
+  height: 26px;
 }
 .file-editor .file-name-holder .close {
   position: absolute;
@@ -323,12 +326,9 @@ body div-sheet canvas {
 .file-editor .file-name-holder .file-name.unsaved:after {
   content: "*";
 }
-.file-editor .ace-editor-holder {
-  flex: 1;
-}
 .file-editor #editor-ace {
   background: #fff;
-  height: 100%;
+  height: calc(100% - 26px);
   width: 100%;
   border-bottom: 1px solid #ccc;
 }

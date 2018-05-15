@@ -469,6 +469,117 @@ func main() {
 		http.Redirect(w, r, "/workspace/"+uuid+"/", 302)
 	})
 
+	http.HandleFunc("/remove/", func(w http.ResponseWriter, r *http.Request) {
+		splitURL := strings.Split(r.URL.Path, "/")
+
+		if len(splitURL) < 3 {
+			http.Redirect(w, r, "/dashboard/", 302)
+			return
+		}
+
+		userID := getUserId(r, db)
+
+		uuidFromUrl := splitURL[2]
+
+		_, err := db.Exec("DELETE FROM workspaces WHERE owner = ? AND slug = ?", userID, uuidFromUrl)
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		dirName := "userdata/workspace-" + uuidFromUrl
+
+		if _, err := os.Stat(dirName); !os.IsNotExist(err) {
+			removeCommand := "rm -rf " + dirName
+			fmt.Println(removeCommand)
+			chownCommand := exec.Command("/bin/sh", "-c", removeCommand)
+			chownCommand.Start()
+		}
+
+		http.Redirect(w, r, "/dashboard/", 302)
+
+	})
+
+	http.HandleFunc("/copy/", func(w http.ResponseWriter, r *http.Request) {
+
+		cookieEmail, err1 := r.Cookie("email")
+		cookieToken, err2 := r.Cookie("token")
+
+		if err1 != nil || err2 != nil {
+			http.Redirect(w, r, "/login", 302)
+		} else if checkLoggedIn(cookieEmail.Value, cookieToken.Value, db) {
+
+			splitURL := strings.Split(r.URL.Path, "/")
+
+			if len(splitURL) < 3 {
+				http.Redirect(w, r, "/dashboard/", 302)
+				return
+			}
+
+			uuidFromUrl := splitURL[2]
+
+			var dirName string
+
+			dirName = "userdata/workspace-" + uuidFromUrl
+
+			fmt.Println(dirName)
+
+			if _, err := os.Stat(dirName); !os.IsNotExist(err) {
+				// path/to/whatever does not exist
+
+				userID := getUserId(r, db)
+
+				newUuid := uuid.NewV4().String()
+				newDirName := "userdata/workspace-" + newUuid
+
+				// get name form DB
+				rows, err := db.Query("SELECT name FROM workspaces WHERE slug = ?", uuidFromUrl)
+				defer rows.Close()
+				if err != nil {
+					fmt.Println(err)
+				}
+				var (
+					name    string
+					oldName string
+				)
+
+				for rows.Next() {
+					err := rows.Scan(&name)
+					if err != nil {
+						log.Fatal(err)
+					}
+					oldName = name
+				}
+
+				fmt.Println(oldName)
+
+				newName := oldName + " (Copy)"
+
+				// create database entry
+				_, err2 := db.Exec("INSERT INTO workspaces (owner, slug, name) VALUES (?,?,?)", userID, newUuid, newName)
+				if err2 != nil {
+					fmt.Println(err2)
+				}
+
+				// copy directory
+				copyCommand := "cp -a -p " + dirName + "/. " + newDirName
+				fmt.Println(copyCommand)
+				chownCommand := exec.Command("/bin/sh", "-c", copyCommand)
+				chownCommand.Start()
+
+				// redirect to initialize
+				// http.Redirect(w, r, "/initialize?uuid="+newUuid, 302)
+				http.Redirect(w, r, "/dashboard/", 302)
+
+			} else {
+				http.Redirect(w, r, "/dashboard/", 302)
+			}
+
+		} else {
+			http.Redirect(w, r, "/dashboard/", 302)
+		}
+
+	})
+
 	http.HandleFunc("/initialize", func(w http.ResponseWriter, r *http.Request) {
 
 		r.ParseForm()

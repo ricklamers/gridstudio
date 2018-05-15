@@ -158,6 +158,32 @@
 			}
 		}
 
+		this.reloadPlotData = function(plot){
+
+			var x_range = plot.data[0];
+			var y_range = plot.data[1];
+
+			// refresh data only on initial plot
+			if(x_range.length > 0){
+				var rangeString = this.cellArrayToStringRange([x_range[0],x_range[1]]);
+				this.refreshDataRange(rangeString);
+			}
+
+			if(y_range.length > 0){
+				var rangeString = this.cellArrayToStringRange([y_range[0],y_range[1]]);
+				this.refreshDataRange(rangeString);
+			}
+
+		}
+
+		this.reloadPlotsData = function(){
+			for(var key in this.plots){
+				if(this.plots.hasOwnProperty(key)){
+					this.reloadPlotData(this.plots[key]);
+				}
+			}
+		}
+
 		this.indexToLetters = function(index){
 			var base = 26;
 			var leftOver = index;
@@ -921,14 +947,21 @@
 			// send websocket request for this range
 			var rangeString = this.cellArrayToStringRange([[this.drawRowStart, this.drawColumnStart],[this.drawRowEnd, this.drawColumnEnd]]);
 
-			this.wsManager.send('{"arguments":["GET","'+rangeString+'"]}')
+			this.refreshDataRange(rangeString);
+
+			// also refresh plot
+			this.reloadPlotsData();
+		}
+
+		this.refreshDataRange = function(range){
+			this.wsManager.send('{"arguments":["GET","'+range+'"]}')
 		}
 
 		this.deselect_input_field = function(set_values){
 			_this.input_field.blur();
 			
 			if(_this.selectedCells != undefined && set_values === true){
-				_this.set_range(_this.selectedCells[0], _this.selectedCells[1], _this.input_field.val());
+				_this.set_range(_this.selectedCells[0], _this.selectedCells[0], _this.input_field.val());
 			}
 			
 			// clear value from input field
@@ -1885,7 +1918,6 @@
 
 		this.plot = function(type){
 
-			
 			var x_range = [];
 			var y_range = [];
 
@@ -2000,6 +2032,16 @@
 			// add plot
 			this.plots[plot_id] = {plot_id, type: type, data: [x_range, y_range]}
 
+			// refresh data only on initial plot
+			if(x_range.length > 0){
+				var rangeString = this.cellArrayToStringRange([x_range[0],x_range[1]]);
+				this.refreshDataRange(rangeString);
+			}
+
+			if(y_range.length > 0){
+				var rangeString = this.cellArrayToStringRange([y_range[0],y_range[1]]);
+				this.refreshDataRange(rangeString);
+			}
 
 		}
 

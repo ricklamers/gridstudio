@@ -119,7 +119,7 @@
                             img.src = "data:image/png;base64, " + json.arguments[1];
                             $(".dev-tabs .plots").html(img);
 
-                            _this.app.termManager.showTab("plots");
+                            _this.app.showTab("plots");
                             
                         }
                         else if(json[0] == "EXPORT-CSV"){
