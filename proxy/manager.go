@@ -30,7 +30,7 @@ import (
 )
 
 const termBase = -1000
-const httpPort = 8080
+const httpPort = 80
 const wsPort = 443
 const constPasswordSalt = "GY=B[+inIGy,W5@U%kwP/wWrw%4uQ?6|8P$]9{X=-XY:LO6*1cG@P-+`<s=+TL#N"
 
@@ -642,18 +642,17 @@ func main() {
 		// start docker instance based on OS
 		if runtime.GOOS == "linux" {
 			// TODO: add GPU docker - big change - will be done later
-			// dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true", "-v", "/home/rick/workspace/grid-docker/grid-app:/home/source", "-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "--device=/dev/nvidia0:/dev/nvidia0", "--device=/dev/nvidiactl:/dev/nvidiactl", "--device=/dev/nvidia-uvm:/dev/nvidia-uvm", "--device=/dev/nvidia-modeset:/dev/nvidia-modeset", "goserver")
 			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true",
 				"-v", "/home/rick/workspace/grid-docker/grid-app:/home/source",
 				"-v", "/home/rick/workspace/grid-docker/proxy/userdata/workspace-"+uuidString+"/userfolder:/home/user",
-				"-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "-d=false", "goserver")
+				"-p", strconv.Itoa(ds.Port)+":"+strconv.Itoa(httpPort), "-p", strconv.Itoa(termBase+ds.Port)+":3000", "-d=false", "goserver")
 		} else if runtime.GOOS == "windows" {
 			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true",
 				"-v", "C:\\Users\\Rick\\workspace\\grid-docker\\grid-app:/home/source",
 				"-v", "C:\\Users\\Rick\\workspace\\grid-docker\\proxy\\userdata\\workspace-"+uuidString+"\\userfolder:/home/user",
-				"-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "goserver")
+				"-p", strconv.Itoa(ds.Port)+":"+strconv.Itoa(httpPort), "-p", strconv.Itoa(termBase+ds.Port)+":3000", "goserver")
 		} else {
-			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true", "-v", "/Users/ricklamers/workspace/grid-docker/proxy/userdata/workspace-"+uuidString+"/userfolder:/home/user", "-v", "/Users/ricklamers/workspace/grid-docker/grid-app:/home/source", "-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "-d=false", "goserver")
+			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true", "-v", "/Users/ricklamers/workspace/grid-docker/proxy/userdata/workspace-"+uuidString+"/userfolder:/home/user", "-v", "/Users/ricklamers/workspace/grid-docker/grid-app:/home/source", "-p", strconv.Itoa(ds.Port)+":"+strconv.Itoa(httpPort), "-p", strconv.Itoa(termBase+ds.Port)+":3000", "-d=false", "goserver")
 		}
 
 		dockerCmd.Stdout = os.Stdout
