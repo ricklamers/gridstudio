@@ -303,7 +303,11 @@ func main() {
 	})
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "static/home/index.html")
+		if r.URL.Path == "/" {
+			http.ServeFile(w, r, "static/home/index.html")
+		} else {
+			http.NotFound(w, r)
+		}
 	})
 
 	http.HandleFunc("/dashboard/", func(w http.ResponseWriter, r *http.Request) {
