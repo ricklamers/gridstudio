@@ -302,7 +302,7 @@ func main() {
 
 	})
 
-	http.HandleFunc("", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "static/home/index.html")
 	})
 
