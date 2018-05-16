@@ -645,14 +645,14 @@ func main() {
 			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true",
 				"-v", "/home/rick/workspace/grid-docker/grid-app:/home/source",
 				"-v", "/home/rick/workspace/grid-docker/proxy/userdata/workspace-"+uuidString+"/userfolder:/home/user",
-				"-p", strconv.Itoa(ds.Port)+":"+strconv.Itoa(httpPort), "-p", strconv.Itoa(termBase+ds.Port)+":3000", "-d=false", "goserver")
+				"-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "-d=false", "goserver")
 		} else if runtime.GOOS == "windows" {
 			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true",
 				"-v", "C:\\Users\\Rick\\workspace\\grid-docker\\grid-app:/home/source",
 				"-v", "C:\\Users\\Rick\\workspace\\grid-docker\\proxy\\userdata\\workspace-"+uuidString+"\\userfolder:/home/user",
-				"-p", strconv.Itoa(ds.Port)+":"+strconv.Itoa(httpPort), "-p", strconv.Itoa(termBase+ds.Port)+":3000", "goserver")
+				"-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "goserver")
 		} else {
-			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true", "-v", "/Users/ricklamers/workspace/grid-docker/proxy/userdata/workspace-"+uuidString+"/userfolder:/home/user", "-v", "/Users/ricklamers/workspace/grid-docker/grid-app:/home/source", "-p", strconv.Itoa(ds.Port)+":"+strconv.Itoa(httpPort), "-p", strconv.Itoa(termBase+ds.Port)+":3000", "-d=false", "goserver")
+			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true", "-v", "/Users/ricklamers/workspace/grid-docker/proxy/userdata/workspace-"+uuidString+"/userfolder:/home/user", "-v", "/Users/ricklamers/workspace/grid-docker/grid-app:/home/source", "-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "-d=false", "goserver")
 		}
 
 		dockerCmd.Stdout = os.Stdout
