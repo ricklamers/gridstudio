@@ -34,6 +34,9 @@ func main() {
 		test("A.01", false)
 		test("A10+0.01", true)
 		test("A10+A", false)
+		test("$A$10+$A1+A$2", true)
+		test("$$A1", false)
+		test("A$$1", false)
 		test("", true)
 	} else {
 		// test("SUM(A1:10, 10)", false)
@@ -41,6 +44,8 @@ func main() {
 		// test("((A1 + A10) - (1))", true)
 
 		// test("SUM(A1:A10, 10)", true)
+		test("$A$10+$A1+A$2", true)
+
 	}
 
 	// test("A10 + A0.2", false)
@@ -68,6 +73,8 @@ func isValidFormula(formula string) bool {
 
 	// inFunction := false
 	inReference := false
+	dollarInColumn := false
+	dollarInRow := false
 	referenceFoundRange := false
 	validReference := false
 	inDecimal := false
@@ -118,6 +125,22 @@ func isValidFormula(formula string) bool {
 				inReference = true
 			}
 
+			if !inReference && dollarInColumn && r == '$' {
+				return false
+			}
+
+			if !inReference && r == '$' {
+				dollarInColumn = true
+			}
+
+			if dollarInRow && inReference && r == '$' {
+				return false
+			}
+
+			if inReference && !dollarInColumn && r == '$' {
+				dollarInRow = true
+			}
+
 			if inReference && (r == ':' && []rune(previousChar)[0] != ':') {
 				inReference = false
 				validReference = false
@@ -157,11 +180,13 @@ func isValidFormula(formula string) bool {
 				}
 
 				inReference = false
+				dollarInColumn = false
+				dollarInRow = false
 				validReference = false
 				referenceFoundRange = false
 			}
 
-			if inReference && !referenceFoundRange && !(unicode.IsDigit(r) || unicode.IsLetter(r) || r == ':') {
+			if inReference && !referenceFoundRange && !(unicode.IsDigit(r) || unicode.IsLetter(r) || r == ':' || r == '$') {
 
 				if !validReference {
 					return false
@@ -169,6 +194,8 @@ func isValidFormula(formula string) bool {
 
 				inReference = false
 				validReference = false
+				dollarInColumn = false
+				dollarInRow = false
 			}
 
 			/* number checking */
@@ -195,7 +222,7 @@ func isValidFormula(formula string) bool {
 			}
 
 			/* operator checking */
-			if !inReference && !inFunction && !inDecimal && !(unicode.IsDigit(r) || unicode.IsLetter(r)) && r != ' ' && r != '(' && r != ')' && r != ',' {
+			if !inReference && !inFunction && !inDecimal && !(unicode.IsDigit(r) || unicode.IsLetter(r)) && r != ' ' && r != '(' && r != ')' && r != ',' && r != '$' {
 				// if not in reference and operator is not space
 				currentOperator += c
 				inOperator = true

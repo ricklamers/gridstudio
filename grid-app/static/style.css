@@ -11,6 +11,7 @@ body {
 }
 .formula-bar {
   padding: 5px;
+  padding-top: 0;
 }
 .formula-bar input {
   width: 100%;
@@ -32,21 +33,21 @@ body header .workspaceName {
   width: 200px;
   left: 50%;
   margin-left: -100px;
-  top: 10px;
+  top: 6px;
 }
 body header .workspaceName input {
   width: 100%;
   text-align: center;
   border: 0;
   background: 0;
-  font-size: 16px;
+  font-size: 14px;
 }
 body header div-menu {
   display: flex;
   align-items: center;
   justify-content: flex-start;
   flex-direction: row;
-  padding: 5px;
+  padding: 0;
 }
 body header a {
   color: #000;
@@ -54,7 +55,10 @@ body header a {
 }
 body header menu-item {
   cursor: pointer;
-  padding: 5px;
+  padding: 7px 12px;
+}
+body header menu-item a {
+  color: inherit;
 }
 body header menu-item input {
   position: absolute;
@@ -62,7 +66,8 @@ body header menu-item input {
   pointer-events: none;
 }
 body header menu-item:hover {
-  background: #ddd;
+  background: #333;
+  color: #fff;
 }
 body header menu-item:hover menu-list {
   display: block;
@@ -70,18 +75,18 @@ body header menu-item:hover menu-list {
 body header menu-list {
   position: absolute;
   display: none;
-  margin-top: 5px;
-  margin-left: -5px;
-  background: #ddd;
+  margin-top: 7px;
+  margin-left: -12px;
+  background: #eee;
   font-size: 14px;
-  border: 1px solid #ddd;
+  color: #000;
 }
 body header menu-list menu-item {
   display: block;
 }
-body header menu-list menu-item:hover,
-body header menu-list menu-item.active {
-  background: #fff;
+color body header menu-list menu-item:hover {
+  background: #333;
+  color: #fff;
 }
 body header menu-list menu-item.no-plots {
   font-style: italic;
@@ -223,11 +228,20 @@ body div-sheet canvas {
 }
 .code-editor .dev-tabs .filemanager {
   height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.code-editor .dev-tabs .filemanager .files-view {
   overflow-y: auto;
+  flex: 1;
 }
 .code-editor .dev-tabs .filemanager .path {
-  background: #ccc;
-  padding: 3px;
+  background: #eee;
+  padding: 4px;
+}
+.code-editor .dev-tabs .filemanager .path input {
+  padding: 4px;
+  width: 100%;
 }
 .code-editor .dev-tabs .filemanager .icon {
   display: block;
@@ -271,6 +285,7 @@ body div-sheet canvas {
 }
 .code-editor .dev-tabs .terminal {
   background: #000;
+  padding: 5px;
 }
 .code-editor .dev-tabs .tabs {
   margin-top: -46px;
@@ -284,10 +299,11 @@ body div-sheet canvas {
   float: left;
   cursor: pointer;
   user-select: none;
+  transition: background-color 0.2s ease;
 }
 .code-editor .dev-tabs .tabs .tab:hover,
 .code-editor .dev-tabs .tabs .tab.current {
-  background: #ccc;
+  background: #ddd;
 }
 .code-editor .dev-tabs .console {
   overflow-y: auto;

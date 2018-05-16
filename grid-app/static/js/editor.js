@@ -29,13 +29,15 @@
                 _this.ace.setValue("",-1);
                 _this.setFilePath();
                 _this.dom.find(".file-name").removeClass("unsaved");
+                _this.dom.find(".close").hide();
             });
 
             editor.setTheme("ace/theme/crimson_editor");
-            editor.getSession().setMode("ace/mode/python");
+            editor.getSession().setMode("ace/mode/text");
 
             editor.getSession().on('change', function() {
                 _this.dom.find(".file-name").addClass("unsaved");
+                _this.dom.find(".close").show();
             });
             
             editor.renderer.setScrollMargin(10, 10)
@@ -134,6 +136,12 @@
             if(!this.filepath){
                 var filename = prompt("Enter a filename");
                 this.setFilePath( "/home/user/" + filename);
+
+                var extension = filename.split(".")[filename.split(".").length-1];
+
+                if(extension == "py"){
+                    this.ace.getSession().setMode("ace/mode/python");
+                }
             }
             var content = this.ace.getValue();
 

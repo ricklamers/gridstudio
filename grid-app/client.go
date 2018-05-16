@@ -124,6 +124,8 @@ func isValidFormula(formula string) bool {
 
 	// inFunction := false
 	inReference := false
+	dollarInColumn := false
+	dollarInRow := false
 	referenceFoundRange := false
 	validReference := false
 	inDecimal := false
@@ -174,6 +176,22 @@ func isValidFormula(formula string) bool {
 				inReference = true
 			}
 
+			if !inReference && dollarInColumn && r == '$' {
+				return false
+			}
+
+			if !inReference && r == '$' {
+				dollarInColumn = true
+			}
+
+			if dollarInRow && inReference && r == '$' {
+				return false
+			}
+
+			if inReference && !dollarInColumn && r == '$' {
+				dollarInRow = true
+			}
+
 			if inReference && (r == ':' && []rune(previousChar)[0] != ':') {
 				inReference = false
 				validReference = false
@@ -213,11 +231,13 @@ func isValidFormula(formula string) bool {
 				}
 
 				inReference = false
+				dollarInColumn = false
+				dollarInRow = false
 				validReference = false
 				referenceFoundRange = false
 			}
 
-			if inReference && !referenceFoundRange && !(unicode.IsDigit(r) || unicode.IsLetter(r) || r == ':') {
+			if inReference && !referenceFoundRange && !(unicode.IsDigit(r) || unicode.IsLetter(r) || r == ':' || r == '$') {
 
 				if !validReference {
 					return false
@@ -225,6 +245,8 @@ func isValidFormula(formula string) bool {
 
 				inReference = false
 				validReference = false
+				dollarInColumn = false
+				dollarInRow = false
 			}
 
 			/* number checking */
@@ -251,7 +273,7 @@ func isValidFormula(formula string) bool {
 			}
 
 			/* operator checking */
-			if !inReference && !inFunction && !inDecimal && !(unicode.IsDigit(r) || unicode.IsLetter(r)) && r != ' ' && r != '(' && r != ')' && r != ',' {
+			if !inReference && !inFunction && !inDecimal && !(unicode.IsDigit(r) || unicode.IsLetter(r)) && r != ' ' && r != '(' && r != ')' && r != ',' && r != '$' {
 				// if not in reference and operator is not space
 				currentOperator += c
 				inOperator = true
@@ -689,7 +711,7 @@ func sortRange(direction string, cellRange string, sortColumn string, grid *Grid
 	}
 }
 
-func copySourceToDestination(sourceRange string, destinationRange string, grid *Grid) {
+func copySourceToDestination(sourceRange string, destinationRange string, grid *Grid) []string {
 
 	// case 1: sourceRange and destinationRange have equal size
 	// solution: copy every cell to every destinationRange cell
@@ -710,6 +732,8 @@ func copySourceToDestination(sourceRange string, destinationRange string, grid *
 	// possible: only write for 1 to 1 mapping to check if bug free, then extend for case 2 & 3
 	sourceCells := cellRangeToCells(sourceRange)
 	destinationCells := cellRangeToCells(destinationRange)
+
+	finalDestinationCells := []string{}
 
 	if len(sourceCells) == len(destinationCells) {
 		for key, value := range sourceCells {
@@ -752,6 +776,9 @@ func copySourceToDestination(sourceRange string, destinationRange string, grid *
 					}
 				}
 
+				// always start row again for new column
+				sRow = sourceRowStart
+
 				if sColumn < sourceColumnEnd {
 					sColumn++
 				} else {
@@ -772,6 +799,8 @@ func copySourceToDestination(sourceRange string, destinationRange string, grid *
 
 					destinationMapping[destinationRef] = sourceRef
 
+					// fmt.Println(destinationRef + "->" + sourceRef)
+
 					dRow++
 				}
 				dRow = destinationRowStart
@@ -781,7 +810,11 @@ func copySourceToDestination(sourceRange string, destinationRange string, grid *
 		}
 	}
 
+	newDvs := make(map[string]DynamicValue)
+
 	for destinationRef, sourceRef := range destinationMapping {
+
+		finalDestinationCells = append(finalDestinationCells, destinationRef)
 
 		referenceMapping := make(map[string]string)
 
@@ -826,10 +859,17 @@ func copySourceToDestination(sourceRange string, destinationRange string, grid *
 		destinationDv := getDataFromRef(destinationRef, grid)
 		destinationDv.DataFormula = newFormula
 
-		// for each cell mapping, copy contents after substituting the references
-		// all cells in destination should be added to dirty
-		grid.Data[destinationRef] = setDependencies(destinationRef, destinationDv, grid)
+		newDvs[destinationRef] = destinationDv
+
 	}
+
+	for ref, dv := range newDvs {
+		grid.Data[ref] = setDependencies(ref, dv, grid)
+	}
+	// for each cell mapping, copy contents after substituting the references
+	// all cells in destination should be added to dirty
+
+	return finalDestinationCells
 
 }
 
@@ -920,6 +960,10 @@ func getDirectory(path string, c *Client) {
 	files, err := ioutil.ReadDir(path)
 	if err != nil {
 		fmt.Println(err)
+
+		// directory doesn't exist
+		jsonData = []string{"GET-DIRECTORY", "INVALIDPATH"}
+
 	}
 
 	filePath := path
@@ -943,6 +987,22 @@ func getDirectory(path string, c *Client) {
 	}
 
 	c.send <- json
+}
+
+func clearCell(ref string, grid *Grid) {
+
+	OriginalDependOut := grid.Data[ref].DependOut
+
+	dv := DynamicValue{
+		ValueType:   DynamicValueTypeString,
+		DataFormula: "",
+	}
+
+	NewDependIn := make(map[string]bool)
+	dv.DependIn = &NewDependIn       // new dependin (new formula)
+	dv.DependOut = OriginalDependOut // dependout remain
+
+	grid.Data[ref] = setDependencies(ref, dv, grid)
 }
 
 func replaceReferencesInFormula(formula string, referenceMap map[string]string) string {
@@ -1275,6 +1335,26 @@ func (c *Client) writePump() {
 				destinationRange := parsed[2]
 
 				copySourceToDestination(sourceRange, destinationRange, &grid)
+
+				changedCells := computeDirtyCells(&grid)
+				sendDirtyOrInvalidate(changedCells, &grid, c)
+
+			case "CUT":
+
+				sourceRange := parsed[1]
+				destinationRange := parsed[2]
+
+				// clear difference between sourceRange and destinationRange
+				sourceCells := cellRangeToCells(sourceRange)
+				destinationCells := copySourceToDestination(sourceRange, destinationRange, &grid)
+
+				// clear sourceCells that are not in destination
+				for _, ref := range sourceCells {
+					if !contains(destinationCells, ref) {
+						// clear cell
+						clearCell(ref, &grid)
+					}
+				}
 
 				changedCells := computeDirtyCells(&grid)
 				sendDirtyOrInvalidate(changedCells, &grid, c)

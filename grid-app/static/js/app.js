@@ -39,15 +39,6 @@
 		);
 	}
 	
-	// function dataURLtoBytes(dataurl, filename) {
-	// 	var arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
-	// 		bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
-	// 	while(n--){
-	// 		u8arr[n] = bstr.charCodeAt(n);
-	// 	}
-	// 	return u8arr
-	// }
-
 	String.prototype.capitalize = function() {
 		return this.replace(/(?:^|\s)\S/g, function(a) { return a.toUpperCase(); });
 	};
@@ -98,7 +89,8 @@
 		this.pixelRatio = window.devicePixelRatio;
 
 		this.selectedCells = [[0,0],[0,0]];
-		this.copySelection;
+		this.copySelectionCells;
+		this.isCutOperation = false;
 
 		this.data = [];
 		this.dataFormulas = [];
@@ -411,8 +403,12 @@
 					_this.sortRange("ASC", _this.selectionToLowerUpper(_this.selectedCells));
 				}else if($(this).hasClass('sort-desc')){
 					_this.sortRange("DESC", _this.selectionToLowerUpper(_this.selectedCells));
-				}else{
-					alert("Sorry, this is not implemented yet.");
+				}else if($(this).hasClass('copy')){
+					_this.copySelection();
+				}else if($(this).hasClass('cut')){
+					_this.cutSelection();
+				}else if($(this).hasClass('paste')){
+					_this.pasteSelection();
 				}
 
 				$('.context-menu').removeClass("shown");
@@ -423,6 +419,31 @@
 				$(".context-menu").removeClass('shown');
 			})
 			
+		}
+
+		this.cutSelection = function(){
+			this.copySelectionCells = this.getSelectedCellsInOrder();
+			this.isCutOperation = true;
+		}
+
+		this.copySelection = function(){
+			this.copySelectionCells = this.getSelectedCellsInOrder();
+		}
+		this.pasteSelection = function(){
+			if(this.copySelectionCells){
+
+				// send copy command
+				var sourceRange = this.cellArrayToStringRange(this.copySelectionCells);
+				var destinationRange = this.cellArrayToStringRange(this.getSelectedCellsInOrder());
+
+				if(this.isCutOperation){
+					this.isCutOperation = false;
+					this.copySelectionCells = undefined;
+					this.wsManager.send(JSON.stringify({arguments: ["CUT", sourceRange, destinationRange]}))
+				}else{
+					this.wsManager.send(JSON.stringify({arguments: ["COPY", sourceRange, destinationRange]}))
+				}
+			}
 		}
 
 		this.init = function(){
@@ -869,7 +890,29 @@
 						// _this.input_field[0].select();
 						// document.execCommand("Copy");
 						// _this.input_field.hide();
-						_this.copySelection = _this.getSelectedCellsInOrder();
+						_this.copySelection();
+
+					}else{
+						keyRegistered = false;
+					}
+						
+					
+				}
+				else if(
+					(e.ctrlKey && (e.keyCode == 88)) ||
+					(e.metaKey && (e.keyCode == 88))) {
+
+					if(!_this.isFocusedOnElement()){
+						
+						// copy
+						// set input with current cell's value
+						// _this.input_field.val(_this.get(_this.selectedCells[0]));
+						// _this.input_field.show();
+						
+						// _this.input_field[0].select();
+						// document.execCommand("Copy");
+						// _this.input_field.hide();
+						_this.cutSelection();
 
 					}else{
 						keyRegistered = false;
@@ -891,15 +934,7 @@
 						// _this.input_field[0].select();
 						// document.execCommand("Copy");
 						// _this.input_field.hide();
-
-						if(_this.copySelection){
-
-							// send copy command
-							var sourceRange = _this.cellArrayToStringRange(_this.copySelection);
-							var destinationRange = _this.cellArrayToStringRange(_this.getSelectedCellsInOrder());
-
-							_this.wsManager.send(JSON.stringify({arguments: ["COPY", sourceRange, destinationRange]}))
-						}
+						_this.pasteSelection();
 
 					}else{
 						keyRegistered = false;

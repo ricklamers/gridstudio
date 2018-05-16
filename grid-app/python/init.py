@@ -8,7 +8,9 @@ import base64
 import os
 import matplotlib.pyplot as plt
 
-os.chdir("/home/user")
+
+if os.path.isdir("/home/user"):
+    os.chdir("/home/user")
 
 sheet_data = {}
 

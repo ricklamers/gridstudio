@@ -58,19 +58,19 @@
 
                         if (json[0] == 'SET'){
             
-                            for(var x = 1; x < json.length; x += 3){
-                                var rowText = json[x].replace(/^\D+/g, '');
+                            for(var i = 1; i < json.length; i += 3){
+                                var rowText = json[i].replace(/^\D+/g, '');
                                 var rowNumber = parseInt(rowText)-1;
                 
-                                var columnText = json[x].replace(rowText, '');
+                                var columnText = json[i].replace(rowText, '');
                                 var columnNumber = _this.app.lettersToIndex(columnText)-1;
                 
                                 var position = [rowNumber, columnNumber];
-                                _this.app.set(position,json[x+1]);
+                                _this.app.set(position,json[i+1]);
                                 
                                 // make sure to not trigger a re-send
                                 // filter empty response
-                                _this.app.set_formula(position, json[x+2], false);
+                                _this.app.set_formula(position, json[i+2], false);
                             }
                         }
                         else if(json[0] == "INTERPRETER"){

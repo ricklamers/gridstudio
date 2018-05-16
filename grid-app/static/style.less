@@ -15,6 +15,7 @@ html, body{
 .formula-bar{
 
 	padding: @padding;
+	padding-top: 0;
 
 	input{
 		width: 100%;
@@ -40,14 +41,14 @@ body{
 			width: 200px;
 			left: 50%;
 			margin-left: -100px;
-			top: 10px;
+			top: 6px;
 
 			input{
 				width: 100%;
 				text-align: center;
 				border:0;
 				background:0;
-				font-size: 16px;
+				font-size: 14px;
 			}
 			
 		}
@@ -57,7 +58,7 @@ body{
 			align-items: center;
 			justify-content: flex-start;
 			flex-direction: row;
-			padding: @padding;
+			padding: 0;
 		}
 
 		a {
@@ -67,8 +68,12 @@ body{
 		 
 		menu-item{
 			cursor: pointer;
-			padding:5px;
+			padding:7px 12px;
 			
+			a {
+				color: inherit;
+			}
+
 			input{
 				position: absolute;
 				opacity: 0; 
@@ -76,7 +81,8 @@ body{
 			}
 
 			&:hover {
-				background: #ddd;
+				background: #333;
+				color: #fff;
 				menu-list {
 					display: block;
 				}
@@ -86,18 +92,20 @@ body{
 		menu-list{
 			position: absolute;
 			display: none;
-			margin-top: 5px;
-			margin-left: -5px;
-			background: #ddd;
+			margin-top: 7px;
+			margin-left: -12px;
+			background: #eee;
 			font-size: 14px;
-			border: 1px solid #ddd;
+
+			color: #000;
 
 			menu-item{
 				display: block;
-				&:hover, &.active {
-					background: #fff;
+				color
+				&:hover{
+					background:#333;
+					color:#fff;
 				}
-
 				&.no-plots{
 					font-style: italic;
 				}
@@ -259,11 +267,21 @@ body{
 
 		.filemanager {
 			height: 100%;
-			overflow-y: auto;
+			display: flex;
+			flex-direction: column;
+
+			.files-view{
+				overflow-y: auto;
+				flex: 1;
+			}
 
 			.path{
-				background: #ccc;
-				padding: 3px;
+				background: #eee;
+				padding: 4px;
+				input{
+					padding: 4px;
+					width:100%;
+				}
 			}
 			
 			.icon {
@@ -316,6 +334,7 @@ body{
 
 		.terminal{
 			background: #000;
+			padding: 5px;
 		}
 
 		.tabs{
@@ -329,8 +348,10 @@ body{
 				float: left;
 				cursor: pointer;
 				user-select: none;
+
+				transition: background-color 0.2s ease;
 				&:hover, &.current{
-					background: #ccc;
+					background: #ddd;
 				}
 			}
 		}

@@ -156,11 +156,18 @@
                     _this.getDir(path);
                 }
             });
+
+            this.dom.find(".path input").on("keydown", function(e){
+                if(e.keyCode == 13){
+                    var newPath = $(this).val();
+                    _this.getDir(newPath);
+                }
+            })
         }
 
         this.getDir = function(path){
             this.cwd = path;
-            this.dom.find(".path").html("Current directory: " + path);            
+            this.dom.find(".path input").val(path);            
             this.getCwd();
         }
 
@@ -173,6 +180,11 @@
         }
 
         this.showDirectory = function(data){
+
+            if(data[0] == "INVALIDPATH"){
+                alert("Path does not exist.");
+                return;
+            }
 
             // clear directory
             this.dom.find(".files").html("");

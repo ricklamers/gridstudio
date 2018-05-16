@@ -30,6 +30,11 @@ a.back {
 .workspace-list li button {
   margin-left: 20px;
 }
+.workspace-list li span.slug {
+  font-style: italic;
+  color: #aaa;
+  margin: 10px;
+}
 body {
   padding: 20px;
 }
@@ -43,9 +48,6 @@ h2 {
 input,
 button {
   padding: 5px 10px;
-}
-input {
-  margin-bottom: 10px;
 }
 a {
   color: royalblue;
