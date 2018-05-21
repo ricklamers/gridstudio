@@ -1298,7 +1298,14 @@ func (c *Client) writePump() {
 
 						valuesIndex++
 
+						// add all OriginalDependOut to dirty
+						for key, _ := range *OriginalDependOut {
+							grid.DirtyCells[key] = grid.Data[key]
+						}
+
 					}
+
+					computeDirtyCells(&grid)
 
 					invalidateView(&grid, c)
 
