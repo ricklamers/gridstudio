@@ -321,11 +321,11 @@ func computeDirtyCells(grid *Grid) []string {
 	for _, thisDv := range grid.DirtyCells {
 
 		// if DependInTemp or DependOutTemp not defined, create here
-		if thisDv.DependInTemp == nil {
+		if *thisDv.DependInTemp == nil {
 			DependInTemp := make(map[string]bool)
 			thisDv.DependInTemp = &DependInTemp
 		}
-		if thisDv.DependOutTemp == nil {
+		if *thisDv.DependOutTemp == nil {
 			DependOutTemp := make(map[string]bool)
 			thisDv.DependOutTemp = &DependOutTemp
 		}
