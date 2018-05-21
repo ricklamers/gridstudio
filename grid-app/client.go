@@ -322,17 +322,19 @@ func computeDirtyCells(grid *Grid) []string {
 
 		// if DependInTemp or DependOutTemp not defined, create here
 		if thisDv.DependInTemp == nil {
-			thisDv.DependInTemp = make(map[string]bool)
+			DependInTemp := make(map[string]bool)
+			thisDv.DependInTemp = &DependInTemp
 		}
 		if thisDv.DependOutTemp == nil {
-			thisDv.DependOutTemp = make(map[string]bool)
+			DependOutTemp := make(map[string]bool)
+			thisDv.DependOutTemp = &DependOutTemp
 		}
 
-		for ref := range thisDv.DependInTemp {
+		for ref := range *thisDv.DependInTemp {
 
 			// if ref is not in dirty cells, remove from depend in
 			if _, ok := (grid.DirtyCells)[ref]; !ok {
-				delete(thisDv.DependInTemp, ref)
+				delete(*thisDv.DependInTemp, ref)
 			}
 		}
 
@@ -349,7 +351,7 @@ func computeDirtyCells(grid *Grid) []string {
 
 		for ref, thisDv := range grid.DirtyCells {
 
-			if len(thisDv.DependInTemp) == 0 {
+			if len(*thisDv.DependInTemp) == 0 {
 				dv = thisDv
 				index = ref
 				break
@@ -357,12 +359,12 @@ func computeDirtyCells(grid *Grid) []string {
 		}
 
 		// compute thisDv and update all DependOn values
-		for ref, inSet := range dv.DependOutTemp {
+		for ref, inSet := range *dv.DependOutTemp {
 			if inSet {
 
 				// only delete dirty dependencies for cells marked in dirtycells
 				if _, ok := (grid.DirtyCells)[ref]; ok {
-					delete((grid.DirtyCells)[ref].DependInTemp, index)
+					delete(*(grid.DirtyCells)[ref].DependInTemp, index)
 				}
 
 			}
@@ -1007,7 +1009,7 @@ func clearCell(ref string, grid *Grid) {
 	}
 
 	NewDependIn := make(map[string]bool)
-	dv.DependIn = NewDependIn        // new dependin (new formula)
+	dv.DependIn = &NewDependIn       // new dependin (new formula)
 	dv.DependOut = OriginalDependOut // dependout remain
 
 	grid.Data[ref] = setDependencies(ref, dv, grid)
@@ -1232,7 +1234,7 @@ func (c *Client) writePump() {
 						}
 
 						NewDependIn := make(map[string]bool)
-						dv.DependIn = NewDependIn        // new dependin (new formula)
+						dv.DependIn = &NewDependIn       // new dependin (new formula)
 						dv.DependOut = OriginalDependOut // dependout remain
 
 						// range auto reference manipulation, increment row automatically for references in this formula for each iteration
@@ -1290,7 +1292,7 @@ func (c *Client) writePump() {
 						}
 
 						NewDependIn := make(map[string]bool)
-						dv.DependIn = NewDependIn        // new dependin (new formula)
+						dv.DependIn = &NewDependIn       // new dependin (new formula)
 						dv.DependOut = OriginalDependOut // dependout remain
 
 						// range auto reference manipulation, increment row automatically for references in this formula for each iteration
@@ -1299,7 +1301,7 @@ func (c *Client) writePump() {
 						// set to grid for access during setDependencies
 						parsedDv := parse(dv, &grid, ref)
 						parsedDv.DataFormula = values[valuesIndex]
-						parsedDv.DependIn = NewDependIn
+						parsedDv.DependIn = &NewDependIn
 						parsedDv.DependOut = OriginalDependOut
 
 						grid.Data[ref] = parsedDv
@@ -1307,7 +1309,7 @@ func (c *Client) writePump() {
 						valuesIndex++
 
 						// add all OriginalDependOut to dirty
-						for key, _ := range OriginalDependOut {
+						for key, _ := range *OriginalDependOut {
 							grid.DirtyCells[key] = grid.Data[key]
 						}
 
@@ -1395,7 +1397,7 @@ func (c *Client) writePump() {
 						}
 
 						NewDependIn := make(map[string]bool)
-						dv.DependIn = NewDependIn        // new dependin (new formula)
+						dv.DependIn = &NewDependIn       // new dependin (new formula)
 						dv.DependOut = OriginalDependOut // dependout remain
 
 						grid.Data[parsed[1]] = setDependencies(parsed[1], dv, &grid)
@@ -1423,7 +1425,7 @@ func (c *Client) writePump() {
 							// don't need dependend information for parsing, hence assign after parse
 							NewDependIn := make(map[string]bool)
 
-							dv.DependIn = NewDependIn                       // new dependin (new formula)
+							dv.DependIn = &NewDependIn                      // new dependin (new formula)
 							dv.DependOut = OriginalDependOut                // dependout remain
 							dv.ValueType = DynamicValueTypeExplosiveFormula // shouldn't be necessary, is return type of olsExplosive()
 							dv.DataFormula = formula                        // re-assigning of formula is usually saved for computeDirty but this will be skipped there
@@ -1446,7 +1448,7 @@ func (c *Client) writePump() {
 							}
 
 							NewDependIn := make(map[string]bool)
-							dv.DependIn = NewDependIn        // new dependin (new formula)
+							dv.DependIn = &NewDependIn       // new dependin (new formula)
 							dv.DependOut = OriginalDependOut // dependout remain
 
 							grid.Data[parsed[1]] = setDependencies(parsed[1], dv, &grid)
@@ -1469,7 +1471,7 @@ func (c *Client) writePump() {
 
 					DependIn := make(map[string]bool)
 
-					dv.DependIn = DependIn
+					dv.DependIn = &DependIn
 					dv.DependOut = OriginalDependOut
 
 					newDv := setDependencies(parsed[1], dv, &grid)

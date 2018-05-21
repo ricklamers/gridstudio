@@ -27,10 +27,10 @@ type DynamicValue struct {
 	DataString    string
 	DataBool      bool
 	DataFormula   string
-	DependIn      map[string]bool
-	DependOut     map[string]bool
-	DependInTemp  map[string]bool
-	DependOutTemp map[string]bool
+	DependIn      *map[string]bool
+	DependOut     *map[string]bool
+	DependInTemp  *map[string]bool
+	DependOutTemp *map[string]bool
 }
 
 var numberOnlyReg *regexp.Regexp
@@ -44,8 +44,11 @@ var breakChars []string
 func makeEmptyDv() DynamicValue {
 	dv := DynamicValue{}
 
-	dv.DependIn = make(map[string]bool)
-	dv.DependOut = make(map[string]bool)
+	DependIn := make(map[string]bool)
+	DependOut := make(map[string]bool)
+
+	dv.DependIn = &DependIn
+	dv.DependOut = &DependOut
 
 	return dv
 }
@@ -56,8 +59,8 @@ func makeDv(formula string) DynamicValue {
 	DependIn := make(map[string]bool)
 	DependOut := make(map[string]bool)
 
-	dv.DependIn = DependIn
-	dv.DependOut = DependOut
+	dv.DependIn = &DependIn
+	dv.DependOut = &DependOut
 
 	return dv
 }
@@ -355,8 +358,8 @@ func setDependencies(index string, dv DynamicValue, grid *Grid) DynamicValue {
 				dv.DataFormula = "\"#Error, circular reference: " + dv.DataFormula + "\""
 			} else {
 
-				dv.DependIn[ref] = true
-				grid.Data[ref].DependOut[index] = true
+				(*dv.DependIn)[ref] = true
+				(*(grid.Data)[ref].DependOut)[index] = true
 
 				// copy
 				copyToDirty((grid.Data)[ref], ref, grid)
@@ -369,7 +372,7 @@ func setDependencies(index string, dv DynamicValue, grid *Grid) DynamicValue {
 	copyToDirty(dv, index, grid)
 
 	// mark all cells dirty that depend on this cell
-	for ref, inSet := range dv.DependOut {
+	for ref, inSet := range *dv.DependOut {
 		if inSet {
 
 			dv := (grid.Data)[ref]
@@ -389,19 +392,19 @@ func copyToDirty(dv DynamicValue, index string, grid *Grid) {
 		DependInTemp := make(map[string]bool)
 		DependOutTemp := make(map[string]bool)
 
-		dv.DependInTemp = DependInTemp
-		dv.DependOutTemp = DependOutTemp
+		dv.DependInTemp = &DependInTemp
+		dv.DependOutTemp = &DependOutTemp
 
 		// copy in
 		(grid.DirtyCells)[index] = dv
 	}
 
 	// always copy dependencies
-	for ref, inSet := range dv.DependIn {
-		grid.DirtyCells[index].DependInTemp[ref] = inSet
+	for ref, inSet := range *dv.DependIn {
+		(*(grid.DirtyCells)[index].DependInTemp)[ref] = inSet
 	}
-	for ref, inSet := range dv.DependOut {
-		grid.DirtyCells[index].DependOutTemp[ref] = inSet
+	for ref, inSet := range *dv.DependOut {
+		(*(grid.DirtyCells)[index].DependOutTemp)[ref] = inSet
 
 		// if outgoing dependency not in dirtCells, add it now
 		if _, ok := (grid.DirtyCells)[ref]; !ok {
@@ -1414,7 +1417,7 @@ func explosionSetValue(index string, dataDv DynamicValue, grid *Grid) {
 	OriginalDependOut := grid.Data[index].DependOut
 
 	NewDependIn := make(map[string]bool)
-	dataDv.DependIn = NewDependIn        // new dependin (new formula)
+	dataDv.DependIn = &NewDependIn       // new dependin (new formula)
 	dataDv.DependOut = OriginalDependOut // dependout remain
 
 	// TODO for now add formula so re-compute succeeds: later optimize for performance
