@@ -156,6 +156,13 @@ a {
   float: left;
   padding-top: 50px;
 }
+.feature .feature-text p {
+  margin-bottom: 10px;
+}
+.feature .feature-text a {
+  color: #215adc;
+  border-bottom: 1px dotted #215adc;
+}
 .feature .feature-text h3 {
   color: #215adc;
   font-size: 16px;

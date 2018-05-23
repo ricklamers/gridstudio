@@ -142,12 +142,47 @@ body{
 	font-size: 12px;
 
 	.context-menu-item {
+		position: relative;
 		padding: 8px;
 		cursor: pointer;
 
 		&:hover {
+
+			&.dropdown {
+				.context-menu-submenu {
+					display: block;
+				}
+			}
+
 			background: rgba(50, 110, 255, 0.1);
 		}
+		&.dropdown {
+			padding-right: 50px;
+			
+			&:after {
+				position: absolute;
+				display: block;
+				content: " ";
+				height: 12px;
+				width: 12px;
+				right: 5px;
+				top: 10px;
+				opacity: 0.3;
+				background-image: url('image/icon-arrow.svg');
+				background-size: contain;
+				background-repeat: no-repeat;
+			}
+		}
+	}
+
+	.context-menu-submenu { 
+		display: none;
+		position: absolute;
+		top: 0;
+		right: 0;
+		background: #fff;
+		transform: translateX(100%);
+		box-shadow: 0px 0px 12px rgba(0, 0, 0, 0.1);
 	}
 
 	&.shown{
