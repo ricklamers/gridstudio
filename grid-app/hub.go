@@ -30,6 +30,7 @@ func (h *Hub) run() {
 			fmt.Println("WS Client registered")
 			h.clients[client] = true
 		case client := <-h.unregister:
+			fmt.Println("WS Client unregistered")
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
 				close(client.send)

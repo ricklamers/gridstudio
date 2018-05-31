@@ -112,6 +112,16 @@
                             _this.app.editor.setContent(fileDecoded, extension, json[1]);
 
                         }
+                        else if(json[0] == "JUMPCELL"){
+
+                            if(_this.app.callbacks.jumpCellCallback){
+
+                                var cellReference = json[3];
+                                var cell = _this.app.referenceToZeroIndexedArray(cellReference);
+                                _this.app.callbacks.jumpCellCallback(cell);
+                            }
+
+                        }
                         else if(json.arguments && json.arguments[0] == "IMAGE"){
                             
                             var img = document.createElement('img');

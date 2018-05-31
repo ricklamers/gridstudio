@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"../dockermanager"
 
@@ -195,12 +196,25 @@ func (w *WebsocketProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		var err error
 		for {
 			msgType, msg, err := src.ReadMessage()
+
 			if err != nil {
-				log.Printf("websocketproxy: error when copying from %s to %s using ReadMessage: %v", srcName, dstName, err)
+
+				// Don't log ReadMessage errors. If read fails, just close proxy
+				// log.Printf("websocketproxy: error when copying from %s to %s using ReadMessage: %v", srcName, dstName, err)
+
+				if srcName == "client" {
+					// send close to dst
+					fmt.Println("Send WS close to dst")
+					dst.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseGoingAway, err.Error()), time.Time{})
+				}
+
 				break
 			}
 			err = dst.WriteMessage(msgType, msg)
+
 			if err != nil {
+				log.Printf("msgType: " + strconv.Itoa(msgType))
+				log.Printf(string(msg))
 				log.Printf("websocketproxy: error when copying from %s to %s using WriteMessage: %v", srcName, dstName, err)
 				break
 			} else {

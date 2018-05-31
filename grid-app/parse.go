@@ -343,29 +343,36 @@ func setDependencies(index string, dv DynamicValue, grid *Grid) DynamicValue {
 		references = make(map[string]bool)
 	} else {
 		references = findReferences(dv.DataFormula)
+
 	}
 
 	for ref, inSet := range references {
 
-		// for dependency checking get rid of dollar signs in references
-		ref = strings.Replace(ref, "$", "", -1)
+		// when findReferences is called and a reference is not in grid.Data[] the reference is invalid
+		if _, ok := grid.Data[ref]; !ok {
+			dv.DataFormula = "\"#REF: " + ref + "\""
+		} else {
+			// for dependency checking get rid of dollar signs in references
+			ref = strings.Replace(ref, "$", "", -1)
 
-		if inSet {
-			if ref == index {
-				// cell is dependent on self
-				fmt.Println("Circular reference error!")
-				dv.ValueType = DynamicValueTypeString
-				dv.DataFormula = "\"#Error, circular reference: " + dv.DataFormula + "\""
-			} else {
+			if inSet {
+				if ref == index {
+					// cell is dependent on self
+					fmt.Println("Circular reference error!")
+					dv.ValueType = DynamicValueTypeString
+					dv.DataFormula = "\"#Error, circular reference: " + dv.DataFormula + "\""
+				} else {
 
-				(*dv.DependIn)[ref] = true
-				(*(grid.Data)[ref].DependOut)[index] = true
+					(*dv.DependIn)[ref] = true
+					(*(grid.Data)[ref].DependOut)[index] = true
 
-				// copy
-				copyToDirty((grid.Data)[ref], ref, grid)
+					// copy
+					copyToDirty((grid.Data)[ref], ref, grid)
 
+				}
 			}
 		}
+
 	}
 
 	// always add self to dirty (after setting references DependIn for self - loop above)
@@ -1026,6 +1033,10 @@ func convertToString(dv DynamicValue) DynamicValue {
 	}
 
 	return dv
+}
+
+func isCellEmpty(dv DynamicValue) bool {
+	return len(dv.DataFormula) == 0
 }
 
 func convertToFloat(dv DynamicValue) DynamicValue {

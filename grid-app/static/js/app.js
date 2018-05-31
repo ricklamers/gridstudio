@@ -74,6 +74,7 @@
 		this.textPadding = 3;
 		
 		this.plots = {};
+		this.callbacks = {};
 
 		this.lastMousePosition = [0,0];
 
@@ -215,6 +216,22 @@
 			return this.indexToLetters(columnIndex+1) + (rowIndex+1);
 		}
 
+		this.referenceToZeroIndexedArray = function(reference){
+
+			var splitIndex = 0;
+			for(var x = 0; x < reference.length; x++){
+				if(reference[x] < 'A'){
+					splitIndex = x;
+					break
+				}
+			}
+			var column = this.lettersToIndex(reference.substring(0, splitIndex)) - 1;
+			var row = parseInt(reference.substring(splitIndex)) - 1;
+
+			return [row, column];
+		}
+
+
 		this.set_formula = function(position, value, update) {
 			if(value == "="){
 				value = "";
@@ -259,7 +276,7 @@
 		this.showTab = function(selector){
 
 			$('.dev-tabs .tab[data-tab="'+selector+'"]').addClass('current').siblings().removeClass('current');
-	
+
 			// hide both
 			$('.dev-tabs .view').hide();
 		
@@ -269,16 +286,8 @@
 			if(selector == "filemanager"){
 				_this.fileManager.refresh();
 			}
-		  }
 
-		// add test data (2nd row, 2nd to 5th column, 10,20,30,40)
-		// var i = 0;
-		// for(var x = 0; x < 50; x++){
-		// 	for(var y = 0; y < 50; y++){
-		// 		i++;
-		// 		this.set([x,y],i);
-		// 	}
-		// }
+		}
 
 		this.ctx.a_moveTo = function(x,y){
 			_this.ctx.moveTo(x+0.5,y+0.5);
@@ -297,10 +306,6 @@
 			this.input_field.css({font: this.fontStyle});
 
 			this.sheetDom.insertBefore(input, this.sheetDom.children[0]);
-			// event listener
-			// input.addEventListener('keypress', function(e){
-
-			// })
 
 		}
 
@@ -383,6 +388,17 @@
 			_this.wsManager.send(JSON.stringify({arguments: ["SORT", direction, rangeString, column]}));
 		}
 
+		this.requestSheetSize = function(){
+
+			var rows = parseInt(prompt("Rows count:", this.numRows));
+			var columns = parseInt(prompt("Column count:", this.numColumns));
+
+			if(!isNaN(rows) && !isNaN(columns) && rows >= 1 && columns >= 1){
+				this.wsManager.send(JSON.stringify({arguments:["SETSIZE",""+rows,""+columns]}))
+			}
+
+		};
+
 		this.registerContextMenu = function(){
 			$('div-sheet').bind("contextmenu", function (event) {
     
@@ -409,6 +425,8 @@
 					_this.cutSelection();
 				}else if($(this).hasClass('paste')){
 					_this.pasteSelection();
+				}else if($(this).hasClass('sheet-size')){
+					_this.requestSheetSize();
 				}
 
 				$('.context-menu').removeClass("shown");
@@ -790,8 +808,7 @@
 	
 							// set focus to next cell
 							var nextCell = _this.selectedCells[0];
-							nextCell[0]++;
-							_this.selectCell(nextCell);
+							_this.translateSelection(0, 1, false, false);
 	
 						}else{
 							keyRegistered = false;
@@ -814,8 +831,8 @@
 						}
 
 						var nextCell = _this.selectedCells[0];
-						nextCell[1]++;
-						_this.selectCell(nextCell);
+
+						_this.translateSelection(1, 0, false, false);
 						
 					}else{
 						var nextCell = _this.selectedCells[0];
@@ -882,14 +899,6 @@
 
 					if(!_this.isFocusedOnElement()){
 						
-						// copy
-						// set input with current cell's value
-						// _this.input_field.val(_this.get(_this.selectedCells[0]));
-						// _this.input_field.show();
-						
-						// _this.input_field[0].select();
-						// document.execCommand("Copy");
-						// _this.input_field.hide();
 						_this.copySelection();
 
 					}else{
@@ -904,20 +913,11 @@
 
 					if(!_this.isFocusedOnElement()){
 						
-						// copy
-						// set input with current cell's value
-						// _this.input_field.val(_this.get(_this.selectedCells[0]));
-						// _this.input_field.show();
-						
-						// _this.input_field[0].select();
-						// document.execCommand("Copy");
-						// _this.input_field.hide();
 						_this.cutSelection();
 
 					}else{
 						keyRegistered = false;
 					}
-						
 					
 				}
 				else if(
@@ -926,21 +926,11 @@
 
 					if(!_this.isFocusedOnElement()){
 						
-						// copy
-						// set input with current cell's value
-						// _this.input_field.val(_this.get(_this.selectedCells[0]));
-						// _this.input_field.show();
-						
-						// _this.input_field[0].select();
-						// document.execCommand("Copy");
-						// _this.input_field.hide();
 						_this.pasteSelection();
 
 					}else{
 						keyRegistered = false;
 					}
-						
-					
 				}
 				else{
 					keyRegistered = false;			
@@ -949,7 +939,6 @@
 				if(keyRegistered){
 					e.preventDefault();
 				}
-				// console.log(e);
 
 			});
 		}
@@ -962,8 +951,6 @@
 			this.computeScrollBounds();
 
 			this.sizeSizer();
-
-			// this.drawSheet();
 
 			this.refreshView();
 		}
@@ -1096,53 +1083,56 @@
 			this.drawSheet();
 		}
 
-		this.findFirstTypeCell = function(startCell, row_or_column, direction, type){
+		this.findFirstTypeCell = function(startCell, direction, cb){
 
-			var currentCell = startCell;
+			this.callbacks.jumpCellCallback = cb;
+			this.wsManager.send(JSON.stringify({arguments: ["JUMPCELL", startCell, direction]}));
 
-			// check for row (row_or_column = 0), check for column (row_or_column = 1)
-			while(true){
-				currentCell[row_or_column] += direction; // decrements cell in case of direction -1
+			// var currentCell = startCell;
 
-				if(type == 'nonempty'){
+			// // check for row (row_or_column = 0), check for column (row_or_column = 1)
+			// while(true){
+			// 	currentCell[row_or_column] += direction; // decrements cell in case of direction -1
 
-					if(this.get(currentCell) != undefined && this.get(currentCell) != ''){
-						break;
-					}
-					else if(this.get(currentCell) == undefined){
-						// undo last step to get to existent cell
-						currentCell[row_or_column] -= direction;
-						break;
-					}
+			// 	if(type == 'nonempty'){
 
-				}else if(type == 'empty'){
+			// 		if(this.get(currentCell) != undefined && this.get(currentCell) != ''){
+			// 			break;
+			// 		}
+			// 		else if(this.get(currentCell) == undefined){
+			// 			// undo last step to get to existent cell
+			// 			currentCell[row_or_column] -= direction;
+			// 			break;
+			// 		}
 
-					if(this.get(currentCell) === undefined){
+			// 	}else if(type == 'empty'){
+
+			// 		if(this.get(currentCell) === undefined){
 						
-						// undo last step to get to existent cell
-						currentCell[row_or_column] -= direction;
-						break;
-					}
-					if(this.get(currentCell) == ''){
+			// 			// undo last step to get to existent cell
+			// 			currentCell[row_or_column] -= direction;
+			// 			break;
+			// 		}
+			// 		if(this.get(currentCell) == ''){
 
-						// undo last step to get to existent cell
-						currentCell[row_or_column] -= direction;
-						break;
-					}
+			// 			// undo last step to get to existent cell
+			// 			currentCell[row_or_column] -= direction;
+			// 			break;
+			// 		}
 
-				}else{
-					break;
-				}
-			}
+			// 	}else{
+			// 		break;
+			// 	}
+			// }
 
-			return currentCell;
+			// return currentCell;
 		}
 
 		this.translateSelection = function(dx, dy, shift, ctrl){
 
 			// set it equal to copy
 			var cell = this.selectedCells[0].slice();
-
+			var _this = this;
 			
 			if(shift){
 				// create copy
@@ -1151,64 +1141,87 @@
 
 			if(ctrl){
 				// transform dx and dy based on direction and first empty cell in this direction
-				var row_or_column = 0;
-				var direction = dy;
+				// var row_or_column = 0;
+				// var direction = dy;
 
-				if(dy == 0){
-					row_or_column = 1;
-					direction = dx;
-				}
+				// if(dy == 0){
+				// 	row_or_column = 1;
+				// 	direction = dx;
+				// }
 
 				// for empty cells go to first non-empty
-				var currentNextCell = cell;
+				// var currentNextCell = cell;
 
-
-				var currentCellValue = this.get(currentNextCell);
+				// var currentCellValue = this.get(currentNextCell);
 
 				// if the current cell is empty not empty, check whether next cell is empty
-				if(currentCellValue != ''){
-					currentNextCell[0] += dy;
-					currentNextCell[1] += dx; // move cell to next intended position
+				// if(currentCellValue != ''){
+				// 	currentNextCell[0] += dy;
+				// 	currentNextCell[1] += dx; // move cell to next intended position
 
-					var currentNextCellValue = this.get(currentNextCell);
-					// protect against undefined location
-					if(currentNextCellValue == undefined){
-						currentNextCellValue = this.get(cell);
-					}
-				}else{
-					var currentNextCellValue = currentCellValue;
+				// 	var currentNextCellValue = this.get(currentNextCell);
+				// 	// protect against undefined location
+				// 	if(currentNextCellValue == undefined){
+				// 		currentNextCellValue = this.get(cell);
+				// 	}
+				// }else{
+				// 	var currentNextCellValue = currentCellValue;
+				// }
+
+				var direction = "up";
+				if(dx < 0){
+					direction = "left";
+				}else if (dx > 0){
+					direction = "right";
+				}else if (dy > 0){
+					direction = "down";
 				}
 				
+				// on ctrl jump make this asynchronously
+				this.findFirstTypeCell(this.cellZeroIndexToString(cell[0],cell[1]), direction, function(cell){
 
-				if(currentNextCellValue == '' || currentNextCellValue == undefined){
+					_this.selectedCells[1] = cell;
 
-					// console.log("Check for non empty cell");
+					// set back to global
+					if(!shift){
+						_this.selectCell(cell);
+					}
 					
-					cell = this.findFirstTypeCell(cell, row_or_column, direction, 'nonempty');
+					_this.positionViewOnSelectedCells();
+				});
 
-				}
-				// for non-empty cells go to first empty
-				else{
+				// if(currentNextCellValue == '' || currentNextCellValue == undefined){
 
-					// console.log("Check for empty cell");
+				// 	// console.log("Check for non empty cell");
 					
-					cell = this.findFirstTypeCell(cell, row_or_column, direction, 'empty');
 
-				}
+				// }
+				// // for non-empty cells go to first empty
+				// else{
+
+				// 	// console.log("Check for empty cell");
+					
+				// 	cell = this.findFirstTypeCell(cell, row_or_column, direction, 'empty');
+
+				// }
 
 			}else{
 				cell = this.translateCell(cell, dx, dy);
+
+				// set back to global
+				if(!shift){
+					this.selectCell(cell);
+				}
+
+				// set second cell equal to first cell
+				this.selectedCells[1] = cell;
+				
+				this.positionViewOnSelectedCells();		
 			}
+			
+		}
 
-			// set back to global
-			if(!shift){
-				this.selectCell(cell);
-			}
-
-			// set second cell equal to first cell
-			this.selectedCells[1] = cell;
-
-
+		this.positionViewOnSelectedCells = function(){
 			///// BLOCK: overflow key navigation and view-port correction
 
 			// after re-position compare selectedCell (1) with visible cells
@@ -1255,7 +1268,6 @@
 			var viewEndColumn = this.drawColumnStart;
 			var measureWidth = 0;
 
-			
 			// endless loop until maximum last row
 			while(viewEndColumn < this.numColumns){
 
@@ -1349,6 +1361,14 @@
 			if(cell[1] < 0){
 				cell[1] = 0;
 			}
+
+			if(cell[0] >= this.numRows){
+				cell[0] = this.numRows-1;
+			}
+			if(cell[1] >= this.numColumns){
+				cell[1] = this.numColumns-1;
+			}
+
 			return cell;
 		}
 
@@ -1701,10 +1721,21 @@
 
 			menu.find('menu-item.close-workspace').click(function(e){
 				e.preventDefault();
-				
-				var currentUrl = window.location.href;
-				var newUrl = currentUrl.replace("/workspace/","/destruct/");
-				window.location.href = newUrl;
+
+				_this.wsManager.ws.onclose = function(){
+					setTimeout(function(){
+						var currentUrl = window.location.href;
+						var newUrl = currentUrl.replace("/workspace/","/destruct/");
+						window.location.href = newUrl;
+					},100);
+				}
+
+				_this.termManager.term.socket.onclose = function(){
+					_this.wsManager.ws.close();
+				}
+
+				_this.termManager.term.socket.close();
+
 			});
 
 			menu.find('menu-item.plot-scatter').click(function(){
@@ -2290,8 +2321,27 @@
 
 				var cell_position = this.cellLocationToPosition(cellsForSelected[0]);
 
+				var cell_1 = this.cellLocationToPosition(this.selectedCells[0]);
+
 				// check if selected cell is in the viewport
 				if(cell_position){
+
+					// draw single cell outline
+					this.ctx.strokeStyle = "rgba(50,110,255,0.20)";
+					this.ctx.lineWidth = 2;
+
+					var strokeX = cell_1[0] + this.sidebarSize + 0.5 + 1;
+					var strokeY = cell_1[1] + this.sidebarSize + 0.5 + 1;
+
+					if (strokeY > this.sidebarSize && strokeX > this.sidebarSize) {
+						this.ctx.strokeRect(
+							strokeX,
+							strokeY,
+							this.columnWidths(this.selectedCells[0][1]) - 2, 
+							this.rowHeights(this.selectedCells[0][0]) - 2
+						);
+					}
+
 					// selectedCell index = first cell, first index is row, second index is column
 					var highlightWidth = 0;
 					var highlightHeight = 0;

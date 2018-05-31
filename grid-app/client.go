@@ -358,15 +358,21 @@ func computeDirtyCells(grid *Grid) []string {
 			}
 		}
 
+		if index == "" {
+			break
+		}
+
 		// compute thisDv and update all DependOn values
-		for ref, inSet := range *dv.DependOutTemp {
-			if inSet {
+		if dv.DependOutTemp != nil {
+			for ref, inSet := range *dv.DependOutTemp {
+				if inSet {
 
-				// only delete dirty dependencies for cells marked in dirtycells
-				if _, ok := (grid.DirtyCells)[ref]; ok {
-					delete(*(grid.DirtyCells)[ref].DependInTemp, index)
+					// only delete dirty dependencies for cells marked in dirtycells
+					if _, ok := (grid.DirtyCells)[ref]; ok {
+						delete(*(grid.DirtyCells)[ref].DependInTemp, index)
+					}
+
 				}
-
 			}
 		}
 
@@ -943,6 +949,83 @@ func getFile(path string, c *Client) {
 	c.send <- json
 }
 
+func findJumpCell(startCell string, direction string, grid *Grid, c *Client) {
+
+	// find jump cell based on startCell
+	startCellRow := getReferenceRowIndex(startCell)
+	startCellColumn := getReferenceColumnIndex(startCell)
+
+	// check whether cell is empty
+	startCellEmpty := isCellEmpty(grid.Data[startCell])
+
+	horizontalIncrement := 0
+	verticalIncrement := 0
+
+	if direction == "up" {
+		verticalIncrement = -1
+	} else if direction == "down" {
+		verticalIncrement = 1
+	} else if direction == "left" {
+		horizontalIncrement = -1
+	} else if direction == "right" {
+		horizontalIncrement = 1
+	}
+
+	currentCellRow := startCellRow
+	currentCellColumn := startCellColumn
+
+	isFirstCellCheck := true
+
+	for {
+		currentCellRow += verticalIncrement
+		currentCellColumn += horizontalIncrement
+
+		if currentCellRow > grid.RowCount || currentCellRow < 1 {
+			break
+		}
+		if currentCellColumn > grid.ColumnCount || currentCellColumn < 1 {
+			break
+		}
+
+		thisCellEmpty := isCellEmpty(grid.Data[indexesToReference(currentCellRow, currentCellColumn)])
+
+		if isFirstCellCheck && thisCellEmpty && !startCellEmpty {
+			// if first cell check is empty cell and this cell is non-empty find first non-empty cell
+			startCellEmpty = !startCellEmpty
+		}
+
+		if !startCellEmpty && thisCellEmpty {
+
+			break
+		}
+		if startCellEmpty && !thisCellEmpty {
+
+			currentCellRow += verticalIncrement
+			currentCellColumn += horizontalIncrement
+
+			break
+		}
+
+		isFirstCellCheck = false
+	}
+
+	// reverse one step
+	currentCellRow -= verticalIncrement
+	currentCellColumn -= horizontalIncrement
+
+	newCell := indexesToReference(currentCellRow, currentCellColumn)
+
+	jsonData := []string{"JUMPCELL", startCell, direction, newCell}
+
+	json, err := json.Marshal(jsonData)
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	c.send <- json
+}
+
 func getDirectory(path string, c *Client) {
 
 	path = strings.TrimRight(path, "/")
@@ -1061,7 +1144,7 @@ func replaceReferencesInFormula(formula string, referenceMap map[string]string) 
 				reference := formula[referenceStartIndex : referenceEndIndex+1]
 				newReference := referenceMap[reference]
 
-				sizeDifference := len(reference) - len(newReference)
+				sizeDifference := len(newReference) - len(reference)
 
 				index += sizeDifference
 
@@ -1334,6 +1417,13 @@ func (c *Client) writePump() {
 
 				sendCellsInRange(parsed[1], &grid, c)
 
+			case "JUMPCELL":
+
+				currentCell := parsed[1]
+				direction := parsed[2]
+
+				findJumpCell(currentCell, direction, &grid, c)
+
 			case "GET-FILE":
 
 				getFile(parsed[1], c)
@@ -1469,6 +1559,10 @@ func (c *Client) writePump() {
 						DataString:  parsed[2],
 						DataFormula: "\"" + parsed[2] + "\""}
 
+					if len(parsed[2]) == 0 {
+						dv.DataFormula = ""
+					}
+
 					DependIn := make(map[string]bool)
 
 					dv.DependIn = &DependIn
@@ -1482,6 +1576,29 @@ func (c *Client) writePump() {
 
 				changedCells := computeDirtyCells(&grid)
 				sendDirtyOrInvalidate(changedCells, &grid, c)
+
+			case "SETSIZE":
+
+				newRowCount, _ := strconv.Atoi(parsed[1])
+				newColumnCount, _ := strconv.Atoi(parsed[2])
+
+				if newRowCount > grid.RowCount || newColumnCount > grid.ColumnCount {
+					// add missing row/column cells
+
+					for currentColumn := 0; currentColumn <= newColumnCount; currentColumn++ {
+						for currentRow := 0; currentRow <= newRowCount; currentRow++ {
+							if currentColumn > grid.ColumnCount || currentRow > grid.RowCount {
+								reference := indexesToReference(currentRow, currentColumn)
+								grid.Data[reference] = makeEmptyDv()
+							}
+						}
+					}
+				}
+
+				grid.RowCount = newRowCount
+				grid.ColumnCount = newColumnCount
+
+				sendSheetSize(c, &grid)
 
 			case "CSV":
 				fmt.Println("Received CSV! Size: " + strconv.Itoa(len(parsed[1])))

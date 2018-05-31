@@ -212,6 +212,12 @@ func main() {
 	}
 	defer db.Close()
 
+	// kill all docker instances
+	fmt.Println("Killing all running docker instances...")
+
+	killDockerInstances := exec.Command("/bin/sh", "-c", "sudo docker kill $(docker ps -q)")
+	killDockerInstances.Start()
+
 	// index.html to initialize
 	httpClient := http.Client{}
 
@@ -693,7 +699,7 @@ func main() {
 
 		splitUrl := strings.Split(r.URL.Path, "/")
 
-		fmt.Println(splitUrl)
+		// fmt.Println(splitUrl)
 
 		if len(splitUrl) < 3 {
 			http.Redirect(w, r, "/dashboard/", 302)
@@ -767,8 +773,7 @@ func main() {
 
 			// fmt.Println("workspacePrefix: " + workspacePrefix)
 			// fmt.Println("requestString (after replace): " + requestString)
-
-			fmt.Println("HTTP proxy: " + "http://127.0.0.1:" + strconv.Itoa(httpRedirPort) + requestString)
+			// fmt.Println("HTTP proxy: " + "http://127.0.0.1:" + strconv.Itoa(httpRedirPort) + requestString)
 
 			base, err := url.Parse("http://127.0.0.1:" + strconv.Itoa(httpRedirPort) + requestString)
 			if err != nil {
