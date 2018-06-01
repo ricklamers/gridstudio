@@ -2,10 +2,12 @@ import json
 import traceback
 import re
 import matplotlib
+import sys
 matplotlib.use('Agg')
 
 import base64
 import os
+import numbers
 import matplotlib.pyplot as plt
 
 
@@ -18,6 +20,26 @@ real_print = print
 
 def print(text):
     real_print("#INTERPRETER#" + str(text) + "#ENDPARSE#", end='', flush=True)
+
+def parseCall(*arg):
+    result = ""
+    try:
+        eval_result = eval(arg[0] + "(\""+'","'.join(arg[1:])+"\")")
+
+        if isinstance(eval_result, numbers.Number) and not isinstance(eval_result, bool):
+            result = str(eval_result)
+        else:
+            result = "\"" + str(eval_result) + "\""
+        
+    except (RuntimeError, TypeError, NameError):
+        result = "\"" + "Unexpected error:" + str(sys.exc_info()) + "\""
+        
+    # real_print()
+    # Method does not exist.  What now?
+    # result = result + "\"Unknown function was called with: " + str(arg) + "\""
+        # result = "\"result + str(" + arg[0] + "(\""+'\",\"'.join(arg[1:])+"\"))\""
+
+    real_print("#PYTHONFUNCTION#"+result+"#ENDPARSE#", flush=True, end='')
 
 def cell(cell, value = None):
     if value is not None:

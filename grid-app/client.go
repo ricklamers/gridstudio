@@ -65,10 +65,12 @@ type Client struct {
 }
 
 type Grid struct {
-	Data        map[string]DynamicValue
-	DirtyCells  map[string]DynamicValue
-	RowCount    int
-	ColumnCount int
+	Data                map[string]DynamicValue
+	DirtyCells          map[string]DynamicValue
+	RowCount            int
+	ColumnCount         int
+	PythonResultChannel chan string
+	PythonClient        chan string
 }
 
 // readPump pumps messages from the websocket connection to the hub (?)
@@ -1230,6 +1232,9 @@ func (c *Client) writePump() {
 		fmt.Println("Loaded Grid struct from sheet.serialized")
 
 	}
+
+	grid.PythonResultChannel = make(chan string, 256)
+	grid.PythonClient = c.commands
 
 	c.grid = &grid
 

@@ -1487,6 +1487,27 @@ func executeCommand(command string, arguments []DynamicValue, grid *Grid, target
 		return abs(arguments)
 	case "OLS":
 		return olsExplosive(arguments, grid, targetRef)
+	default:
+
+		argumentStrings := []string{}
+
+		for _, dv := range arguments {
+			stringDv := convertToString(dv)
+			argumentStrings = append(argumentStrings, stringDv.DataString)
+		}
+
+		// send command to Python
+		grid.PythonClient <- "parseCall(\"" + command + "\", \"" + strings.Join(argumentStrings, "\",\"") + "\")"
+
+		// loop until result is back
+		for {
+			select {
+			case pythonResult := <-grid.PythonResultChannel:
+				newDv := DynamicValue{ValueType: DynamicValueTypeFormula, DataFormula: pythonResult}
+				return parse(newDv, grid, targetRef)
+			}
+		}
+
 	}
-	return DynamicValue{ValueType: DynamicValueTypeString, DataString: ""}
+
 }

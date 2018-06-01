@@ -33,7 +33,7 @@
             });
 
             editor.setTheme("ace/theme/crimson_editor");
-            editor.getSession().setMode("ace/mode/text");
+            editor.getSession().setMode("ace/mode/python");
 
             editor.getSession().on('change', function() {
                 _this.dom.find(".file-name").addClass("unsaved");

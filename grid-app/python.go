@@ -153,6 +153,18 @@ func parsePythonOutput(bufferHolder bytes.Buffer, pythonIn io.WriteCloser, c *Cl
 					for _, e := range commands {
 						c.send <- []byte(e)
 					}
+
+				} else if len(newString) > 15 && newString[:16] == "#PYTHONFUNCTION#" {
+
+					commands := strings.Split(newString, "#PYTHONFUNCTION#")
+
+					// remove first element
+					commands = commands[1:2]
+
+					// send back result in formula form (string escaped, numbers as literals)
+					// c.actions <- []byte(commands[0])
+					c.grid.PythonResultChannel <- commands[0]
+
 				} else if len(newString) > 5 && newString[:6] == "#DATA#" {
 
 					// data receive request
@@ -245,7 +257,6 @@ func (c *Client) pythonInterpreter() {
 			}
 
 			// fmt.Println("Write for Python interpreter received: " + command)
-
 			pythonIn.Write([]byte(command + "\n\n"))
 
 		}
