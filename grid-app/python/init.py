@@ -3,13 +3,13 @@ import traceback
 import re
 import matplotlib
 import sys
+import pandas as pd
 matplotlib.use('Agg')
 
 import base64
 import os
 import numbers
 import matplotlib.pyplot as plt
-
 
 if os.path.isdir("/home/user"):
     os.chdir("/home/user")
@@ -34,11 +34,6 @@ def parseCall(*arg):
     except (RuntimeError, TypeError, NameError):
         result = "\"" + "Unexpected error:" + str(sys.exc_info()) + "\""
         
-    # real_print()
-    # Method does not exist.  What now?
-    # result = result + "\"Unknown function was called with: " + str(arg) + "\""
-        # result = "\"result + str(" + arg[0] + "(\""+'\",\"'.join(arg[1:])+"\"))\""
-
     real_print("#PYTHONFUNCTION#"+result+"#ENDPARSE#", flush=True, end='')
 
 def cell(cell, value = None):
@@ -132,6 +127,16 @@ def convert_to_json_string(element):
     else:
         return format(element, '.12f')
 
+def df_to_list(df):
+    columns = list(df.columns.values)
+    data = []
+    column_length = 0
+    for column in columns:
+        column_data = ([column] + df[column].tolist())
+        column_length = len(column_data)
+        data = data + column_data
+    return (data,column_length, len(columns))
+
 def sheet(cell_range, data = None):
 
     # input data into sheet
@@ -141,6 +146,27 @@ def sheet(cell_range, data = None):
         data_type_string = str(type(data))
         if data_type_string == "<class 'numpy.ndarray'>":
             data = data.tolist()
+
+        if data_type_string == "<class 'pandas.core.frame.DataFrame'>":
+            df_tuple = df_to_list(data)
+            data = df_tuple[0]
+            column_length = df_tuple[1]
+            column_count = df_tuple[2]
+
+            # create cell_range
+            if not has_number(cell_range):
+
+                cellColumnLetter = cell_range
+                cellColumnEndLetter = indexToLetters(letterToIndex(cellColumnLetter) + column_count - 1)
+                cell_range = cellColumnLetter + "1:" + cellColumnEndLetter + str(column_length)
+                
+            else:
+
+                cellColumnLetter = indexToLetters(getReferenceColumnIndex(cell_range))
+                startRow = getReferenceRowIndex(cell_range)
+                cellColumnEndLetter = indexToLetters(letterToIndex(cellColumnLetter) + column_count - 1)
+                cell_range = cellColumnLetter + str(startRow) + ":" + cellColumnEndLetter + str(column_length + startRow - 1)
+        
 
         # always convert cell to range
         if ":" not in cell_range:
@@ -152,9 +178,6 @@ def sheet(cell_range, data = None):
             else:
                 cell_range = cell_range + ":" + cell_range
         
-        
-        
-            
         if type(data) is list:
             
             newList = list(map(convert_to_json_string, data))
@@ -239,4 +262,7 @@ def getAndExecuteInput():
 
 # testing
 #sheet("A1:A2", [1,2])
+# df = pd.DataFrame({'a':[1,2,3], 'b':[4,5,6]})
+# sheet("A10", df)
+
 getAndExecuteInput()
