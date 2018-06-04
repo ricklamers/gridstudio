@@ -45,14 +45,17 @@ def cell(cell, value = None):
         cell_range = ':'.join([cell, cell])
         return sheet(cell_range)
 
-def plot():
-    plt.savefig("tmp.png")
-    with open("tmp.png", "rb") as image_file:
+def show():
+    plt.savefig("tmp.svg")
+    with open("tmp.svg", "rb") as image_file:
         encoded_string = base64.b64encode(image_file.read())
 
     image_string = str(encoded_string)
     data = {'arguments': ["IMAGE", image_string[2:len(image_string)-1]]}
     data = ''.join(['#IMAGE#', json.dumps(data),'#ENDPARSE#'])
+
+    # remove to clean up
+    os.remove("tmp.svg")
 
     real_print(data, flush=True, end='')
 
@@ -110,9 +113,11 @@ def cell_range_to_indexes(cell_range):
     cell2Column = getReferenceColumnIndex(cells[1])
 
     for x in range(cell1Column, cell2Column+1):
+        columnReferences = []
         for y in range(cell1Row, cell2Row+1):
-            references.append(indexToLetters(x) + str(y))
-
+            columnReferences.append(indexToLetters(x) + str(y))
+        references.append(columnReferences)
+        
     return references
 
 
@@ -127,17 +132,21 @@ def convert_to_json_string(element):
     else:
         return format(element, '.12f')
 
-def df_to_list(df):
+def df_to_list(df, include_headers = True):
     columns = list(df.columns.values)
     data = []
     column_length = 0
     for column in columns:
-        column_data = ([column] + df[column].tolist())
+        column_data = df[column].tolist()
+
+        if include_headers:
+            column_data = [column] + column_data
+
         column_length = len(column_data)
         data = data + column_data
     return (data,column_length, len(columns))
 
-def sheet(cell_range, data = None):
+def sheet(cell_range, data = None, headers = False):
 
     # input data into sheet
     if data is not None:
@@ -148,7 +157,8 @@ def sheet(cell_range, data = None):
             data = data.tolist()
 
         if data_type_string == "<class 'pandas.core.frame.DataFrame'>":
-            df_tuple = df_to_list(data)
+
+            df_tuple = df_to_list(data, headers)
             data = df_tuple[0]
             column_length = df_tuple[1]
             column_count = df_tuple[2]
@@ -217,13 +227,16 @@ def sheet(cell_range, data = None):
         getAndExecuteInputOnce()
         # if everything works, the exec command has filled sheet_data with the appropriate data
         # return data range as arrays
-        cell_refs = cell_range_to_indexes(cell_range)
+        column_references = cell_range_to_indexes(cell_range)
 
         result = []
-        for cell_ref in cell_refs:
-            result.append(sheet_data[cell_ref])
+        for column in column_references:
+            column_data = []
+            for reference in column:
+                column_data.append(sheet_data[reference])
+            result.append(column_data)
 
-        return result
+        return pd.DataFrame(data=result).transpose()
 
 def getAndExecuteInputOnce():
 
@@ -263,6 +276,6 @@ def getAndExecuteInput():
 # testing
 #sheet("A1:A2", [1,2])
 # df = pd.DataFrame({'a':[1,2,3], 'b':[4,5,6]})
-# sheet("A10", df)
+# sheet("A1:B2")
 
 getAndExecuteInput()

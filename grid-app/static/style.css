@@ -224,6 +224,11 @@ body div-sheet canvas {
   justify-content: center;
   cursor: pointer;
 }
+.full-plot img {
+  width: 70vw;
+  height: 70vh;
+  object-fit: contain;
+}
 .code-editor {
   width: 38.2%;
   right: 0;

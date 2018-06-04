@@ -323,6 +323,14 @@
 			// determine width based on columnWidths
 			var sizerWidth = this.numColumns * this.cellWidth;
 
+			// adapt based on modified widths
+			for(var key in this.columnWidthsCache){
+				sizerWidth += this.columnWidthsCache[key];
+				sizerWidth -= this.cellWidth;
+			}
+
+			sizerWidth += this.sidebarSize;
+
 			if(sizerWidth > 40000){
 				sizerWidth = 40000;
 			}
@@ -332,6 +340,13 @@
 			if(sizerHeight > 40000){
 				sizerHeight = 40000;
 			}
+			// adapt based on modified widths
+			for(var key in this.rowHeightsCache){
+				sizerHeight += this.rowHeightsCache[key];
+				sizerHeight -= this.cellHeight;
+			}
+
+			sizerHeight += this.sidebarSize;
 
 			this.sheetSizer.style.height = sizerHeight + "px";
 			this.sheetSizer.style.width = sizerWidth + "px";
@@ -732,6 +747,7 @@
 					_this.resizingIndicator = false;
 					// recompute bounds on mouse up
 					_this.computeScrollBounds();
+					_this.sizeSizer();
 					_this.drawSheet();
 				}
 				
@@ -1389,36 +1405,36 @@
 			// calculate the y axis (the row)
 			var y = 0;
 			var currentRowHeight = 0;
-			for(var i = 0; i < this.numRows; i++){
-
-				if(i == cellPosition[0]){
-					y = currentRowHeight - this.sheetOffsetY;
-					break;
+			
+			currentRowHeight = cellPosition[0] * this.cellHeight;
+			for(var key in this.rowHeightsCache){
+				if(key < cellPosition[0]){
+					currentRowHeight += this.rowHeightsCache[key];
+					currentRowHeight -= this.cellHeight;
 				}
-				// check for out of bounds
-				if(currentRowHeight - this.sheetOffsetY > this.sheetDom.clientHeight){
-					return undefined;
-				}
-
-				currentRowHeight += this.rowHeights(i);
 			}
 
-			// calculate x axis (the column)
+			if(currentRowHeight - this.sheetOffsetY > this.sheetDom.clientHeight){
+				return undefined;
+			}else{
+				y = currentRowHeight - this.sheetOffsetY;
+			}
+
 			var x = 0;
 			var currentColumnWidth = 0;
-
-			for(var i = 0; i < this.numColumns; i++){
-
-				if(i == cellPosition[1]){
-					x = currentColumnWidth - this.sheetOffsetX;
-					break;
+			
+			currentColumnWidth = cellPosition[1] * this.cellWidth;
+			for(var key in this.columnWidthsCache){
+				if(key < cellPosition[0]){
+					currentColumnWidth += this.columnWidthsCache[key];
+					currentColumnWidth -= this.cellWidth;
 				}
-				// check for out of bounds
-				if(currentColumnWidth - this.sheetOffsetX > this.sheetDom.clientWidth){
-					return undefined;
-				}
+			}
 
-				currentColumnWidth += this.columnWidths(i);
+			if(currentColumnWidth - this.sheetOffsetX > this.sheetDom.clientWidth){
+				return undefined;
+			}else{
+				x = currentColumnWidth - this.sheetOffsetX;
 			}
 
 			return [x, y];

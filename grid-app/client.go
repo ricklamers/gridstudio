@@ -1229,6 +1229,8 @@ func (c *Client) writePump() {
 		}
 		grid = FromGOB64(gridData)
 
+		sendSheetSize(c, &grid)
+
 		fmt.Println("Loaded Grid struct from sheet.serialized")
 
 	}
