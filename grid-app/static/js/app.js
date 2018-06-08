@@ -677,7 +677,13 @@
 				}else{
 					// if clicked on sheetDom deselect
 					if(e.target != _this.input_field[0] && _this.input_field.is(':focus')){
-						_this.deselect_input_field();
+
+						// if clicked outside of input field, while input field is open append reference of current click position in input
+						var clickedCellPosition = _this.positionToCellLocation(e.offsetX,e.offsetY);
+						var clickedCellRef = _this.cellZeroIndexToString(clickedCellPosition[0], clickedCellPosition[1]);
+						_this.input_field.val(_this.input_field.val() + clickedCellRef);
+						e.preventDefault();
+						// closing the input can be done either through ESC key or pressing enter.
 					}
 				}
 				
@@ -1013,7 +1019,13 @@
 
 			// position input field
 			// prefill with value in current cell
-			this.input_field.val(this.get_formula(this.selectedCells[0]));
+			var formula = this.get_formula(this.selectedCells[0]);
+
+			// if formula is string, remove prefix =" and suffix "
+			if(formula && formula[0] == "=" && formula[1] == '"' && formula[formula.length-1] == '"'){
+				formula = formula.substring(2,formula.length-1);
+			}
+			this.input_field.val(formula);
 
 			this.init_input_field_backup_value = this.input_field.val();
 			
@@ -1246,17 +1258,19 @@
 			var sheetViewWidth = this.sheetDom.clientWidth;
 			var sheetViewHeight = this.sheetDom.clientHeight;
 
-			if(orderedCells[0][0] < this.drawRowStart){
+			var cellToCenterOn = orderedCells[1];
 
-				// set vertical scroll to orderedCells[0][1] position
-				var newScrollOffsetY = (this.sheetSizer.clientHeight - sheetViewHeight) * (orderedCells[0][0] / this.finalRow);
+			if(cellToCenterOn[0] < this.drawRowStart){
+
+				// set vertical scroll to cellToCenterOn[1] position
+				var newScrollOffsetY = (this.sheetSizer.clientHeight - sheetViewHeight) * (cellToCenterOn[0] / this.finalRow);
 				this.sheetDom.scrollTop = newScrollOffsetY;
 
 			}
-			if(orderedCells[0][1] < this.drawColumnStart){
+			if(cellToCenterOn[1] < this.drawColumnStart){
 
-				// set horizontal scroll to orderedCells[0][1] position
-				var newScrollOffsetX = (this.sheetSizer.clientWidth - sheetViewWidth) * (orderedCells[0][1] / this.finalColumn);
+				// set horizontal scroll to cellToCenterOn[1] position
+				var newScrollOffsetX = (this.sheetSizer.clientWidth - sheetViewWidth) * (cellToCenterOn[1] / this.finalColumn);
 				this.sheetDom.scrollLeft = newScrollOffsetX;
 
 			}
@@ -1299,12 +1313,12 @@
 				}
 			}
 
-			if(orderedCells[0][0] > viewEndRow){
+			if(cellToCenterOn[0] > viewEndRow){
 
 				// compute the firstcell that needs to be selected in order to have the whole of the targetcell (orderedCells[0][0]) in view
 
 				// compute downwards
-				var minimumFirstRow = orderedCells[0][0];
+				var minimumFirstRow = cellToCenterOn[0];
 				var measuredHeight = 0;
 				
 				// endless loop until maximum last row
@@ -1322,16 +1336,16 @@
 					}
 				}
 				
-				// set vertical scroll to orderedCells[0][1] position
+				// set vertical scroll to cellToCenterOn[1] position
 				var newScrollOffsetY = (this.sheetSizer.clientHeight - sheetViewHeight) * (minimumFirstRow / this.finalRow);
 				this.sheetDom.scrollTop = newScrollOffsetY;
 
 			}
 
-			if(orderedCells[0][1] > viewEndColumn){
+			if(cellToCenterOn[1] > viewEndColumn){
 
 				// compute downwards
-				var minimumFirstColumn = orderedCells[0][1];
+				var minimumFirstColumn = cellToCenterOn[1];
 				var measureWidth = 0;
 				
 				// endless loop until maximum last row
@@ -1349,7 +1363,7 @@
 					}
 				}
 
-				// set horizontal scroll to orderedCells[0][1] position
+				// set horizontal scroll to cellToCenterOn[1] position
 				var newScrollOffsetX = (this.sheetSizer.clientWidth - sheetViewWidth) * (minimumFirstColumn / this.finalColumn);
 				this.sheetDom.scrollLeft = newScrollOffsetX;
 
@@ -1408,7 +1422,7 @@
 			
 			currentRowHeight = cellPosition[0] * this.cellHeight;
 			for(var key in this.rowHeightsCache){
-				if(key < cellPosition[0]){
+				if(parseInt(key) < cellPosition[0]){
 					currentRowHeight += this.rowHeightsCache[key];
 					currentRowHeight -= this.cellHeight;
 				}
@@ -1425,7 +1439,7 @@
 			
 			currentColumnWidth = cellPosition[1] * this.cellWidth;
 			for(var key in this.columnWidthsCache){
-				if(key < cellPosition[0]){
+				if(parseInt(key) < cellPosition[1]){
 					currentColumnWidth += this.columnWidthsCache[key];
 					currentColumnWidth -= this.cellWidth;
 				}
@@ -2342,20 +2356,23 @@
 				// check if selected cell is in the viewport
 				if(cell_position){
 
-					// draw single cell outline
-					this.ctx.strokeStyle = "rgba(50,110,255,0.20)";
-					this.ctx.lineWidth = 2;
+					// cell_1 could be undefined, if it's out of the viewport
+					if(cell_1){
+						// draw single cell outline
+						this.ctx.strokeStyle = "rgba(50,110,255,0.8)";
+						this.ctx.lineWidth = 1;
 
-					var strokeX = cell_1[0] + this.sidebarSize + 0.5 + 1;
-					var strokeY = cell_1[1] + this.sidebarSize + 0.5 + 1;
+						var strokeX = cell_1[0] + this.sidebarSize + 0.5;
+						var strokeY = cell_1[1] + this.sidebarSize + 0.5;
 
-					if (strokeY > this.sidebarSize && strokeX > this.sidebarSize) {
-						this.ctx.strokeRect(
-							strokeX,
-							strokeY,
-							this.columnWidths(this.selectedCells[0][1]) - 2, 
-							this.rowHeights(this.selectedCells[0][0]) - 2
-						);
+						if (strokeY > this.sidebarSize && strokeX > this.sidebarSize) {
+							this.ctx.strokeRect(
+								strokeX,
+								strokeY,
+								this.columnWidths(this.selectedCells[0][1]), 
+								this.rowHeights(this.selectedCells[0][0])
+							);
+						}
 					}
 
 					// selectedCell index = first cell, first index is row, second index is column

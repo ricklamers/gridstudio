@@ -95,15 +95,13 @@ func (c *Client) readPump() {
 			break
 		}
 
-		// message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
-
 		messageString := string(message)
 
-		if len(messageString) > 100 {
-			fmt.Println("Received WS message: " + messageString[:100] + "... [truncated]")
-		} else {
-			fmt.Println("Received WS message: " + messageString)
-		}
+		// if len(messageString) > 100 {
+		// 	fmt.Println("Received WS message: " + messageString[:100] + "... [truncated]")
+		// } else {
+		// 	fmt.Println("Received WS message: " + messageString)
+		// }
 
 		// check if command or code
 		if messageString[:7] == "#PARSE#" {
@@ -729,7 +727,7 @@ func sortRange(direction string, cellRange string, sortColumn string, grid *Grid
 	}
 }
 
-func copySourceToDestination(sourceRange string, destinationRange string, grid *Grid) []string {
+func copySourceToDestination(sourceRange string, destinationRange string, grid *Grid, incrementReferences bool) []string {
 
 	// case 1: sourceRange and destinationRange have equal size
 	// solution: copy every cell to every destinationRange cell
@@ -842,37 +840,42 @@ func copySourceToDestination(sourceRange string, destinationRange string, grid *
 		sourceFormula := grid.Data[sourceRef].DataFormula
 		sourceReferences := findReferences(sourceFormula)
 
-		for reference, _ := range sourceReferences {
-			rowDifference, columnDifference, fixedRow, fixedColumn := getReferenceDifference(reference, sourceRef)
+		newFormula := sourceFormula
 
-			newRefRow := destinationRefRow + rowDifference
-			if newRefRow < 1 {
-				newRefRow = 1
-			}
-			if newRefRow > grid.RowCount {
-				newRefRow = grid.RowCount
+		if incrementReferences {
+
+			for reference, _ := range sourceReferences {
+				rowDifference, columnDifference, fixedRow, fixedColumn := getReferenceDifference(reference, sourceRef)
+
+				newRefRow := destinationRefRow + rowDifference
+				if newRefRow < 1 {
+					newRefRow = 1
+				}
+				if newRefRow > grid.RowCount {
+					newRefRow = grid.RowCount
+				}
+
+				newRefColumn := destinationRefColumn + columnDifference
+				if newRefColumn < 1 {
+					newRefColumn = 1
+				}
+				if newRefColumn > grid.ColumnCount {
+					newRefColumn = grid.ColumnCount
+				}
+
+				if fixedRow {
+					newRefRow = getReferenceRowIndex(reference)
+				}
+				if fixedColumn {
+					newRefColumn = getReferenceColumnIndex(reference)
+				}
+
+				newRelativeReference := indexesToReferenceWithFixed(newRefRow, newRefColumn, fixedRow, fixedColumn)
+				referenceMapping[reference] = newRelativeReference
 			}
 
-			newRefColumn := destinationRefColumn + columnDifference
-			if newRefColumn < 1 {
-				newRefColumn = 1
-			}
-			if newRefColumn > grid.ColumnCount {
-				newRefColumn = grid.ColumnCount
-			}
-
-			if fixedRow {
-				newRefRow = getReferenceRowIndex(reference)
-			}
-			if fixedColumn {
-				newRefColumn = getReferenceColumnIndex(reference)
-			}
-
-			newRelativeReference := indexesToReferenceWithFixed(newRefRow, newRefColumn, fixedRow, fixedColumn)
-			referenceMapping[reference] = newRelativeReference
+			newFormula = replaceReferencesInFormula(sourceFormula, referenceMapping)
 		}
-
-		newFormula := replaceReferencesInFormula(sourceFormula, referenceMapping)
 
 		destinationDv := getDataFromRef(destinationRef, grid)
 		destinationDv.DataFormula = newFormula
@@ -1260,11 +1263,11 @@ func (c *Client) writePump() {
 
 			parsed := res.Arguments
 
-			if len(actions) > 100 {
-				fmt.Println("Received WS in Client actions: " + string(actions[:100]) + "... [truncated]")
-			} else {
-				fmt.Println("Received WS in Client actions: " + string(actions))
-			}
+			// if len(actions) > 100 {
+			// 	fmt.Println("Received WS in Client actions: " + string(actions[:100]) + "... [truncated]")
+			// } else {
+			// 	fmt.Println("Received WS in Client actions: " + string(actions))
+			// }
 
 			switch parsed[0] {
 			case "RANGE":
@@ -1448,7 +1451,7 @@ func (c *Client) writePump() {
 				sourceRange := parsed[1]
 				destinationRange := parsed[2]
 
-				copySourceToDestination(sourceRange, destinationRange, &grid)
+				copySourceToDestination(sourceRange, destinationRange, &grid, true)
 
 				changedCells := computeDirtyCells(&grid)
 				sendDirtyOrInvalidate(changedCells, &grid, c)
@@ -1460,7 +1463,7 @@ func (c *Client) writePump() {
 
 				// clear difference between sourceRange and destinationRange
 				sourceCells := cellRangeToCells(sourceRange)
-				destinationCells := copySourceToDestination(sourceRange, destinationRange, &grid)
+				destinationCells := copySourceToDestination(sourceRange, destinationRange, &grid, false)
 
 				// clear sourceCells that are not in destination
 				for _, ref := range sourceCells {
