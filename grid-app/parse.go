@@ -346,6 +346,11 @@ func setDependencies(index string, dv DynamicValue, grid *Grid) DynamicValue {
 
 	}
 
+	// every cell that this depended on needs to get removed
+	for ref, _ := range *(grid.Data[index]).DependIn {
+		delete(*(grid.Data)[ref].DependOut, index)
+	}
+
 	for ref, inSet := range references {
 
 		// when findReferences is called and a reference is not in grid.Data[] the reference is invalid
@@ -1026,9 +1031,9 @@ func convertToString(dv DynamicValue) DynamicValue {
 		dv.DataString = strconv.FormatFloat(float64(dv.DataFloat), 'f', -1, 64)
 
 		// 10 arbitrarily chosen but covers most situations
-		if len(dv.DataString) > 10 {
-			dv.DataString = strconv.FormatFloat(float64(dv.DataFloat), 'f', 10, 64)
-		}
+		// if len(dv.DataString) > 10 {
+		// 	dv.DataString = strconv.FormatFloat(float64(dv.DataFloat), 'f', 10, 64)
+		// }
 
 	}
 
@@ -1498,11 +1503,13 @@ func executeCommand(command string, arguments []DynamicValue, grid *Grid, target
 
 		// send command to Python
 		grid.PythonClient <- "parseCall(\"" + command + "\", \"" + strings.Join(argumentStrings, "\",\"") + "\")"
+		// fmt.Println("Posted message to Python CMD")
 
 		// loop until result is back
 		for {
 			select {
 			case pythonResult := <-grid.PythonResultChannel:
+				// fmt.Println("Received message from Python to return parse()")
 				newDv := DynamicValue{ValueType: DynamicValueTypeFormula, DataFormula: pythonResult}
 				return parse(newDv, grid, targetRef)
 			}

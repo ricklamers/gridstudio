@@ -1657,7 +1657,7 @@
 			var input = $(this.dom).find('menu-item.load-csv input');
 			
 			var reader = new FileReader();
-			
+
 			reader.onload = function(e){
 				
 				var data = e.target.result;
@@ -1669,6 +1669,9 @@
 			}
 			
 			reader.readAsText(input[0].files[0]);
+
+			// reset to empty to detect new uploads
+			input.val("");
 			
 		}
 		
@@ -1793,7 +1796,6 @@
 			
 			input[0].addEventListener('change', function(e){
 				_this.uploadCSV();
-				console.log(e);
 			})
 			
 			menu.find('menu-item.load-csv').click(function(e){
@@ -2513,6 +2515,9 @@
 		}
 
 		this.computeWLetterSize = function(){
+			this.ctx.font = this.fontStyle;
+			this.ctx.textAlign = 'left';
+			this.ctx.textBaseline = 'top';
 			var width = this.ctx.measureText("W").width;
 			return width;
 		}
@@ -2522,12 +2527,14 @@
 		this.fittingStringFast = function(str, maxWidth){
 			if(str.length * this.cachedWLetterSize < maxWidth){
 				return str;
-			}else if(str.length > (maxWidth/this.cachedWLetterSize) * 2 ){
-				return str.substring(0, maxWidth/this.cachedWLetterSize) + "...";
 			}
 			else{
 				return fittingString(this.ctx, str, maxWidth);
 			}
+			// possibly obsolete (definitely inaccurate) optimisation
+			// else if(str.length > (maxWidth/this.cachedWLetterSize) * 2 ){
+			// 	return str.substring(0, maxWidth/this.cachedWLetterSize) + "...";
+			// }
 		}
 	}
 

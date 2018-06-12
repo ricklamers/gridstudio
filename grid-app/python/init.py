@@ -266,7 +266,12 @@ def getAndExecuteInput():
         if code_input == "":
             try:
                 exec(command_buffer, globals(), globals())
-                real_print("#COMMANDCOMPLETE##ENDPARSE#", end='', flush = True)
+
+                # onlyprint COMANDCOMPLETE when the input doesn't start with parseCall, 
+                # since it's a special internal Python call 
+                # which requires a single print between exec and return
+                if not command_buffer.startswith("parseCall"):
+                    real_print("#COMMANDCOMPLETE##ENDPARSE#", end='', flush = True)
             except:
                 traceback.print_exc()
             command_buffer = ""

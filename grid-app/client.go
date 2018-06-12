@@ -1263,11 +1263,11 @@ func (c *Client) writePump() {
 
 			parsed := res.Arguments
 
-			// if len(actions) > 100 {
-			// 	fmt.Println("Received WS in Client actions: " + string(actions[:100]) + "... [truncated]")
-			// } else {
-			// 	fmt.Println("Received WS in Client actions: " + string(actions))
-			// }
+			if len(actions) > 100 {
+				fmt.Println("Received WS in Client actions: " + string(actions[:100]) + "... [truncated]")
+			} else {
+				fmt.Println("Received WS in Client actions: " + string(actions))
+			}
 
 			switch parsed[0] {
 			case "RANGE":

@@ -37,6 +37,8 @@ func streamPythonEOut(stdoutPipe io.ReadCloser, pythonIn io.WriteCloser, c *Clie
 
 			bufferString += string(buffer)
 
+			// fmt.Println("Error:" + string(buffer))
+
 			if strings.HasSuffix(bufferString, "\n") {
 
 				// detect whether Python process has outputted new data
@@ -84,6 +86,8 @@ func streamPythonOut(stdoutPipe io.ReadCloser, pythonIn io.WriteCloser, c *Clien
 				if n != len(buffer) {
 					// error implies that the buffer could not be fully filled, hence some sort of end was found in stdoutPipe
 					subbuffer := buffer[:n]
+
+					// fmt.Println("Python out:" + string(subbuffer))
 
 					bufferHolder.Write(subbuffer)
 
@@ -256,7 +260,10 @@ func (c *Client) pythonInterpreter() {
 				return
 			}
 
+			// fmt.Println("Received")
+
 			// fmt.Println("Write for Python interpreter received: " + command)
+
 			pythonIn.Write([]byte(command + "\n\n"))
 
 		}
