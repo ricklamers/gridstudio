@@ -132,7 +132,7 @@ func addToReferenceReplaceMap(reference string, incrementAmount int, references 
 
 }
 
-func findReferences(formula string) map[string]bool {
+func findReferenceStrings(formula string) []string {
 
 	references := []string{}
 
@@ -208,13 +208,36 @@ func findReferences(formula string) map[string]bool {
 		}
 	}
 
+	return references
+}
+
+func findRanges(formula string) []string {
+
+	rangeReferences := []string{}
+	references := findReferenceStrings(formula)
+
+	// expand references when necessary
+	for _, reference := range references {
+
+		if strings.Contains(reference, ":") {
+			rangeReferences = append(rangeReferences, reference)
+		}
+
+	}
+
+	return rangeReferences
+}
+
+func findReferences(formula string, includeRanges bool) map[string]bool {
+
+	references := findReferenceStrings(formula)
+
 	// expand references when necessary
 	for k, reference := range references {
 
 		if strings.Contains(reference, ":") {
 
 			// remove from references
-
 			// split operation (if 1 just replace with empty, if bigger replace) else, remove reference from references
 			if len(references) > 1 {
 				references = append(references[:k], references[k+1:]...)
@@ -222,9 +245,11 @@ func findReferences(formula string) map[string]bool {
 				references = []string{}
 			}
 
-			// split
-			references = append(references, cellRangeToCells(reference)...)
+			if includeRanges {
+				references = append(references, cellRangeToCells(reference)...)
+			}
 		}
+
 	}
 
 	finalMap := make(map[string]bool)
@@ -342,12 +367,11 @@ func setDependencies(index string, dv DynamicValue, grid *Grid) DynamicValue {
 	if dv.ValueType == DynamicValueTypeExplosiveFormula {
 		references = make(map[string]bool)
 	} else {
-		references = findReferences(dv.DataFormula)
-
+		references = findReferences(dv.DataFormula, true)
 	}
 
 	// every cell that this depended on needs to get removed
-	for ref, _ := range *(grid.Data[index]).DependIn {
+	for ref := range *(grid.Data[index]).DependIn {
 		delete(*(grid.Data)[ref].DependOut, index)
 	}
 
@@ -398,18 +422,18 @@ func setDependencies(index string, dv DynamicValue, grid *Grid) DynamicValue {
 func copyToDirty(dv DynamicValue, index string, grid *Grid) {
 
 	// only add if not already in
-	if _, ok := (grid.DirtyCells)[index]; !ok {
+	// if _, ok := (grid.DirtyCells)[index]; !ok {
 
-		// copy the DependIn/DependOut maps to retain original
-		DependInTemp := make(map[string]bool)
-		DependOutTemp := make(map[string]bool)
+	// copy the DependIn/DependOut maps to retain original
+	DependInTemp := make(map[string]bool)
+	DependOutTemp := make(map[string]bool)
 
-		dv.DependInTemp = &DependInTemp
-		dv.DependOutTemp = &DependOutTemp
+	dv.DependInTemp = &DependInTemp
+	dv.DependOutTemp = &DependOutTemp
 
-		// copy in
-		(grid.DirtyCells)[index] = dv
-	}
+	// copy in
+	(grid.DirtyCells)[index] = dv
+	// }
 
 	// always copy dependencies
 	for ref, inSet := range *dv.DependIn {

@@ -13,7 +13,7 @@ func main() {
 	// formula := "A1 + A2 + \"hello A1\""
 	// formula := "A2*A1*A2/A1*A1 + \"hello 😭 A1\""
 	// formula := "A$2*$A$1*$A2/A1*A1 + \"hello 😭 A1\""
-	debug := false
+	debug := true
 
 	availableOperators = []string{"^", "*", "/", "+", "-", ">", "<", ">=", "<=", "==", "<>", "!="}
 
@@ -44,7 +44,14 @@ func main() {
 		// test("((A1 + A10) - (1))", true)
 
 		// test("SUM(A1:A10, 10)", true)
-		test("$A$10+$A1+A$2", true)
+		// test("$A$10+$A1+A$2", true)
+
+		referenceMap := make(map[string]string)
+
+		referenceMap["A1:B10"] = "B1:C10"
+		referenceMap["A1"] = "B1"
+
+		replaceReferencesInFormula("SUM( A1:B10 ) + A1", referenceMap)
 
 	}
 
@@ -420,4 +427,112 @@ func contains(s []string, e string) bool {
 		}
 	}
 	return false
+}
+
+func replaceReferencesInFormula(formula string, referenceMap map[string]string) string {
+
+	// take into account replacements that elongate the string while in the loop
+	// e.g. A9 => A10, after replacing the index should be incremented by one (use IsDigit from unicode package)
+
+	// check for empty referenceMap inputs
+	if len(referenceMap) == 0 {
+		return formula
+	}
+
+	// loop through formula string and only replace references in the map that are
+	index := 0
+
+	referenceStartIndex := 0
+	referenceEndIndex := 0
+	haveValidReference := false
+	inQuoteSection := false
+
+	for {
+
+		// set default characters
+		character := ' '
+
+		// get character
+		if index < len(formula) {
+			character = rune(formula[index])
+		}
+
+		if inQuoteSection {
+
+			if character == '"' && formula[index-1] != '\\' {
+				// exit quote section
+				inQuoteSection = false
+				referenceStartIndex = index + 1
+				referenceEndIndex = index + 1
+			}
+
+		} else if character == '"' {
+			inQuoteSection = true
+		} else if haveValidReference {
+
+			if character == ':' {
+
+				referenceEndIndex = index
+				haveValidReference = false
+
+			} else if unicode.IsDigit(character) {
+				// append digit to valid reference
+				referenceEndIndex = index
+			} else {
+				// replace reference
+				leftSubstring := formula[:referenceStartIndex]
+				rightSubstring := formula[referenceEndIndex+1:]
+
+				reference := formula[referenceStartIndex : referenceEndIndex+1]
+
+				newReference := reference
+
+				// if reference is not in referenceMap, use existing
+				if _, ok := referenceMap[reference]; ok {
+					//do something here
+					newReference = referenceMap[reference]
+				}
+
+				sizeDifference := len(newReference) - len(reference)
+
+				index += sizeDifference
+
+				// replace
+				formula = leftSubstring + newReference + rightSubstring
+
+				haveValidReference = false
+				referenceStartIndex = index + 1
+				referenceEndIndex = index + 1
+			}
+
+		} else if unicode.IsLetter(character) || character == '$' || character == ':' {
+
+			referenceEndIndex = index + 1
+
+		} else if unicode.IsDigit(character) {
+
+			// check if next character is digit or :
+			if referenceEndIndex-referenceStartIndex > 0 {
+				// non zero reference is built up, append digit
+				referenceEndIndex = index
+				haveValidReference = true
+
+			} else {
+				referenceStartIndex = index + 1
+				referenceEndIndex = index + 1
+				haveValidReference = false
+			}
+		} else {
+			referenceStartIndex = index + 1
+			referenceEndIndex = index + 1
+			haveValidReference = false
+		}
+
+		index++
+		if index >= len(formula) && !haveValidReference {
+			break
+		}
+	}
+
+	return formula
 }

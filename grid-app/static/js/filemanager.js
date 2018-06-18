@@ -182,7 +182,7 @@
         this.showDirectory = function(data){
 
             if(data[0] == "INVALIDPATH"){
-                alert("Path does not exist.");
+                console.log("Requested path does not exist.");
                 return;
             }
 
