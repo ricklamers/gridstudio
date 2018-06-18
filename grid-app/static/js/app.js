@@ -62,6 +62,7 @@
 		this.sheetSizer = this.sheetDom.querySelector('.sheet-sizer');
 		this.formula_input = $(this.dom.querySelector('.formula-bar input'));
 		this.mouse_down_canvas = false;
+		this.mouseRightClickLocation = [0,0];
 		this.console = $('.console');
 
 		this.numRows = 10000;
@@ -414,17 +415,39 @@
 
 		};
 
+		this.insertRowColumn = function(type, direction){
+			
+			var clickedCellPosition = _this.positionToCellLocation(_this.mouseRightClickLocation[0],_this.mouseRightClickLocation[1]);
+
+			_this.wsManager.send(JSON.stringify({arguments:["INSERTROWCOL", type, direction, this.cellZeroIndexToString(clickedCellPosition[0], clickedCellPosition[1])]}));
+		}
+
 		this.registerContextMenu = function(){
 			$('div-sheet').bind("contextmenu", function (event) {
     
 				// Avoid the real one
 				event.preventDefault();
+
+				_this.mouseRightClickLocation = [event.offsetX, event.offsetY];
 				
 				// Show contextmenu
 				$(".context-menu").toggleClass("shown").css({
 					left: event.clientX + "px",
 					top: event.clientY + "px"
 				});
+
+				$('.context-menu .hide').hide();
+
+				// show contextual items
+				var clickedCellPosition = _this.positionToCellLocation(event.offsetX, event.offsetY);
+
+				if(clickedCellPosition[1] == 0){
+					$('.context-menu .row-only').show();
+				}
+				if(clickedCellPosition[0] == 0){
+					$('.context-menu .column-only').show();
+				}
+
 			});
 
 			$(".context-menu .context-menu-item").click(function(e){
@@ -442,6 +465,14 @@
 					_this.pasteSelection();
 				}else if($(this).hasClass('sheet-size')){
 					_this.requestSheetSize();
+				}else if($(this).hasClass('insert-column-left')){
+					_this.insertRowColumn('COLUMN','LEFT');
+				}else if($(this).hasClass('insert-column-right')){
+					_this.insertRowColumn('COLUMN','RIGHT');
+				}else if($(this).hasClass('insert-row-above')){
+					_this.insertRowColumn('ROW','ABOVE');
+				}else if($(this).hasClass('insert-row-below')){
+					_this.insertRowColumn('ROW','BELOW');
 				}
 
 				$('.context-menu').removeClass("shown");

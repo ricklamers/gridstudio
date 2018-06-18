@@ -519,34 +519,36 @@ func FromGOB64(binary []byte) Grid {
 	return grid
 }
 
-func generateCSV(grid *Grid) string {
+func determineMinimumRectangle(startRow int, startColumn int, grid *Grid) (int, int) {
 
-	// determine number of columns
-	numberOfColumns := 0
-	numberOfRows := 0
+	maximumRow := startRow
+	maximumColumn := startColumn
 
-	for r := 0; r < grid.RowCount; r++ {
-		for c := 0; c < grid.ColumnCount; c++ {
+	for r := startRow; r <= grid.RowCount; r++ {
+		for c := startColumn; c <= grid.ColumnCount; c++ {
 
-			cell := grid.Data[doubleIndexToStringRef(r, c)]
+			cell := grid.Data[indexesToReference(r, c)]
 
 			cellFormula := cell.DataFormula
 
 			cellFormula = strings.Replace(cellFormula, "\"", "", -1)
 
-			// if len(cellFormula) > 0 {
-			// 	fmt.Println(cellFormula)
-			// }
-
-			if len(cellFormula) != 0 && c >= numberOfColumns {
-				numberOfColumns = c + 1
+			if len(cellFormula) != 0 && c >= maximumColumn {
+				maximumColumn = c
 			}
 
-			if len(cellFormula) != 0 && r >= numberOfRows {
-				numberOfRows = r + 1
+			if len(cellFormula) != 0 && r >= maximumRow {
+				maximumRow = r
 			}
 		}
 	}
+	return maximumRow, maximumColumn
+}
+
+func generateCSV(grid *Grid) string {
+
+	// determine number of columns
+	numberOfRows, numberOfColumns := determineMinimumRectangle(1, 1, grid)
 
 	// fmt.Println("Detected minimum rectangle: " + strconv.Itoa(numberOfRows) + "x" + strconv.Itoa(numberOfColumns))
 
@@ -554,13 +556,13 @@ func generateCSV(grid *Grid) string {
 
 	w := csv.NewWriter(&buffer)
 
-	for r := 0; r < numberOfRows; r++ {
+	for r := 1; r <= numberOfRows; r++ {
 
 		var record []string
 
-		for c := 0; c < numberOfColumns; c++ {
+		for c := 1; c <= numberOfColumns; c++ {
 
-			cell := grid.Data[doubleIndexToStringRef(r, c)]
+			cell := grid.Data[indexesToReference(r, c)]
 
 			// fmt.Println("Ref: " + doubleIndexToStringRef(r, c))
 			// fmt.Println("cell.DataFormula: " + cell.DataFormula)
@@ -1363,6 +1365,90 @@ func replaceReferencesInFormula(formula string, referenceMap map[string]string) 
 	return formula
 }
 
+func changeSheetSize(newRowCount int, newColumnCount int, c *Client, grid *Grid) {
+
+	if newRowCount > grid.RowCount || newColumnCount > grid.ColumnCount {
+		// add missing row/column cells
+
+		for currentColumn := 0; currentColumn <= newColumnCount; currentColumn++ {
+			for currentRow := 0; currentRow <= newRowCount; currentRow++ {
+				if currentColumn > grid.ColumnCount || currentRow > grid.RowCount {
+					reference := indexesToReference(currentRow, currentColumn)
+					grid.Data[reference] = makeEmptyDv()
+				}
+			}
+		}
+	}
+
+	grid.RowCount = newRowCount
+	grid.ColumnCount = newColumnCount
+
+	sendSheetSize(c, grid)
+}
+
+func insertRowColumn(insertType string, direction string, reference string, c *Client, grid *Grid) {
+
+	if insertType == "COLUMN" {
+
+		changeSheetSize(grid.RowCount, grid.ColumnCount+1, c, grid)
+
+		baseColumn := getReferenceColumnIndex(reference)
+
+		if direction == "RIGHT" {
+			baseColumn++
+		}
+
+		maximumRow, maximumColumn := determineMinimumRectangle(1, baseColumn, grid)
+
+		topLeftRef := indexesToReference(1, baseColumn)
+		bottomRightRef := indexesToReference(maximumRow, maximumColumn)
+
+		newTopLeftRef := indexesToReference(1, baseColumn+1)
+		newBottomRightRef := indexesToReference(maximumRow, maximumColumn+1)
+
+		cutCells(topLeftRef+":"+bottomRightRef, newTopLeftRef+":"+newBottomRightRef, grid)
+
+	} else if insertType == "ROW" {
+
+		changeSheetSize(grid.RowCount+1, grid.ColumnCount, c, grid)
+
+		baseRow := getReferenceRowIndex(reference)
+
+		if direction == "BELOW" {
+			baseRow++
+		}
+
+		maximumRow, maximumColumn := determineMinimumRectangle(baseRow, 1, grid)
+
+		topLeftRef := indexesToReference(baseRow, 1)
+		bottomRightRef := indexesToReference(maximumRow, maximumColumn)
+
+		newTopLeftRef := indexesToReference(baseRow+1, 1)
+		newBottomRightRef := indexesToReference(maximumRow+1, maximumColumn)
+
+		cutCells(topLeftRef+":"+bottomRightRef, newTopLeftRef+":"+newBottomRightRef, grid)
+	}
+
+}
+
+func cutCells(sourceRange string, destinationRange string, grid *Grid) []string {
+
+	sourceCells := cellRangeToCells(sourceRange)
+	destinationCells := copySourceToDestination(sourceRange, destinationRange, grid, true)
+
+	// clear sourceCells that are not in destination
+	for _, ref := range sourceCells {
+		if !contains(destinationCells, ref) {
+			// clear cell
+			clearCell(ref, grid)
+		}
+	}
+
+	changedCells := computeDirtyCells(grid)
+
+	return changedCells
+}
+
 func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 
@@ -1629,24 +1715,24 @@ func (c *Client) writePump() {
 				changedCells := computeDirtyCells(&grid)
 				sendDirtyOrInvalidate(changedCells, &grid, c)
 
+			case "INSERTROWCOL":
+
+				insertType := parsed[1]
+				direction := parsed[2]
+				reference := parsed[3]
+
+				insertRowColumn(insertType, direction, reference, c, &grid)
+
+				invalidateView(&grid, c)
+
 			case "CUT":
 
 				sourceRange := parsed[1]
 				destinationRange := parsed[2]
 
 				// clear difference between sourceRange and destinationRange
-				sourceCells := cellRangeToCells(sourceRange)
-				destinationCells := copySourceToDestination(sourceRange, destinationRange, &grid, true)
+				changedCells := cutCells(sourceRange, destinationRange, &grid)
 
-				// clear sourceCells that are not in destination
-				for _, ref := range sourceCells {
-					if !contains(destinationCells, ref) {
-						// clear cell
-						clearCell(ref, &grid)
-					}
-				}
-
-				changedCells := computeDirtyCells(&grid)
 				sendDirtyOrInvalidate(changedCells, &grid, c)
 
 			case "SET":
@@ -1765,23 +1851,7 @@ func (c *Client) writePump() {
 				newRowCount, _ := strconv.Atoi(parsed[1])
 				newColumnCount, _ := strconv.Atoi(parsed[2])
 
-				if newRowCount > grid.RowCount || newColumnCount > grid.ColumnCount {
-					// add missing row/column cells
-
-					for currentColumn := 0; currentColumn <= newColumnCount; currentColumn++ {
-						for currentRow := 0; currentRow <= newRowCount; currentRow++ {
-							if currentColumn > grid.ColumnCount || currentRow > grid.RowCount {
-								reference := indexesToReference(currentRow, currentColumn)
-								grid.Data[reference] = makeEmptyDv()
-							}
-						}
-					}
-				}
-
-				grid.RowCount = newRowCount
-				grid.ColumnCount = newColumnCount
-
-				sendSheetSize(c, &grid)
+				changeSheetSize(newRowCount, newColumnCount, c, &grid)
 
 			case "CSV":
 				fmt.Println("Received CSV! Size: " + strconv.Itoa(len(parsed[1])))
