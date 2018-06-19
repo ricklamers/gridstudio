@@ -9,16 +9,20 @@ import (
 
 var availableOperators []string
 
+var breakChars []string
+
 func main() {
 	// formula := "A1 + A2 + \"hello A1\""
 	// formula := "A2*A1*A2/A1*A1 + \"hello 😭 A1\""
 	// formula := "A$2*$A$1*$A2/A1*A1 + \"hello 😭 A1\""
-	debug := true
+	debug := false
+
+	// debug = true
 
 	availableOperators = []string{"^", "*", "/", "+", "-", ">", "<", ">=", "<=", "==", "<>", "!="}
+	breakChars = []string{" ", ")", ",", "*", "/", "+", "-", ">", "<", "=", "^"}
 
 	if !debug {
-		test("((A1 + A) - (1))", false)
 		test("((A1 + A10) - (1))", true)
 		test("A10 + 0.2", true)
 		test("A10 + A0.2", false)
@@ -29,6 +33,7 @@ func main() {
 		test("SUM(A1:10, 10)", false)
 		test("A1 ^^ 10", false)
 		test("A1 ^ 10", true)
+		test("SUM(A1 ^ 10, 1, 1.05))", false)
 		test("SUM(A1 ^ 10, 1, 1.05)", true)
 		test("SUM(A1 ^ 10, 1, A1.05)", false)
 		test("A.01", false)
@@ -37,7 +42,16 @@ func main() {
 		test("$A$10+$A1+A$2", true)
 		test("$$A1", false)
 		test("A$$1", false)
+		test("'0'!A5 + 'Blad 2'!A10 + A10 - Blad15!$A$100", true)
+		test("0!A5 + 'Blad 2'!A10 + A10 - Blad15!$A$100", false)
+		test("10+-10/10--10", true)
 		test("", true)
+		test("10+-10/10---10", false)
+		test("A10+(-10)", true)
+		test("A10+(--10)", false)
+		test("A1*-5", true)
+		test("*5", false)
+
 	} else {
 		// test("SUM(A1:10, 10)", false)
 
@@ -46,12 +60,23 @@ func main() {
 		// test("SUM(A1:A10, 10)", true)
 		// test("$A$10+$A1+A$2", true)
 
-		referenceMap := make(map[string]string)
+		// referenceMap := make(map[string]string)
 
-		referenceMap["A1:B10"] = "B1:C10"
-		referenceMap["A1"] = "B1"
+		// referenceMap["A1:B10"] = "B1:C10"
+		// referenceMap["A1"] = "B1"
 
-		replaceReferencesInFormula("SUM( A1:B10 ) + A1", referenceMap)
+		// replaceReferencesInFormula("SUM( A1:B10 ) + A1", referenceMap)
+		// references := findReferenceStrings("'0'!A5 + 'Blad 2'!A10 + A10 - Blad15!$A$100")
+
+		// for _, value := range references {
+		// 	fmt.Println(value)
+		// }
+
+		test("'0'!A5 + 'Blad 2'!A10 + A10 - Blad15!$A$100", true)
+
+		// test("A1 * A20 + 0.2 - \"abc\"", true)
+		// test("'0'!A5 + 'Blad 2'!A10 + A10 - Blad15!$A$100", true)
+		// test("0!A5 + 'Blad 2'!A10 + A10 - Blad15!$A$100", true)
 
 	}
 
@@ -76,6 +101,8 @@ func isValidFormula(formula string) bool {
 
 	parenDepth := 0
 	quoteDepth := 0
+	singleQuoteDepth := 0
+	skipNextChar := false
 	previousChar := ""
 
 	// inFunction := false
@@ -87,16 +114,35 @@ func isValidFormula(formula string) bool {
 	inDecimal := false
 	inNumber := false
 	validDecimal := false
+	foundReferenceMark := false
 	inOperator := false
 	inFunction := false
+	operatorAllowed := false
 
 	var buffer bytes.Buffer
 
 	// skipCharacters := 0
+	formulaRunes := []rune{}
 
 	for _, r := range formula {
+		formulaRunes = append(formulaRunes, r)
+	}
+
+	for k := range formulaRunes {
+
+		if skipNextChar {
+			skipNextChar = false
+			continue
+		}
 
 		// fmt.Println("char index: " + strconv.Itoa(k))
+		r := formulaRunes[k]
+
+		nextR := ' '
+
+		if len(formulaRunes) > k+1 {
+			nextR = formulaRunes[k+1]
+		}
 
 		c := string(r)
 
@@ -104,18 +150,49 @@ func isValidFormula(formula string) bool {
 		if c == "\"" && quoteDepth == 0 && previousChar != "\\" {
 
 			quoteDepth++
+			continue
 
 		} else if c == "\"" && quoteDepth == 1 && previousChar != "\\" {
 
 			quoteDepth--
-
+			continue
 		}
 
-		if quoteDepth == 0 {
+		if c == "'" && singleQuoteDepth == 0 {
+
+			singleQuoteDepth++
+
+			continue
+
+		} else if c == "'" && singleQuoteDepth == 1 {
+
+			singleQuoteDepth--
+
+			// should be followed by dollar or letter
+			if nextR != '!' {
+				return false
+			} else {
+				inReference = true
+
+				// skip next char !
+				skipNextChar = true
+			}
+
+			continue
+		}
+
+		if quoteDepth == 0 && singleQuoteDepth == 0 {
 
 			if c == "(" {
 
 				parenDepth++
+
+				operatorAllowed = false
+
+				inOperator = false
+
+				operatorsFound = append(operatorsFound, currentOperator)
+				currentOperator = ""
 
 			} else if c == ")" {
 
@@ -128,6 +205,17 @@ func isValidFormula(formula string) bool {
 			}
 
 			/* reference checking */
+			if inReference && r == '!' && !foundReferenceMark {
+				foundReferenceMark = true
+				validReference = false
+				inReference = false
+				continue
+			}
+
+			if r == '!' && foundReferenceMark {
+				return false
+			}
+
 			if !inReference && unicode.IsLetter(r) {
 				inReference = true
 			}
@@ -152,6 +240,7 @@ func isValidFormula(formula string) bool {
 				inReference = false
 				validReference = false
 				referenceFoundRange = true
+				foundReferenceMark = false
 			}
 
 			if inReference && validReference && unicode.IsLetter(r) {
@@ -162,6 +251,7 @@ func isValidFormula(formula string) bool {
 			if inReference && !validReference && r == '(' {
 				inFunction = true
 				inReference = false
+				foundReferenceMark = false
 			}
 
 			if inFunction && r == ')' {
@@ -187,6 +277,7 @@ func isValidFormula(formula string) bool {
 				}
 
 				inReference = false
+				foundReferenceMark = false
 				dollarInColumn = false
 				dollarInRow = false
 				validReference = false
@@ -200,14 +291,23 @@ func isValidFormula(formula string) bool {
 				}
 
 				inReference = false
+				foundReferenceMark = false
 				validReference = false
 				dollarInColumn = false
 				dollarInRow = false
+				operatorAllowed = true
 			}
 
-			/* number checking */
 			if !inReference && !inDecimal && unicode.IsDigit(r) {
 				inNumber = true
+
+				operatorsFound = append(operatorsFound, currentOperator)
+				currentOperator = ""
+
+				if inOperator {
+					inOperator = false
+					operatorAllowed = false
+				}
 			}
 
 			/* decimal checking */
@@ -223,20 +323,47 @@ func isValidFormula(formula string) bool {
 				return false
 			}
 
-			if !(unicode.IsLetter(r) || unicode.IsDigit(r)) && r != '.' {
+			if (inNumber || inDecimal) && !(unicode.IsLetter(r) || unicode.IsDigit(r)) && r != '.' {
 				inNumber = false
 				inDecimal = false
+
+				// number end
+				operatorAllowed = true
 			}
 
-			/* operator checking */
-			if !inReference && !inFunction && !inDecimal && !(unicode.IsDigit(r) || unicode.IsLetter(r)) && r != ' ' && r != '(' && r != ')' && r != ',' && r != '$' {
+			if !inNumber && r == '-' && unicode.IsDigit(nextR) {
+				inNumber = true
+
+				operatorsFound = append(operatorsFound, currentOperator)
+				currentOperator = ""
+
+				if inOperator {
+					inOperator = false
+				}
+
+			} else if inOperator && r == '-' && currentOperator == "-" {
+				return false
+			} else if !inReference && r == '-' && !inNumber && !inOperator && !unicode.IsDigit(nextR) {
+				currentOperator += c
+				inOperator = true
+
+				if !operatorAllowed {
+					return false
+				}
+
+			} else if !inReference && !inFunction && !inDecimal && !(unicode.IsDigit(r) || unicode.IsLetter(r)) && r != ' ' && r != '(' && r != ')' && r != ',' && r != '$' {
 				// if not in reference and operator is not space
 				currentOperator += c
 				inOperator = true
+
+				if !operatorAllowed {
+					return false
+				}
 			}
 
 			if inOperator && (unicode.IsDigit(r) || unicode.IsLetter(r) || r == ' ') {
 				inOperator = false
+				operatorAllowed = false
 				operatorsFound = append(operatorsFound, currentOperator)
 				currentOperator = ""
 			}
@@ -250,7 +377,7 @@ func isValidFormula(formula string) bool {
 	}
 
 	for _, operator := range operatorsFound {
-		if !contains(availableOperators, operator) {
+		if !contains(availableOperators, operator) && operator != "" {
 			return false
 		}
 	}
@@ -269,156 +396,93 @@ func isValidFormula(formula string) bool {
 	return true
 }
 
-// func isValidFormula(formula string) bool {
+func findReferenceStrings(formula string) []string {
 
-// 	currentOperator := ""
-// 	operatorsFound := []string{}
+	references := []string{}
 
-// 	parenDepth := 0
-// 	quoteDepth := 0
-// 	previousChar := ""
+	// loop over string, if double quote is found, ignore input for references,
+	quoteLevel := 0
+	singleQuoteLevel := 0
+	previousChar := ""
 
-// 	// inFunction := false
-// 	inReference := false
-// 	validReference := false
-// 	inDecimal := false
-// 	inNumber := false
-// 	validDecimal := false
-// 	inOperator := false
-// 	inFunction := false
+	var buf bytes.Buffer
 
-// 	var buffer bytes.Buffer
+	for _, c := range formula {
+		char := string(c)
 
-// 	// skipCharacters := 0
+		if char == "\"" && previousChar != "\\" {
+			if quoteLevel == 0 {
+				quoteLevel++
+			} else {
+				buf.Reset()
+				quoteLevel--
+				continue
+			}
+		}
 
-// 	for _, r := range formula {
+		if quoteLevel == 0 && char == "'" && singleQuoteLevel == 0 {
+			singleQuoteLevel++
+		} else if quoteLevel == 0 && singleQuoteLevel == 1 && char == "'" {
+			singleQuoteLevel--
+		}
 
-// 		c := string(r)
+		if quoteLevel == 0 {
 
-// 		// check for quotes
-// 		if c == "\"" && quoteDepth == 0 && previousChar != "\\" {
+			// assume everything not in quotes is a reference
+			// if we find open brace it must be a function name
+			if singleQuoteLevel == 1 {
+				// continue regularly when singleQuoteLevel is 1, full buf with WriteString
+			} else if char == "(" {
+				buf.Reset()
+				continue
+			} else if contains(breakChars, char) {
 
-// 			quoteDepth++
+				if buf.Len() > 0 {
+					// found space, previous is references
+					references = append(references, buf.String())
+					buf.Reset()
+				}
+				// never add break char to reference
+				continue
+			}
 
-// 		} else if c == "\"" && quoteDepth == 1 && previousChar != "\\" {
+			// edge case for number, if first char of buffer is number, can't be reference
+			if buf.Len() == 0 {
 
-// 			quoteDepth--
+				_, err := strconv.Atoi(char)
 
-// 		}
+				if err == nil || char == "." { // check for both numbers and . character
 
-// 		if quoteDepth == 0 {
+					// found number can't be reference
+					buf.Reset()
+					continue
+				}
+			}
 
-// 			if c == "(" {
+			buf.WriteString(char)
 
-// 				parenDepth++
+		}
 
-// 			} else if c == ")" {
+		previousChar = char
 
-// 				parenDepth--
+	}
 
-// 				if parenDepth < 0 {
-// 					return false
-// 				}
+	// at the end also add as reference
+	if buf.Len() > 0 {
+		references = append(references, buf.String())
+	}
 
-// 			}
+	// filter references for known keywords such as TRUE/FALSE
+	for k, reference := range references {
+		if len(references) > 0 {
+			if reference == "TRUE" || reference == "FALSE" {
+				references = append(references[:k], references[k+1:]...)
+			}
+		}
+	}
 
-// 			/* reference checking */
-// 			if !inReference && unicode.IsLetter(r) {
-// 				inReference = true
-// 			}
-
-// 			if inReference && (unicode.IsDigit(r) || r == ':' && []rune(previousChar)[0] != ':') {
-// 				inReference = true
-// 				validReference = false
-// 			}
-
-// 			if inReference && validReference && unicode.IsLetter(r) {
-// 				return false
-// 			}
-
-// 			/* function checking */
-// 			if inReference && !validReference && r == '(' {
-// 				inFunction = true
-// 				inReference = false
-// 			}
-
-// 			if inFunction && r == ')' {
-// 				inFunction = false
-// 			}
-
-// 			if inFunction && r == ',' {
-// 				continue
-// 			}
-
-// 			if inReference && !(unicode.IsDigit(r) || unicode.IsLetter(r) || r == ':') {
-
-// 				if !validReference {
-// 					return false
-// 				}
-
-// 				inReference = false
-// 				validReference = false
-// 			}
-
-// 			/* number checking */
-// 			if !inReference && !inDecimal && unicode.IsDigit(r) {
-// 				inNumber = true
-// 			}
-
-// 			/* decimal checking */
-// 			if !inReference && inNumber && r == '.' && unicode.IsDigit([]rune(previousChar)[0]) {
-// 				inDecimal = true
-// 			} else if inDecimal && !(unicode.IsDigit(r) || unicode.IsLetter(r)) && !validDecimal {
-// 				return false
-// 			} else if inDecimal && unicode.IsDigit(r) {
-// 				validDecimal = true
-// 			} else if inDecimal && unicode.IsLetter(r) {
-// 				return false
-// 			} else if !inDecimal && r == '.' {
-// 				return false
-// 			}
-
-// 			if !(unicode.IsLetter(r) || unicode.IsDigit(r)) && r != '.' {
-// 				inNumber = false
-// 				inDecimal = false
-// 			}
-
-// 			/* operator checking */
-// 			if !inReference && !inFunction && !inDecimal && !(unicode.IsDigit(r) || unicode.IsLetter(r)) && r != ' ' && r != '(' && r != ')' {
-// 				// if not in reference and operator is not space
-// 				currentOperator += c
-// 				inOperator = true
-// 			}
-
-// 			if inOperator && (unicode.IsDigit(r) || unicode.IsLetter(r) || r == ' ') {
-// 				inOperator = false
-// 				operatorsFound = append(operatorsFound, currentOperator)
-// 				currentOperator = ""
-// 			}
-
-// 		}
-
-// 		buffer.WriteString(c)
-
-// 		previousChar = c
-
-// 	}
-
-// 	for _, operator := range operatorsFound {
-// 		if !contains(availableOperators, operator) {
-// 			return false
-// 		}
-// 	}
-
-// 	if parenDepth != 0 {
-// 		return false
-// 	}
-// 	if quoteDepth != 0 {
-// 		return false
-// 	}
-
-// 	return true
-// }
+	return references
+}
 
 func contains(s []string, e string) bool {
 	for _, a := range s {
@@ -427,112 +491,4 @@ func contains(s []string, e string) bool {
 		}
 	}
 	return false
-}
-
-func replaceReferencesInFormula(formula string, referenceMap map[string]string) string {
-
-	// take into account replacements that elongate the string while in the loop
-	// e.g. A9 => A10, after replacing the index should be incremented by one (use IsDigit from unicode package)
-
-	// check for empty referenceMap inputs
-	if len(referenceMap) == 0 {
-		return formula
-	}
-
-	// loop through formula string and only replace references in the map that are
-	index := 0
-
-	referenceStartIndex := 0
-	referenceEndIndex := 0
-	haveValidReference := false
-	inQuoteSection := false
-
-	for {
-
-		// set default characters
-		character := ' '
-
-		// get character
-		if index < len(formula) {
-			character = rune(formula[index])
-		}
-
-		if inQuoteSection {
-
-			if character == '"' && formula[index-1] != '\\' {
-				// exit quote section
-				inQuoteSection = false
-				referenceStartIndex = index + 1
-				referenceEndIndex = index + 1
-			}
-
-		} else if character == '"' {
-			inQuoteSection = true
-		} else if haveValidReference {
-
-			if character == ':' {
-
-				referenceEndIndex = index
-				haveValidReference = false
-
-			} else if unicode.IsDigit(character) {
-				// append digit to valid reference
-				referenceEndIndex = index
-			} else {
-				// replace reference
-				leftSubstring := formula[:referenceStartIndex]
-				rightSubstring := formula[referenceEndIndex+1:]
-
-				reference := formula[referenceStartIndex : referenceEndIndex+1]
-
-				newReference := reference
-
-				// if reference is not in referenceMap, use existing
-				if _, ok := referenceMap[reference]; ok {
-					//do something here
-					newReference = referenceMap[reference]
-				}
-
-				sizeDifference := len(newReference) - len(reference)
-
-				index += sizeDifference
-
-				// replace
-				formula = leftSubstring + newReference + rightSubstring
-
-				haveValidReference = false
-				referenceStartIndex = index + 1
-				referenceEndIndex = index + 1
-			}
-
-		} else if unicode.IsLetter(character) || character == '$' || character == ':' {
-
-			referenceEndIndex = index + 1
-
-		} else if unicode.IsDigit(character) {
-
-			// check if next character is digit or :
-			if referenceEndIndex-referenceStartIndex > 0 {
-				// non zero reference is built up, append digit
-				referenceEndIndex = index
-				haveValidReference = true
-
-			} else {
-				referenceStartIndex = index + 1
-				referenceEndIndex = index + 1
-				haveValidReference = false
-			}
-		} else {
-			referenceStartIndex = index + 1
-			referenceEndIndex = index + 1
-			haveValidReference = false
-		}
-
-		index++
-		if index >= len(formula) && !haveValidReference {
-			break
-		}
-	}
-
-	return formula
 }

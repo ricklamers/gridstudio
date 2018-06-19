@@ -64,11 +64,28 @@ type Client struct {
 	grid *Grid
 }
 
+type Reference struct {
+	String     string
+	SheetIndex int8
+}
+
+type ReferenceRange struct {
+	String     string
+	SheetIndex int8
+}
+
+type SheetSize struct {
+	RowCount    int
+	ColumnCount int
+}
+
 type Grid struct {
 	Data                map[string]DynamicValue
 	DirtyCells          map[string]DynamicValue
-	RowCount            int
-	ColumnCount         int
+	ActiveSheet         int8
+	SheetNames          map[string]int
+	SheetList           []string
+	SheetSizes          []SheetSize
 	PythonResultChannel chan string
 	PythonClient        chan string
 }
@@ -120,6 +137,8 @@ func isValidFormula(formula string) bool {
 
 	parenDepth := 0
 	quoteDepth := 0
+	singleQuoteDepth := 0
+	skipNextChar := false
 	previousChar := ""
 
 	// inFunction := false
@@ -131,16 +150,35 @@ func isValidFormula(formula string) bool {
 	inDecimal := false
 	inNumber := false
 	validDecimal := false
+	foundReferenceMark := false
 	inOperator := false
 	inFunction := false
+	operatorAllowed := false
 
 	var buffer bytes.Buffer
 
 	// skipCharacters := 0
+	formulaRunes := []rune{}
 
 	for _, r := range formula {
+		formulaRunes = append(formulaRunes, r)
+	}
+
+	for k := range formulaRunes {
+
+		if skipNextChar {
+			skipNextChar = false
+			continue
+		}
 
 		// fmt.Println("char index: " + strconv.Itoa(k))
+		r := formulaRunes[k]
+
+		nextR := ' '
+
+		if len(formulaRunes) > k+1 {
+			nextR = formulaRunes[k+1]
+		}
 
 		c := string(r)
 
@@ -148,18 +186,49 @@ func isValidFormula(formula string) bool {
 		if c == "\"" && quoteDepth == 0 && previousChar != "\\" {
 
 			quoteDepth++
+			continue
 
 		} else if c == "\"" && quoteDepth == 1 && previousChar != "\\" {
 
 			quoteDepth--
-
+			continue
 		}
 
-		if quoteDepth == 0 {
+		if c == "'" && singleQuoteDepth == 0 {
+
+			singleQuoteDepth++
+
+			continue
+
+		} else if c == "'" && singleQuoteDepth == 1 {
+
+			singleQuoteDepth--
+
+			// should be followed by dollar or letter
+			if nextR != '!' {
+				return false
+			} else {
+				inReference = true
+
+				// skip next char !
+				skipNextChar = true
+			}
+
+			continue
+		}
+
+		if quoteDepth == 0 && singleQuoteDepth == 0 {
 
 			if c == "(" {
 
 				parenDepth++
+
+				operatorAllowed = false
+
+				inOperator = false
+
+				operatorsFound = append(operatorsFound, currentOperator)
+				currentOperator = ""
 
 			} else if c == ")" {
 
@@ -172,6 +241,17 @@ func isValidFormula(formula string) bool {
 			}
 
 			/* reference checking */
+			if inReference && r == '!' && !foundReferenceMark {
+				foundReferenceMark = true
+				validReference = false
+				inReference = false
+				continue
+			}
+
+			if r == '!' && foundReferenceMark {
+				return false
+			}
+
 			if !inReference && unicode.IsLetter(r) {
 				inReference = true
 			}
@@ -196,6 +276,7 @@ func isValidFormula(formula string) bool {
 				inReference = false
 				validReference = false
 				referenceFoundRange = true
+				foundReferenceMark = false
 			}
 
 			if inReference && validReference && unicode.IsLetter(r) {
@@ -206,6 +287,7 @@ func isValidFormula(formula string) bool {
 			if inReference && !validReference && r == '(' {
 				inFunction = true
 				inReference = false
+				foundReferenceMark = false
 			}
 
 			if inFunction && r == ')' {
@@ -231,6 +313,7 @@ func isValidFormula(formula string) bool {
 				}
 
 				inReference = false
+				foundReferenceMark = false
 				dollarInColumn = false
 				dollarInRow = false
 				validReference = false
@@ -244,14 +327,23 @@ func isValidFormula(formula string) bool {
 				}
 
 				inReference = false
+				foundReferenceMark = false
 				validReference = false
 				dollarInColumn = false
 				dollarInRow = false
+				operatorAllowed = true
 			}
 
-			/* number checking */
 			if !inReference && !inDecimal && unicode.IsDigit(r) {
 				inNumber = true
+
+				operatorsFound = append(operatorsFound, currentOperator)
+				currentOperator = ""
+
+				if inOperator {
+					inOperator = false
+					operatorAllowed = false
+				}
 			}
 
 			/* decimal checking */
@@ -267,20 +359,47 @@ func isValidFormula(formula string) bool {
 				return false
 			}
 
-			if !(unicode.IsLetter(r) || unicode.IsDigit(r)) && r != '.' {
+			if (inNumber || inDecimal) && !(unicode.IsLetter(r) || unicode.IsDigit(r)) && r != '.' {
 				inNumber = false
 				inDecimal = false
+
+				// number end
+				operatorAllowed = true
 			}
 
-			/* operator checking */
-			if !inReference && !inFunction && !inDecimal && !(unicode.IsDigit(r) || unicode.IsLetter(r)) && r != ' ' && r != '(' && r != ')' && r != ',' && r != '$' {
+			if !inNumber && r == '-' && unicode.IsDigit(nextR) {
+				inNumber = true
+
+				operatorsFound = append(operatorsFound, currentOperator)
+				currentOperator = ""
+
+				if inOperator {
+					inOperator = false
+				}
+
+			} else if inOperator && r == '-' && currentOperator == "-" {
+				return false
+			} else if !inReference && r == '-' && !inNumber && !inOperator && !unicode.IsDigit(nextR) {
+				currentOperator += c
+				inOperator = true
+
+				if !operatorAllowed {
+					return false
+				}
+
+			} else if !inReference && !inFunction && !inDecimal && !(unicode.IsDigit(r) || unicode.IsLetter(r)) && r != ' ' && r != '(' && r != ')' && r != ',' && r != '$' {
 				// if not in reference and operator is not space
 				currentOperator += c
 				inOperator = true
+
+				if !operatorAllowed {
+					return false
+				}
 			}
 
 			if inOperator && (unicode.IsDigit(r) || unicode.IsLetter(r) || r == ' ') {
 				inOperator = false
+				operatorAllowed = false
 				operatorsFound = append(operatorsFound, currentOperator)
 				currentOperator = ""
 			}
@@ -294,7 +413,7 @@ func isValidFormula(formula string) bool {
 	}
 
 	for _, operator := range operatorsFound {
-		if !contains(availableOperators, operator) {
+		if !contains(availableOperators, operator) && operator != "" {
 			return false
 		}
 	}
@@ -313,9 +432,32 @@ func isValidFormula(formula string) bool {
 	return true
 }
 
-func computeDirtyCells(grid *Grid) []string {
+func getReferenceFromMapIndex(standardReference string) Reference {
 
-	changedRefs := []string{}
+	referenceParts := strings.Split(standardReference, "!")
+	sheetIndex, err := strconv.Atoi(referenceParts[0])
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return Reference{String: referenceParts[1], SheetIndex: int8(sheetIndex)}
+}
+
+func getMapIndexFromReference(reference Reference) string {
+	stringRef := strings.Replace(reference.String, "$", "", -1)
+
+	splittedString := strings.Split(stringRef, "!")
+	lastPart := splittedString[len(splittedString)-1]
+
+	stringRef = strconv.Itoa(int(reference.SheetIndex)) + "!" + lastPart
+
+	return stringRef
+}
+
+func computeDirtyCells(grid *Grid) []Reference {
+
+	changedRefs := []Reference{}
 
 	// for every DV in dirtyCells clean up the DependInTemp list with refs not in DirtyCells
 	for _, thisDv := range grid.DirtyCells {
@@ -381,7 +523,7 @@ func computeDirtyCells(grid *Grid) []string {
 		// DO COMPUTE HERE
 		// stringBefore := convertToString((*grid)[index])
 
-		originalDv := (grid.Data)[index]
+		originalDv := getDataByNormalRef(index, grid)
 
 		// originalIsString := false
 		// if originalDv.ValueType == DynamicValueTypeString {
@@ -394,15 +536,17 @@ func computeDirtyCells(grid *Grid) []string {
 		if originalDv.ValueType != DynamicValueTypeExplosiveFormula {
 
 			originalDv.ValueType = DynamicValueTypeFormula
-			newDv = parse(originalDv, grid, index)
+			newDv = parse(originalDv, grid, getReferenceFromMapIndex(index))
 
 			newDv.DataFormula = originalDv.DataFormula
 			newDv.DependIn = originalDv.DependIn
 			newDv.DependOut = originalDv.DependOut
+			newDv.SheetIndex = originalDv.SheetIndex
 
-			(grid.Data)[index] = newDv
+			newReference := Reference{String: index, SheetIndex: newDv.SheetIndex}
+			setDataByRef(newReference, newDv, grid)
 
-			changedRefs = append(changedRefs, index)
+			changedRefs = append(changedRefs, newReference)
 
 		}
 
@@ -432,7 +576,7 @@ func sendCells(cellsToSend *[][]string, c *Client) {
 
 	// send all dirty cells
 	for _, e := range *cellsToSend {
-		jsonData = append(jsonData, e[0], e[1], e[2])
+		jsonData = append(jsonData, e[0], e[1], e[2], e[3])
 	}
 
 	json, _ := json.Marshal(jsonData)
@@ -440,13 +584,26 @@ func sendCells(cellsToSend *[][]string, c *Client) {
 
 }
 
-func sendSheetSize(c *Client, grid *Grid) {
-	jsonData := []string{"SHEETSIZE", strconv.Itoa(grid.RowCount), strconv.Itoa(grid.ColumnCount)}
+func sendSheets(c *Client, grid *Grid) {
+	jsonData := []string{"SETSHEETS"}
+
+	for key, value := range grid.SheetList {
+		jsonData = append(jsonData, value)
+		jsonData = append(jsonData, strconv.Itoa(grid.SheetSizes[key].RowCount))
+		jsonData = append(jsonData, strconv.Itoa(grid.SheetSizes[key].ColumnCount))
+	}
+
 	json, _ := json.Marshal(jsonData)
 	c.send <- json
 }
 
-func sendDirtyOrInvalidate(changedCells []string, grid *Grid, c *Client) {
+func sendSheetSize(c *Client, grid *Grid) {
+	jsonData := []string{"SHEETSIZE", strconv.Itoa(grid.SheetSizes[grid.ActiveSheet].RowCount), strconv.Itoa(grid.SheetSizes[grid.ActiveSheet].ColumnCount)}
+	json, _ := json.Marshal(jsonData)
+	c.send <- json
+}
+
+func sendDirtyOrInvalidate(changedCells []Reference, grid *Grid, c *Client) {
 	// magic number to speed up cell updating
 	if len(changedCells) < 100 {
 		sendCellsByRefs(changedCells, grid, c)
@@ -462,34 +619,43 @@ func invalidateView(grid *Grid, c *Client) {
 	c.send <- json
 }
 
-func sendCellsInRange(cellRange string, grid *Grid, c *Client) {
+func sendCellsInRange(cellRange ReferenceRange, grid *Grid, c *Client) {
 
-	cells := cellRangeToCells(cellRange)
+	cells := cellRangeToCells(cellRange.String)
 
 	cellsToSend := [][]string{}
 
 	for _, refString := range cells {
 
-		if dv, ok := grid.Data[refString]; ok {
-			// cell to string
-			stringAfter := convertToString(dv)
-			cellsToSend = append(cellsToSend, []string{refString, stringAfter.DataString, "=" + dv.DataFormula})
-		}
+		reference := Reference{String: refString, SheetIndex: cellRange.SheetIndex}
+
+		dv := getDataFromRef(reference, grid)
+
+		// cell to string
+		stringAfter := convertToString(dv)
+		cellsToSend = append(cellsToSend, []string{relativeReferenceString(reference), stringAfter.DataString, "=" + dv.DataFormula, strconv.Itoa(int(dv.SheetIndex))})
 	}
 
 	sendCells(&cellsToSend, c)
 }
 
-func sendCellsByRefs(refs []string, grid *Grid, c *Client) {
+func relativeReferenceString(reference Reference) string {
+	stringRef := reference.String
+	splittedString := strings.Split(stringRef, "!")
+	lastPart := splittedString[len(splittedString)-1]
+	return lastPart
+}
+
+func sendCellsByRefs(refs []Reference, grid *Grid, c *Client) {
 
 	cellsToSend := [][]string{}
 
-	for _, refString := range refs {
+	for _, reference := range refs {
 
-		if dv, ok := grid.Data[refString]; ok {
+		if dv, ok := grid.Data[reference.String]; ok {
 			// cell to string
 			stringAfter := convertToString(dv)
-			cellsToSend = append(cellsToSend, []string{refString, stringAfter.DataString, "=" + dv.DataFormula})
+			cellsToSend = append(cellsToSend, []string{relativeReferenceString(reference), stringAfter.DataString, "=" + dv.DataFormula, strconv.Itoa(int(dv.SheetIndex))})
 		}
 	}
 
@@ -524,8 +690,8 @@ func determineMinimumRectangle(startRow int, startColumn int, grid *Grid) (int, 
 	maximumRow := startRow
 	maximumColumn := startColumn
 
-	for r := startRow; r <= grid.RowCount; r++ {
-		for c := startColumn; c <= grid.ColumnCount; c++ {
+	for r := startRow; r <= grid.SheetSizes[grid.ActiveSheet].RowCount; r++ {
+		for c := startColumn; c <= grid.SheetSizes[grid.ActiveSheet].ColumnCount; c++ {
 
 			cell := grid.Data[indexesToReference(r, c)]
 
@@ -745,15 +911,15 @@ func changeReferenceIndex(reference string, rowDifference int, columnDifference 
 	if refRow < 1 {
 		refRow = 1
 	}
-	if refRow > grid.RowCount {
-		refRow = grid.RowCount
+	if refRow > grid.SheetSizes[grid.ActiveSheet].RowCount {
+		refRow = grid.SheetSizes[grid.ActiveSheet].RowCount
 	}
 
 	if refColumn < 1 {
 		refColumn = 1
 	}
-	if refColumn > grid.ColumnCount {
-		refColumn = grid.ColumnCount
+	if refColumn > grid.SheetSizes[grid.ActiveSheet].ColumnCount {
+		refColumn = grid.SheetSizes[grid.ActiveSheet].ColumnCount
 	}
 
 	fixedRow, fixedColumn := getReferenceFixedBools(reference)
@@ -917,7 +1083,7 @@ func copySourceToDestination(sourceRange string, destinationRange string, grid *
 			newFormula = replaceReferencesInFormula(sourceFormula, referenceMapping)
 		}
 
-		previousDv := getDataFromRef(destinationRef, grid)
+		previousDv := getDataFromRef(Reference{String: destinationRef, SheetIndex: grid.ActiveSheet}, grid)
 		destinationDv := makeDv(newFormula)
 		destinationDv.DependOut = previousDv.DependOut
 
@@ -929,7 +1095,7 @@ func copySourceToDestination(sourceRange string, destinationRange string, grid *
 			for ref := range *grid.Data[sourceRef].DependOut {
 
 				// if DependOut not in source (will not be moved/deleted)
-				_, originalDv := getDvAndRefForCopyModify(ref, operationRowDifference, operationColumnDifference, newDvs, grid)
+				originalDv := getDvAndRefForCopyModify(getReferenceFromMapIndex(ref), operationRowDifference, operationColumnDifference, newDvs, grid)
 				originalFormula := originalDv.DataFormula
 
 				outgoingDvReferences := findReferences(originalFormula, false)
@@ -953,7 +1119,7 @@ func copySourceToDestination(sourceRange string, destinationRange string, grid *
 
 				newDependOutDv := makeDv(newFormula)
 				newDependOutDv.DependOut = originalDv.DependOut
-				putDvForCopyModify(ref, newDependOutDv, operationRowDifference, operationColumnDifference, newDvs, grid)
+				putDvForCopyModify(getReferenceFromMapIndex(ref), newDependOutDv, operationRowDifference, operationColumnDifference, newDvs, grid)
 
 			}
 
@@ -971,7 +1137,10 @@ func copySourceToDestination(sourceRange string, destinationRange string, grid *
 
 		// check for each outgoingRange whether it is matched in full
 		// check whether in newDv or grid
-		_, outgoingRefDv := getDvAndRefForCopyModify(outgoingRef, 0, 0, newDvs, grid)
+
+		outgoingReference := getReferenceFromMapIndex(outgoingRef)
+
+		outgoingRefDv := getDvAndRefForCopyModify(outgoingReference, 0, 0, newDvs, grid)
 		outgoingRefFormula := outgoingRefDv.DataFormula
 
 		replacedFormula := false
@@ -1003,14 +1172,15 @@ func copySourceToDestination(sourceRange string, destinationRange string, grid *
 			newDv := makeDv(outgoingRefFormula)
 			newDv.DependOut = outgoingRefDv.DependOut
 
-			putDvForCopyModify(outgoingRef, newDv, 0, 0, newDvs, grid)
+			putDvForCopyModify(outgoingReference, newDv, 0, 0, newDvs, grid)
 
 		}
 
 	}
 
 	for ref, dv := range newDvs {
-		grid.Data[ref] = setDependencies(ref, dv, grid)
+		reference := Reference{String: ref, SheetIndex: grid.ActiveSheet}
+		setDataByRef(reference, setDependencies(reference, dv, grid), grid)
 	}
 
 	// for each cell mapping, copy contents after substituting the references
@@ -1020,24 +1190,24 @@ func copySourceToDestination(sourceRange string, destinationRange string, grid *
 
 }
 
-func getDvAndRefForCopyModify(ref string, diffRow int, diffCol int, newDvs map[string]DynamicValue, grid *Grid) (string, DynamicValue) {
+func getDvAndRefForCopyModify(reference Reference, diffRow int, diffCol int, newDvs map[string]DynamicValue, grid *Grid) DynamicValue {
 
-	newlyMappedRef := changeReferenceIndex(ref, diffRow, diffCol, grid)
+	newlyMappedRef := changeReferenceIndex(reference.String, diffRow, diffCol, grid)
 
 	if _, ok := newDvs[newlyMappedRef]; ok {
-		return newlyMappedRef, newDvs[newlyMappedRef]
+		return newDvs[newlyMappedRef]
 	} else {
-		return ref, grid.Data[ref]
+		return getDataFromRef(reference, grid)
 	}
 }
 
-func putDvForCopyModify(ref string, dv DynamicValue, diffRow int, diffCol int, newDvs map[string]DynamicValue, grid *Grid) {
-	newlyMappedRef := changeReferenceIndex(ref, diffRow, diffCol, grid)
+func putDvForCopyModify(reference Reference, dv DynamicValue, diffRow int, diffCol int, newDvs map[string]DynamicValue, grid *Grid) {
+	newlyMappedRef := changeReferenceIndex(reference.String, diffRow, diffCol, grid)
 
 	if _, ok := newDvs[newlyMappedRef]; ok {
 		newDvs[newlyMappedRef] = dv
 	} else {
-		grid.Data[ref] = setDependencies(ref, dv, grid)
+		setDataByRef(reference, setDependencies(reference, dv, grid), grid)
 	}
 }
 
@@ -1108,14 +1278,14 @@ func getFile(path string, c *Client) {
 	c.send <- json
 }
 
-func findJumpCell(startCell string, direction string, grid *Grid, c *Client) {
+func findJumpCell(startCell Reference, direction string, grid *Grid, c *Client) {
 
 	// find jump cell based on startCell
-	startCellRow := getReferenceRowIndex(startCell)
-	startCellColumn := getReferenceColumnIndex(startCell)
+	startCellRow := getReferenceRowIndex(startCell.String)
+	startCellColumn := getReferenceColumnIndex(startCell.String)
 
 	// check whether cell is empty
-	startCellEmpty := isCellEmpty(grid.Data[startCell])
+	startCellEmpty := isCellEmpty(getDataFromRef(startCell, grid))
 
 	horizontalIncrement := 0
 	verticalIncrement := 0
@@ -1139,14 +1309,14 @@ func findJumpCell(startCell string, direction string, grid *Grid, c *Client) {
 		currentCellRow += verticalIncrement
 		currentCellColumn += horizontalIncrement
 
-		if currentCellRow > grid.RowCount || currentCellRow < 1 {
+		if currentCellRow > grid.SheetSizes[grid.ActiveSheet].RowCount || currentCellRow < 1 {
 			break
 		}
-		if currentCellColumn > grid.ColumnCount || currentCellColumn < 1 {
+		if currentCellColumn > grid.SheetSizes[grid.ActiveSheet].ColumnCount || currentCellColumn < 1 {
 			break
 		}
 
-		thisCellEmpty := isCellEmpty(grid.Data[indexesToReference(currentCellRow, currentCellColumn)])
+		thisCellEmpty := isCellEmpty(getDataFromRef(Reference{String: indexesToReference(currentCellRow, currentCellColumn), SheetIndex: startCell.SheetIndex}, grid))
 
 		if isFirstCellCheck && thisCellEmpty && !startCellEmpty {
 			// if first cell check is empty cell and this cell is non-empty find first non-empty cell
@@ -1174,7 +1344,7 @@ func findJumpCell(startCell string, direction string, grid *Grid, c *Client) {
 
 	newCell := indexesToReference(currentCellRow, currentCellColumn)
 
-	jsonData := []string{"JUMPCELL", startCell, direction, newCell}
+	jsonData := []string{"JUMPCELL", relativeReferenceString(startCell), direction, newCell}
 
 	json, err := json.Marshal(jsonData)
 
@@ -1241,9 +1411,19 @@ func getDirectory(path string, c *Client) {
 	c.send <- json
 }
 
-func clearCell(ref string, grid *Grid) {
+func getIndexFromString(sheetIndexString string) int8 {
+	sheetIndexInt, err := strconv.Atoi(sheetIndexString)
+	sheetIndex := int8(sheetIndexInt)
 
-	OriginalDependOut := grid.Data[ref].DependOut
+	if err != nil {
+		log.Fatal(err)
+	}
+	return sheetIndex
+}
+
+func clearCell(ref Reference, grid *Grid) {
+
+	OriginalDependOut := getDataFromRef(ref, grid).DependOut
 
 	dv := DynamicValue{
 		ValueType:   DynamicValueTypeString,
@@ -1254,7 +1434,7 @@ func clearCell(ref string, grid *Grid) {
 	dv.DependIn = &NewDependIn       // new dependin (new formula)
 	dv.DependOut = OriginalDependOut // dependout remain
 
-	grid.Data[ref] = setDependencies(ref, dv, grid)
+	setDataByRef(ref, setDependencies(ref, dv, grid), grid)
 }
 
 func replaceReferencesInFormula(formula string, referenceMap map[string]string) string {
@@ -1367,12 +1547,12 @@ func replaceReferencesInFormula(formula string, referenceMap map[string]string) 
 
 func changeSheetSize(newRowCount int, newColumnCount int, c *Client, grid *Grid) {
 
-	if newRowCount > grid.RowCount || newColumnCount > grid.ColumnCount {
-		// add missing row/column cells
+	if newRowCount > grid.SheetSizes[grid.ActiveSheet].RowCount || newColumnCount > grid.SheetSizes[grid.ActiveSheet].ColumnCount {
 
+		// add missing row/column cells
 		for currentColumn := 0; currentColumn <= newColumnCount; currentColumn++ {
 			for currentRow := 0; currentRow <= newRowCount; currentRow++ {
-				if currentColumn > grid.ColumnCount || currentRow > grid.RowCount {
+				if currentColumn > grid.SheetSizes[grid.ActiveSheet].ColumnCount || currentRow > grid.SheetSizes[grid.ActiveSheet].RowCount {
 					reference := indexesToReference(currentRow, currentColumn)
 					grid.Data[reference] = makeEmptyDv()
 				}
@@ -1380,8 +1560,8 @@ func changeSheetSize(newRowCount int, newColumnCount int, c *Client, grid *Grid)
 		}
 	}
 
-	grid.RowCount = newRowCount
-	grid.ColumnCount = newColumnCount
+	grid.SheetSizes[grid.ActiveSheet].RowCount = newRowCount
+	grid.SheetSizes[grid.ActiveSheet].ColumnCount = newColumnCount
 
 	sendSheetSize(c, grid)
 }
@@ -1390,7 +1570,7 @@ func insertRowColumn(insertType string, direction string, reference string, c *C
 
 	if insertType == "COLUMN" {
 
-		changeSheetSize(grid.RowCount, grid.ColumnCount+1, c, grid)
+		changeSheetSize(grid.SheetSizes[grid.ActiveSheet].RowCount, grid.SheetSizes[grid.ActiveSheet].ColumnCount+1, c, grid)
 
 		baseColumn := getReferenceColumnIndex(reference)
 
@@ -1406,11 +1586,12 @@ func insertRowColumn(insertType string, direction string, reference string, c *C
 		newTopLeftRef := indexesToReference(1, baseColumn+1)
 		newBottomRightRef := indexesToReference(maximumRow, maximumColumn+1)
 
-		cutCells(topLeftRef+":"+bottomRightRef, newTopLeftRef+":"+newBottomRightRef, grid)
+		cutCells(ReferenceRange{String: topLeftRef + ":" + bottomRightRef, SheetIndex: grid.ActiveSheet},
+			ReferenceRange{String: newTopLeftRef + ":" + newBottomRightRef, SheetIndex: grid.ActiveSheet}, grid)
 
 	} else if insertType == "ROW" {
 
-		changeSheetSize(grid.RowCount+1, grid.ColumnCount, c, grid)
+		changeSheetSize(grid.SheetSizes[grid.ActiveSheet].RowCount+1, grid.SheetSizes[grid.ActiveSheet].ColumnCount, c, grid)
 
 		baseRow := getReferenceRowIndex(reference)
 
@@ -1426,21 +1607,25 @@ func insertRowColumn(insertType string, direction string, reference string, c *C
 		newTopLeftRef := indexesToReference(baseRow+1, 1)
 		newBottomRightRef := indexesToReference(maximumRow+1, maximumColumn)
 
-		cutCells(topLeftRef+":"+bottomRightRef, newTopLeftRef+":"+newBottomRightRef, grid)
+		cutCells(ReferenceRange{String: topLeftRef + ":" + bottomRightRef, SheetIndex: grid.ActiveSheet},
+			ReferenceRange{String: newTopLeftRef + ":" + newBottomRightRef, SheetIndex: grid.ActiveSheet}, grid)
+
 	}
 
 }
 
-func cutCells(sourceRange string, destinationRange string, grid *Grid) []string {
+func cutCells(sourceRange ReferenceRange, destinationRange ReferenceRange, grid *Grid) []Reference {
 
-	sourceCells := cellRangeToCells(sourceRange)
-	destinationCells := copySourceToDestination(sourceRange, destinationRange, grid, true)
+	sourceCells := cellRangeToCells(sourceRange.String)
+	destinationCells := copySourceToDestination(sourceRange.String, destinationRange.String, grid, true)
 
-	// clear sourceCells that are not in destination
-	for _, ref := range sourceCells {
-		if !contains(destinationCells, ref) {
-			// clear cell
-			clearCell(ref, grid)
+	if sourceRange.SheetIndex != destinationRange.SheetIndex {
+		// clear sourceCells that are not in destination
+		for _, ref := range sourceCells {
+			if !contains(destinationCells, ref) {
+				// clear cell
+				clearCell(Reference{String: ref, SheetIndex: sourceRange.SheetIndex}, grid)
+			}
 		}
 	}
 
@@ -1462,22 +1647,34 @@ func (c *Client) writePump() {
 		columnCount := 10
 		rowCount := 100
 
-		grid = Grid{Data: make(map[string]DynamicValue), DirtyCells: make(map[string]DynamicValue), RowCount: rowCount, ColumnCount: columnCount}
+		sheetSizes := []SheetSize{SheetSize{RowCount: rowCount, ColumnCount: columnCount}, SheetSize{RowCount: rowCount, ColumnCount: columnCount}}
+
+		// For now make this a two way mapping for ordered loops and O(1) access times -- aware of redundancy of state which could cause problems
+		sheetNames := make(map[string]int)
+		sheetNames["Sheet1"] = 0
+		sheetNames["Sheet2"] = 1
+
+		sheetList := []string{"Sheet1", "Sheet2"}
+
+		grid = Grid{Data: make(map[string]DynamicValue), DirtyCells: make(map[string]DynamicValue), ActiveSheet: 0, SheetNames: sheetNames, SheetList: sheetList, SheetSizes: sheetSizes}
 
 		cellCount := 1
 
-		for x := 1; x <= columnCount; x++ {
-			for y := 1; y <= rowCount; y++ {
-				dv := makeDv("")
+		for sheet := 0; sheet <= len(sheetList); sheet++ {
+			for x := 1; x <= columnCount; x++ {
+				for y := 1; y <= rowCount; y++ {
+					dv := makeDv("")
+					dv.SheetIndex = int8(sheet)
 
-				// DEBUG: fill with incrementing numbers
-				// dv.ValueType = DynamicValueTypeInteger
-				// dv.DataInteger = int32(cellCount)
-				// dv.DataFormula = strconv.Itoa(cellCount)
+					// DEBUG: fill with incrementing numbers
+					// dv.ValueType = DynamicValueTypeInteger
+					// dv.DataInteger = int32(cellCount)
+					// dv.DataFormula = strconv.Itoa(cellCount)
 
-				grid.Data[indexToLetters(x)+strconv.Itoa(y)] = dv
+					grid.Data[strconv.Itoa(sheet)+"!"+indexToLetters(x)+strconv.Itoa(y)] = dv
 
-				cellCount++
+					cellCount++
+				}
 			}
 		}
 
@@ -1495,7 +1692,7 @@ func (c *Client) writePump() {
 
 	}
 
-	sendSheetSize(c, &grid)
+	sendSheets(c, &grid)
 
 	grid.PythonResultChannel = make(chan string, 256)
 	grid.PythonClient = c.commands
@@ -1556,6 +1753,9 @@ func (c *Client) writePump() {
 						formula = parsed[3]
 					}
 
+					// then setDependencies for all
+					sheetIndex := getIndexFromString(parsed[4])
+
 					// parsed[3] contains the value (formula)
 					newDvs := make(map[string]DynamicValue)
 
@@ -1569,7 +1769,9 @@ func (c *Client) writePump() {
 					// first add all to grid
 					for _, ref := range references {
 
-						OriginalDependOut := grid.Data[ref].DependOut
+						thisReference := Reference{String: ref, SheetIndex: sheetIndex}
+
+						OriginalDependOut := getDataFromRef(thisReference, &grid).DependOut
 
 						var dv DynamicValue
 
@@ -1593,15 +1795,15 @@ func (c *Client) writePump() {
 						newDvs[ref] = dv
 
 						// set to grid for access during setDependencies
-						grid.Data[ref] = dv
+						setDataByRef(thisReference, dv, &grid)
 
 						incrementAmount++
 
 					}
 
-					// then setDependencies for all
 					for ref, dv := range newDvs {
-						grid.Data[ref] = setDependencies(ref, dv, &grid)
+						reference := Reference{String: ref, SheetIndex: sheetIndex}
+						setDataByRef(reference, setDependencies(reference, dv, &grid), &grid)
 					}
 
 					// now compute all dirty
@@ -1613,7 +1815,9 @@ func (c *Client) writePump() {
 					// Note: SETLIST doesn't support formula insert, only raw data. E.g. numbers or strings
 
 					// values are all values from parsed[3] on
-					values := parsed[3:]
+					values := parsed[4:]
+
+					sheetIndex := getIndexFromString(parsed[3])
 
 					// parsed[3] contains the value (formula)
 					// newDvs := make(map[string]DynamicValue)
@@ -1627,7 +1831,9 @@ func (c *Client) writePump() {
 					valuesIndex := 0
 					for _, ref := range references {
 
-						OriginalDependOut := grid.Data[ref].DependOut
+						thisReference := Reference{String: ref, SheetIndex: sheetIndex}
+
+						OriginalDependOut := getDataFromRef(thisReference, &grid).DependOut
 
 						var dv DynamicValue
 
@@ -1651,12 +1857,12 @@ func (c *Client) writePump() {
 						// newDvs[ref] = dv
 
 						// set to grid for access during setDependencies
-						parsedDv := parse(dv, &grid, ref)
+						parsedDv := parse(dv, &grid, thisReference)
 						parsedDv.DataFormula = values[valuesIndex]
 						parsedDv.DependIn = &NewDependIn
 						parsedDv.DependOut = OriginalDependOut
 
-						grid.Data[ref] = parsedDv
+						setDataByRef(thisReference, parsedDv, &grid)
 
 						valuesIndex++
 
@@ -1684,14 +1890,15 @@ func (c *Client) writePump() {
 				}
 			case "GET":
 
-				sendCellsInRange(parsed[1], &grid, c)
+				sendCellsInRange(ReferenceRange{String: parsed[1], SheetIndex: getIndexFromString(parsed[2])}, &grid, c)
 
 			case "JUMPCELL":
 
 				currentCell := parsed[1]
 				direction := parsed[2]
+				sheetIndex := getIndexFromString(parsed[3])
 
-				findJumpCell(currentCell, direction, &grid, c)
+				findJumpCell(Reference{String: currentCell, SheetIndex: sheetIndex}, direction, &grid, c)
 
 			case "GET-FILE":
 
@@ -1728,10 +1935,23 @@ func (c *Client) writePump() {
 			case "CUT":
 
 				sourceRange := parsed[1]
-				destinationRange := parsed[2]
+				sourceRangeSheetInt, err := strconv.Atoi(parsed[2])
+				if err != nil {
+					log.Fatal(err)
+				}
+				sourceRangeSheetIndex := int8(sourceRangeSheetInt)
+
+				destinationRange := parsed[3]
+				destinationRangeSheetInt, err := strconv.Atoi(parsed[4])
+				if err != nil {
+					log.Fatal(err)
+				}
+				destinationRangeSheetIndex := int8(destinationRangeSheetInt)
 
 				// clear difference between sourceRange and destinationRange
-				changedCells := cutCells(sourceRange, destinationRange, &grid)
+				changedCells := cutCells(
+					ReferenceRange{String: sourceRange, SheetIndex: sourceRangeSheetIndex},
+					ReferenceRange{String: destinationRange, SheetIndex: destinationRangeSheetIndex}, &grid)
 
 				sendDirtyOrInvalidate(changedCells, &grid, c)
 
@@ -1748,7 +1968,10 @@ func (c *Client) writePump() {
 
 					if !isValidFormula(formula) {
 
-						OriginalDependOut := grid.Data[parsed[1]].DependOut
+						sheetIndex := getIndexFromString(parsed[3])
+						reference := Reference{String: parsed[1], SheetIndex: sheetIndex}
+
+						OriginalDependOut := getDataFromRef(reference, &grid).DependOut
 
 						dv := DynamicValue{
 							ValueType:   DynamicValueTypeString,
@@ -1759,7 +1982,7 @@ func (c *Client) writePump() {
 						dv.DependIn = &NewDependIn       // new dependin (new formula)
 						dv.DependOut = OriginalDependOut // dependout remain
 
-						grid.Data[parsed[1]] = setDependencies(parsed[1], dv, &grid)
+						setDataByRef(reference, setDependencies(reference, dv, &grid), &grid)
 
 					} else {
 
@@ -1779,7 +2002,7 @@ func (c *Client) writePump() {
 							// Dependencies are not required, since this cell won't depend on anything given that it's explosive
 
 							// parse explosive formula (also, explosive formulas cannot be nested)
-							dv = parse(dv, &grid, parsed[1])
+							dv = parse(dv, &grid, Reference{String: parsed[1], SheetIndex: getIndexFromString(parsed[3])})
 
 							// don't need dependend information for parsing, hence assign after parse
 							NewDependIn := make(map[string]bool)
@@ -1790,7 +2013,7 @@ func (c *Client) writePump() {
 							dv.DataFormula = formula                        // re-assigning of formula is usually saved for computeDirty but this will be skipped there
 
 							// add OLS cell to dirty (which needs DependInTemp etc)
-							grid.Data[parsed[1]] = setDependencies(parsed[1], dv, &grid)
+							grid.Data[parsed[1]] = setDependencies(Reference{String: parsed[1], SheetIndex: getIndexFromString(parsed[3])}, dv, &grid)
 
 							// dependencies will be fulfilled for all cells created by explosion
 
@@ -1799,7 +2022,9 @@ func (c *Client) writePump() {
 							// cut off = for parsing
 
 							// original Dependends
-							OriginalDependOut := grid.Data[parsed[1]].DependOut
+							thisReference := Reference{String: parsed[1], SheetIndex: getIndexFromString(parsed[3])}
+
+							OriginalDependOut := getDataFromRef(thisReference, &grid).DependOut
 
 							dv := DynamicValue{
 								ValueType:   DynamicValueTypeFormula,
@@ -1810,7 +2035,7 @@ func (c *Client) writePump() {
 							dv.DependIn = &NewDependIn       // new dependin (new formula)
 							dv.DependOut = OriginalDependOut // dependout remain
 
-							grid.Data[parsed[1]] = setDependencies(parsed[1], dv, &grid)
+							setDataByRef(thisReference, setDependencies(thisReference, dv, &grid), &grid)
 						}
 
 					}
@@ -1820,8 +2045,9 @@ func (c *Client) writePump() {
 					// else enter as string
 					// if user enters non string value, client is reponsible for adding the equals sign.
 					// Anything without it won't be parsed as formula.
+					reference := Reference{String: parsed[1], SheetIndex: getIndexFromString(parsed[3])}
 
-					OriginalDependOut := grid.Data[parsed[1]].DependOut
+					OriginalDependOut := getDataFromRef(reference, &grid).DependOut
 
 					dv := DynamicValue{
 						ValueType:   DynamicValueTypeString,
@@ -1837,9 +2063,10 @@ func (c *Client) writePump() {
 					dv.DependIn = &DependIn
 					dv.DependOut = OriginalDependOut
 
-					newDv := setDependencies(parsed[1], dv, &grid)
+					newDv := setDependencies(reference, dv, &grid)
 					newDv.ValueType = DynamicValueTypeString
-					grid.Data[parsed[1]] = newDv
+
+					setDataByRef(reference, newDv, &grid)
 
 				}
 
@@ -1930,18 +2157,18 @@ func (c *Client) writePump() {
 
 				minRowSize := lineCount
 
-				newRowCount := grid.RowCount
-				newColumnCount := grid.ColumnCount
+				newRowCount := grid.SheetSizes[grid.ActiveSheet].RowCount
+				newColumnCount := grid.SheetSizes[grid.ActiveSheet].ColumnCount
 
-				if minRowSize > grid.RowCount {
+				if minRowSize > grid.SheetSizes[grid.ActiveSheet].RowCount {
 					newRowCount = minRowSize
 				}
-				if minColumnSize > grid.ColumnCount {
+				if minColumnSize > grid.SheetSizes[grid.ActiveSheet].ColumnCount {
 					newColumnCount = minColumnSize
 				}
 
-				grid.RowCount = newRowCount
-				grid.ColumnCount = newColumnCount
+				grid.SheetSizes[grid.ActiveSheet].RowCount = newRowCount
+				grid.SheetSizes[grid.ActiveSheet].ColumnCount = newColumnCount
 
 				sendSheetSize(c, &grid)
 

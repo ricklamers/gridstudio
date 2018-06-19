@@ -192,7 +192,7 @@ def sheet(cell_range, data = None, headers = False):
             
             newList = list(map(convert_to_json_string, data))
 
-            arguments =  ['RANGE', 'SETLIST', cell_range]
+            arguments =  ['RANGE', 'SETLIST', '0', cell_range]
 
             # append list
             arguments = arguments + newList

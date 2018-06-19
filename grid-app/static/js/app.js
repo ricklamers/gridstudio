@@ -94,6 +94,9 @@
 		this.copySelectionCells;
 		this.isCutOperation = false;
 
+		this.activeSheet = 0;
+		this.sheetSizes = [];
+		this.sheetNames = [];
 		this.data = [];
 		this.dataFormulas = [];
 
@@ -105,7 +108,7 @@
 		this.fontStyle = "12px Arial";
 		this.fontHeight = determineFontHeight(this.fontStyle);
 
-		this.get = function(position){
+		this.get = function(position, sheet){
 
 			// undefined is reserved for out of bounds
 			if(position[0] < 0 || position[1] >= this.numColumns){
@@ -115,11 +118,15 @@
 				return undefined;
 			}
 
+			if(this.data[sheet] === undefined){
+				return "";
+			}
+
 			// do not return undefined for empty cells but an empty string (consistent with default cell values in backend)
-			if(this.data[position[0]] === undefined){
+			if(this.data[sheet][position[0]] === undefined){
 				return ""; 
 			}else{
-				var value = this.data[position[0]][position[1]];
+				var value = this.data[sheet][position[0]][position[1]];
 				if(value === undefined){
 					value = "";
 				}
@@ -131,16 +138,19 @@
 
 			for(var x = cell1[0]; x <= cell2[0]; x++){
 				for(var y = cell1[1]; y <= cell2[1]; y++){
-					data.push(this.get([x, y]));
+					data.push(this.get([x, y], this.activeSheet));
 				}
 			}
 			return data;
 		}
-		this.get_formula = function(position){
-			if(this.dataFormulas[position[0]] === undefined){
+		this.get_formula = function(position, sheet){
+			if(this.dataFormulas[sheet] == undefined){
+				return undefined;
+			}
+			else if(this.dataFormulas[sheet][position[0]] === undefined){
 				return undefined;
 			}else{
-				return this.dataFormulas[position[0]][position[1]];
+				return this.dataFormulas[sheet][position[0]][position[1]];
 			}
 		}
 		
@@ -233,13 +243,13 @@
 		}
 
 
-		this.set_formula = function(position, value, update) {
+		this.set_formula = function(position, value, update, sheet) {
 			if(value == "="){
 				value = "";
 			}
 
-			if(!this.dataFormulas[position[0]]){
-				this.dataFormulas[position[0]] = [];
+			if(!this.dataFormulas[sheet][position[0]]){
+				this.dataFormulas[sheet][position[0]] = [];
 			}
 
 			// check if value is numeric
@@ -248,19 +258,19 @@
 				value = "=" + value;
 			}
 
-			this.dataFormulas[position[0]][position[1]] = value.toString();
+			this.dataFormulas[sheet][position[0]][position[1]] = value.toString();
 			
 			if(update !== false){
-				this.wsManager.send(JSON.stringify({arguments: ["SET",this.indexToLetters(position[1]+1) + (position[0]+1), value.toString()]}));
+				this.wsManager.send(JSON.stringify({arguments: ["SET", this.indexToLetters(position[1]+1) + (position[0]+1), value.toString(), ""+sheet]}));
 			}
 		}
 
-		this.set = function(position, value){
-			if(!this.data[position[0]]){
-				this.data[position[0]] = [];
+		this.set = function(position, value, sheet){
+			if(!this.data[sheet][position[0]]){
+				this.data[sheet][position[0]] = [];
 			}
 
-			this.data[position[0]][position[1]] = value.toString();
+			this.data[sheet][position[0]][position[1]] = value.toString();
 		}
 
 		this.initTabs = function(){
@@ -439,12 +449,10 @@
 				$('.context-menu .hide').hide();
 
 				// show contextual items
-				var clickedCellPosition = _this.positionToCellLocation(event.offsetX, event.offsetY);
-
-				if(clickedCellPosition[1] == 0){
+				if(event.offsetX <= _this.sidebarSize){
 					$('.context-menu .row-only').show();
 				}
-				if(clickedCellPosition[0] == 0){
+				if(event.offsetY <= _this.sidebarSize){
 					$('.context-menu .column-only').show();
 				}
 
@@ -509,6 +517,50 @@
 				}
 			}
 		}
+		
+		// this.getSheets() = function(){
+		// 	this.wsManager.send(JSON.stringify({arguments: ["GETSHEETS"]}));
+		// }
+
+		this.setSheets = function(sheetsArray){
+
+			this.data = [];
+			this.dataFormulas = [];
+			this.sheetSizes = [];
+			this.sheetNames = [];
+
+			$('.sheet-tabs').html("");
+
+			for(var x = 0; x < sheetsArray.length; x+= 3){
+				var sheetName = sheetsArray[x];
+				var rowCount = sheetsArray[x+1];
+				var columnCount = sheetsArray[x+2];
+
+				this.sheetSizes.push([rowCount, columnCount]);
+				this.sheetNames.push(sheetName);
+
+				$('.sheet-tabs').append("<div class='sheet-tab'>"+sheetName+"</div>");
+
+				this.data.push([]);
+				this.dataFormulas.push([]);
+			}
+
+			$('.sheet-tabs .sheet-tab').eq(this.activeSheet).addClass('active');
+
+		}
+
+		this.switchSheet = function(index){
+			_this.activeSheet = index;
+			$('.sheet-tabs .sheet-tab').eq(index).addClass('active').siblings().removeClass('active');
+
+			_this.refreshView();
+		}
+
+		this.initSheetTabs = function(){
+			$('.sheet-tabs').on('click', '.sheet-tab', function(){
+				_this.switchSheet($(this).index());
+			});
+		}
 
 		this.init = function(){
 
@@ -522,6 +574,7 @@
 			this.wsManager.init();
 			this.wsManager.onconnect = function(){
 				_this.refreshView();
+				// _this.getSheets();
 				_this.fileManager.init();
 			}
 
@@ -531,6 +584,8 @@
 			this.termManager.init();
 
 			this.initTabs();
+
+			this.initSheetTabs();
 
 			this.menuInit();
 
@@ -640,7 +695,7 @@
 				this.selectedCells = [cell, cell];
 				// also fill formulabar
 
-				var formula_value = this.get_formula(cell);
+				var formula_value = this.get_formula(cell, this.activeSheet);
 				if(formula_value !== undefined){
 					this.formula_input.val(formula_value);
 				}else{
@@ -852,7 +907,7 @@
 						
 						if(_this.formula_input.is(":focus")){
 							var inputValue = _this.formula_input.val();
-							_this.set_formula(_this.selectedCells[0], inputValue);
+							_this.set_formula(_this.selectedCells[0], inputValue, true, this.activeSheet);
 							_this.formula_input.blur();
 						}
 						else if(_this.input_field.is(":focus")){
@@ -1029,7 +1084,7 @@
 		}
 
 		this.refreshDataRange = function(range){
-			this.wsManager.send('{"arguments":["GET","'+range+'"]}')
+			this.wsManager.send('{"arguments":["GET","'+range+'","'+this.activeSheet+'"]}')
 		}
 
 		this.deselect_input_field = function(set_values){
@@ -1050,7 +1105,7 @@
 
 			// position input field
 			// prefill with value in current cell
-			var formula = this.get_formula(this.selectedCells[0]);
+			var formula = this.get_formula(this.selectedCells[0], this.activeSheet);
 
 			// if formula is string, remove prefix =" and suffix "
 			if(formula && formula[0] == "=" && formula[1] == '"' && formula[formula.length-1] == '"'){
@@ -1096,7 +1151,7 @@
 				}
 			}
 
-			_this.wsManager.send(JSON.stringify({arguments: ["RANGE","SETSINGLE",  startCell+":"+endCell, ""]}));
+			_this.wsManager.send(JSON.stringify({arguments: ["RANGE","SETSINGLE",  startCell+":"+endCell, "", _this.activeSheet+""]}));
 		}
 
 		this.selectionToLowerUpper = function(selectedCells){
@@ -1135,7 +1190,7 @@
 			for(var x = 0; x < cellRangeSize[0]; x++){
 				for(var y = 0; y < cellRangeSize[1]; y++){
 					var current_cell = [cell[0] + y, cell[1] + x];
-					this.set_formula(current_cell, value);
+					this.set_formula(current_cell, value, true, this.activeSheet);
 				}
 			}
 			
@@ -1145,7 +1200,7 @@
 		this.findFirstTypeCell = function(startCell, direction, cb){
 
 			this.callbacks.jumpCellCallback = cb;
-			this.wsManager.send(JSON.stringify({arguments: ["JUMPCELL", startCell, direction]}));
+			this.wsManager.send(JSON.stringify({arguments: ["JUMPCELL", startCell, direction, ""+this.activeSheet]}));
 
 			// var currentCell = startCell;
 
@@ -2354,7 +2409,7 @@
 		}
 		
 		this.updateInputFormula = function(){
-			this.formula_input.val(this.get_formula(this.selectedCells[0]));
+			this.formula_input.val(this.get_formula(this.selectedCells[0], this.activeSheet));
 		}
 
 		this.cellRangeDistance = function(cell1, cell2){
@@ -2502,7 +2557,7 @@
 					var centeringOffset = ((this.rowHeights(i) + 2 - this.fontHeight)/2) + 1;
 
 					// get data
-					var cell_data = this.get([i, d]);
+					var cell_data = this.get([i, d], this.activeSheet);
 
 					var cellMaxWidth = this.columnWidths(d) - this.textPadding - 2; // minus borders
 

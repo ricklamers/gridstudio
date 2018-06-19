@@ -58,7 +58,7 @@
 
                         if (json[0] == 'SET'){
             
-                            for(var i = 1; i < json.length; i += 3){
+                            for(var i = 1; i < json.length; i += 4){
                                 var rowText = json[i].replace(/^\D+/g, '');
                                 var rowNumber = parseInt(rowText)-1;
                 
@@ -66,12 +66,19 @@
                                 var columnNumber = _this.app.lettersToIndex(columnText)-1;
                 
                                 var position = [rowNumber, columnNumber];
-                                _this.app.set(position,json[i+1]);
+                                _this.app.set(position,json[i+1], parseInt(json[i+3]));
                                 
                                 // make sure to not trigger a re-send
                                 // filter empty response
-                                _this.app.set_formula(position, json[i+2], false);
+                                _this.app.set_formula(position, json[i+2], false, parseInt(json[i+3]));
                             }
+                        }
+                        else if(json[0] == "SETSHEETS"){
+                        
+                            // each element contains: "name", "rowCount", "columnCount"
+                            json.splice(0,1);
+                            _this.app.setSheets(json);
+
                         }
                         else if(json[0] == "INTERPRETER"){
                             var consoleText = json[1];

@@ -27,6 +27,7 @@ type DynamicValue struct {
 	DataString    string
 	DataBool      bool
 	DataFormula   string
+	SheetIndex    int8
 	DependIn      *map[string]bool
 	DependOut     *map[string]bool
 	DependInTemp  *map[string]bool
@@ -103,9 +104,25 @@ func getData(ref1 DynamicValue, grid *Grid) DynamicValue {
 	return (grid.Data)[ref1.DataString]
 }
 
-func getDataFromRef(ref string, grid *Grid) DynamicValue {
-	ref = strings.Replace(ref, "$", "", -1)
+func getDataFromRef(reference Reference, grid *Grid) DynamicValue {
+	return grid.Data[getMapIndexFromReference(reference)]
+}
+
+func checkIfRefExists(reference Reference, grid *Grid) bool {
+	if _, ok := grid.Data[getMapIndexFromReference(reference)]; ok {
+		return true
+	}
+	return false
+}
+
+func getDataByNormalRef(ref string, grid *Grid) DynamicValue {
 	return grid.Data[ref]
+}
+
+func setDataByRef(reference Reference, dv DynamicValue, grid *Grid) {
+	dv.SheetIndex = reference.SheetIndex
+	mapIndex := getMapIndexFromReference(reference)
+	grid.Data[mapIndex] = dv
 }
 
 func findInMap(amap map[int]string, value string) bool {
@@ -360,8 +377,9 @@ func cellRangeToCells(cellRange string) []string {
 	return references
 }
 
-func setDependencies(index string, dv DynamicValue, grid *Grid) DynamicValue {
+func setDependencies(reference Reference, dv DynamicValue, grid *Grid) DynamicValue {
 
+	standardIndex := getMapIndexFromReference(reference)
 	var references map[string]bool
 	// explosiveFormulas never have dependencies
 	if dv.ValueType == DynamicValueTypeExplosiveFormula {
@@ -371,41 +389,47 @@ func setDependencies(index string, dv DynamicValue, grid *Grid) DynamicValue {
 	}
 
 	// every cell that this depended on needs to get removed
-	for ref := range *(grid.Data[index]).DependIn {
-		delete(*(grid.Data)[ref].DependOut, index)
+	referenceDv := getDataFromRef(reference, grid)
+
+	for ref := range *referenceDv.DependIn {
+		delete(*getDataByNormalRef(ref, grid).DependOut, standardIndex)
 	}
 
 	for ref, inSet := range references {
 
 		// when findReferences is called and a reference is not in grid.Data[] the reference is invalid
-		if _, ok := grid.Data[ref]; !ok {
-			dv.DataFormula = "\"#REF: " + ref + "\""
-		} else {
+		thisRef := Reference{String: ref, SheetIndex: reference.SheetIndex}
+		if checkIfRefExists(thisRef, grid) {
+			thisDv := getDataFromRef(thisRef, grid)
+
 			// for dependency checking get rid of dollar signs in references
-			ref = strings.Replace(ref, "$", "", -1)
+			thisDvStandardRef := getMapIndexFromReference(thisRef)
 
 			if inSet {
-				if ref == index {
+				if ref == reference.String {
 					// cell is dependent on self
 					fmt.Println("Circular reference error!")
 					dv.ValueType = DynamicValueTypeString
 					dv.DataFormula = "\"#Error, circular reference: " + dv.DataFormula + "\""
 				} else {
 
-					(*dv.DependIn)[ref] = true
-					(*(grid.Data)[ref].DependOut)[index] = true
+					(*dv.DependIn)[thisDvStandardRef] = true
+					(*thisDv.DependOut)[standardIndex] = true
 
 					// copy
-					copyToDirty((grid.Data)[ref], ref, grid)
+					copyToDirty(thisDv, thisDvStandardRef, grid)
 
 				}
 			}
+
+		} else {
+			dv.DataFormula = "\"#REF: " + ref + "\""
 		}
 
 	}
 
 	// always add self to dirty (after setting references DependIn for self - loop above)
-	copyToDirty(dv, index, grid)
+	copyToDirty(dv, standardIndex, grid)
 
 	// mark all cells dirty that depend on this cell
 	for ref, inSet := range *dv.DependOut {
@@ -460,7 +484,7 @@ func contains(s []string, e string) bool {
 	return false
 }
 
-func parse(formula DynamicValue, grid *Grid, targetRef string) DynamicValue {
+func parse(formula DynamicValue, grid *Grid, targetRef Reference) DynamicValue {
 
 	if formula.ValueType == DynamicValueTypeFloat {
 		return formula
@@ -549,10 +573,10 @@ func parse(formula DynamicValue, grid *Grid, targetRef string) DynamicValue {
 						if len(identifiedOperator) > 0 {
 
 							// add to elements everything in buffer before operator
-							elements = append(elements, DynamicValue{ValueType: DynamicValueTypeFormula, DataFormula: strings.TrimSpace(buffer.String())})
+							elements = append(elements, DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeFormula, DataFormula: strings.TrimSpace(buffer.String())})
 
 							// add operator to elements
-							elements = append(elements, DynamicValue{ValueType: DynamicValueTypeOperator, DataFormula: identifiedOperator})
+							elements = append(elements, DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeOperator, DataFormula: identifiedOperator})
 
 							skipCharacters = len(identifiedOperator) - 1
 
@@ -578,7 +602,7 @@ func parse(formula DynamicValue, grid *Grid, targetRef string) DynamicValue {
 
 	}
 
-	elements = append(elements, DynamicValue{ValueType: DynamicValueTypeFormula, DataFormula: strings.TrimSpace(buffer.String())})
+	elements = append(elements, DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeFormula, DataFormula: strings.TrimSpace(buffer.String())})
 
 	// if first and last element in elements are parens, remove parens
 	for k, e := range elements {
@@ -656,7 +680,7 @@ func parse(formula DynamicValue, grid *Grid, targetRef string) DynamicValue {
 			argumentFormulas = []DynamicValue{}
 
 			for _, e := range arguments {
-				argumentFormulas = append(argumentFormulas, parse(DynamicValue{ValueType: DynamicValueTypeFormula, DataFormula: e}, grid, targetRef))
+				argumentFormulas = append(argumentFormulas, parse(DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeFormula, DataFormula: e}, grid, targetRef))
 			}
 
 			return executeCommand(command, argumentFormulas, grid, targetRef)
@@ -673,12 +697,12 @@ func parse(formula DynamicValue, grid *Grid, targetRef string) DynamicValue {
 					log.Fatal("Wrong reference specifier")
 
 				} else {
-					return DynamicValue{ValueType: DynamicValueTypeReference, DataString: singleElement.DataFormula}
+					return DynamicValue{ValueType: DynamicValueTypeReference, SheetIndex: targetRef.SheetIndex, DataString: singleElement.DataFormula}
 				}
 
 			} else if singleElement.DataFormula[0:1] == "\"" && singleElement.DataFormula[len(singleElement.DataFormula)-1:len(singleElement.DataFormula)] == "\"" {
 
-				return DynamicValue{ValueType: DynamicValueTypeString, DataString: singleElement.DataFormula[1 : len(singleElement.DataFormula)-1]}
+				return DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeString, DataString: singleElement.DataFormula[1 : len(singleElement.DataFormula)-1]}
 
 			} else if numberOnlyFilter.MatchString(singleElement.DataFormula) {
 
@@ -687,10 +711,10 @@ func parse(formula DynamicValue, grid *Grid, targetRef string) DynamicValue {
 					log.Fatal(err)
 				}
 
-				return DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: float64(floatValue)}
+				return DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeFloat, DataFloat: float64(floatValue)}
 
 			} else if singleElement.DataFormula == "FALSE" || singleElement.DataFormula == "TRUE" {
-				newDv := DynamicValue{ValueType: DynamicValueTypeBool, DataBool: false}
+				newDv := DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeBool, DataBool: false}
 				if singleElement.DataFormula == "TRUE" {
 					newDv.DataBool = true
 				}
@@ -698,7 +722,7 @@ func parse(formula DynamicValue, grid *Grid, targetRef string) DynamicValue {
 			} else {
 
 				// when references contain dollar signs, remove them here
-				return getDataFromRef(singleElement.DataFormula, grid)
+				return getDataFromRef(Reference{String: singleElement.DataFormula, SheetIndex: targetRef.SheetIndex}, grid)
 
 			}
 
@@ -1141,7 +1165,7 @@ func getDataRange(dv DynamicValue, grid *Grid) []DynamicValue {
 
 		for x := column1; x <= column2; x++ {
 			for y := row1; y <= row2; y++ {
-				dvs = append(dvs, (grid.Data)[indexToLetters(x)+strconv.Itoa(y)])
+				dvs = append(dvs, getDataFromRef(Reference{String: indexToLetters(x) + strconv.Itoa(y), SheetIndex: dv.SheetIndex}, grid))
 			}
 		}
 
@@ -1323,12 +1347,12 @@ func isExplosiveFormula(formula string) bool {
 	return false
 }
 
-func olsExplosive(arguments []DynamicValue, grid *Grid, targetRef string) DynamicValue {
+func olsExplosive(arguments []DynamicValue, grid *Grid, targetRef Reference) DynamicValue {
 
 	// TESTING
 	// set the cell below and right to this cell for testing
-	targetCellColumn := getReferenceColumnIndex(targetRef)
-	targetCellRow := getReferenceRowIndex(targetRef)
+	targetCellColumn := getReferenceColumnIndex(targetRef.String)
+	targetCellRow := getReferenceRowIndex(targetRef.String)
 
 	// Algorithm for OLS
 
@@ -1420,41 +1444,41 @@ func olsExplosive(arguments []DynamicValue, grid *Grid, targetRef string) Dynami
 	// y_predicts
 	for key, yPredict := range yPredicts {
 		thisIndex := indexToLetters(targetCellColumn+1) + strconv.Itoa(targetCellRow+key+1) // new index is below the targetRef (two because labels)
-		explosionSetValue(thisIndex, DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: yPredict}, grid)
+		explosionSetValue(Reference{String: thisIndex, SheetIndex: targetRef.SheetIndex}, DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: yPredict}, grid)
 	}
 	// residuals
 	for key, residual := range residuals {
 		thisIndex := indexToLetters(targetCellColumn+2) + strconv.Itoa(targetCellRow+key+1) // new index is below the targetRef (two because labels)
-		explosionSetValue(thisIndex, DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: residual}, grid)
+		explosionSetValue(Reference{String: thisIndex, SheetIndex: targetRef.SheetIndex}, DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: residual}, grid)
 	}
 
 	// co-efficients
 	for i := 0; i < independentsCount+1; i++ { // also beta 1 for intercept
 
 		coefficientLabelIndex := indexToLetters(targetCellColumn+3) + strconv.Itoa(targetCellRow+i)
-		explosionSetValue(coefficientLabelIndex, DynamicValue{ValueType: DynamicValueTypeString, DataString: "beta " + strconv.Itoa(i+1)}, grid)
+		explosionSetValue(Reference{String: coefficientLabelIndex, SheetIndex: targetRef.SheetIndex}, DynamicValue{ValueType: DynamicValueTypeString, DataString: "beta " + strconv.Itoa(i+1)}, grid)
 
 		coefficientIndex := indexToLetters(targetCellColumn+4) + strconv.Itoa(targetCellRow+i)
-		explosionSetValue(coefficientIndex, DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: B.Get(i, 0)}, grid)
+		explosionSetValue(Reference{String: coefficientIndex, SheetIndex: targetRef.SheetIndex}, DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: B.Get(i, 0)}, grid)
 	}
 
 	// labels
 	yPredictsLabelIndex := indexToLetters(targetCellColumn+1) + strconv.Itoa(targetCellRow)
-	explosionSetValue(yPredictsLabelIndex, DynamicValue{ValueType: DynamicValueTypeString, DataString: "y hat"}, grid)
+	explosionSetValue(Reference{String: yPredictsLabelIndex, SheetIndex: targetRef.SheetIndex}, DynamicValue{ValueType: DynamicValueTypeString, DataString: "y hat"}, grid)
 
 	residualsLabelIndex := indexToLetters(targetCellColumn+2) + strconv.Itoa(targetCellRow)
-	explosionSetValue(residualsLabelIndex, DynamicValue{ValueType: DynamicValueTypeString, DataString: "residuals"}, grid)
+	explosionSetValue(Reference{String: residualsLabelIndex, SheetIndex: targetRef.SheetIndex}, DynamicValue{ValueType: DynamicValueTypeString, DataString: "residuals"}, grid)
 
-	olsDv := grid.Data[targetRef]
+	olsDv := getDataFromRef(targetRef, grid)
 	olsDv.DataString = "OLS Regression"
 
 	// OLS also returns a DynamicValue itself
 	return olsDv
 }
 
-func explosionSetValue(index string, dataDv DynamicValue, grid *Grid) {
+func explosionSetValue(ref Reference, dataDv DynamicValue, grid *Grid) {
 
-	OriginalDependOut := grid.Data[index].DependOut
+	OriginalDependOut := getDataFromRef(ref, grid).DependOut
 
 	NewDependIn := make(map[string]bool)
 	dataDv.DependIn = &NewDependIn       // new dependin (new formula)
@@ -1472,8 +1496,7 @@ func explosionSetValue(index string, dataDv DynamicValue, grid *Grid) {
 		}
 	}
 
-	grid.Data[index] = setDependencies(index, dataDv, grid)
-
+	setDataByRef(ref, setDependencies(ref, dataDv, grid), grid)
 }
 
 func abs(arguments []DynamicValue) DynamicValue {
@@ -1485,7 +1508,7 @@ func abs(arguments []DynamicValue) DynamicValue {
 	dv.DataFloat = math.Abs(dv.DataFloat)
 	return dv
 }
-func executeCommand(command string, arguments []DynamicValue, grid *Grid, targetRef string) DynamicValue {
+func executeCommand(command string, arguments []DynamicValue, grid *Grid, targetRef Reference) DynamicValue {
 
 	switch command := command; command {
 	case "SUM":

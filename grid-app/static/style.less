@@ -1,4 +1,4 @@
-html, body{
+html, body {
 	margin: 0;
 	height: 100%;
 	font-family: "Arial", sans-serif;
@@ -6,13 +6,13 @@ html, body{
 	overflow: hidden;
 }
 
-*{
+* {
 	box-sizing: border-box;
 }
 
 @padding: 5px;
 
-.formula-bar{
+.formula-bar {
 
 	padding: @padding;
 	padding-top: 0;
@@ -24,7 +24,7 @@ html, body{
 }
 
 
-body{
+body {
 	
 	display: flex;
 	flex-direction: column;
@@ -113,13 +113,10 @@ body{
 		}
 	}
 	div-sheet {
-		position: absolute;
-		left:0;
-		top:0;
-		width: 61.8%;
-		height: 100%;
+		width: 100%;
 		overflow-y: scroll;
 		overflow-x: scroll;
+		flex: 1;
 
 		canvas{
 			position: fixed;
@@ -131,6 +128,32 @@ body{
 
 .plotly-notifier{
 	font-family: "Open Sans", sans-serif !important;
+}
+
+.left-panel {
+	display: flex;
+	flex-direction: column;
+	position: absolute;
+	height:100%;
+	width: 61.8%;
+
+	.sheet-tabs {
+		height: 30px;
+		.sheet-tab {
+			display: flex;
+			float: left;
+			height: 100%;
+			justify-content: center;
+			align-items: center;
+			padding: 0 10px;
+			cursor: pointer;
+
+			&.active, &:hover {
+				background: #333;
+				color:#fff;
+			}
+		}
+	}
 }
 
 .context-menu {
