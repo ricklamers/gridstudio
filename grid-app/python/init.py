@@ -212,7 +212,7 @@ def sheet(cell_range, data = None, headers = False):
                 # string meant as string, escape
                 data = "\"" + data + "\""
 
-            data = {'arguments': ['RANGE', 'SETSINGLE', cell_range, ''.join(["=",str(data)])]}
+            data = {'arguments': ['RANGE', 'SETSINGLE', '0', cell_range, ''.join(["=",str(data)])]}
             data = ''.join(['#PARSE#', json.dumps(data),'#ENDPARSE#'])
             real_print(data, flush=True, end='')
     
@@ -223,7 +223,7 @@ def sheet(cell_range, data = None, headers = False):
             cell_range = ':'.join([cell_range, cell_range])
 
         # in blocking fashion get latest data of range from Go
-        real_print("#DATA#" + cell_range + '#ENDPARSE#', end='', flush=True)
+        real_print("#DATA#" + '0!'+ cell_range + '#ENDPARSE#', end='', flush=True)
         getAndExecuteInputOnce()
         # if everything works, the exec command has filled sheet_data with the appropriate data
         # return data range as arrays

@@ -174,17 +174,17 @@ func parsePythonOutput(bufferHolder bytes.Buffer, pythonIn io.WriteCloser, c *Cl
 					// data receive request
 					cellRangeString := newString[6:]
 
-					cells := cellRangeToCells(cellRangeString)
+					cells := cellRangeToCells(getReferenceRangeFromMapIndex(cellRangeString))
 
 					var commandBuf bytes.Buffer
 
 					for _, e := range cells {
 
-						valueDv := c.grid.Data[e]
+						valueDv := getDataFromRef(e, c.grid)
 						value := convertToString(valueDv).DataString
 						// for each cell get data
 						commandBuf.WriteString("sheet_data[\"")
-						commandBuf.WriteString(e)
+						commandBuf.WriteString(getMapIndexFromReference(e))
 						commandBuf.WriteString("\"] = ")
 
 						if valueDv.ValueType == DynamicValueTypeString {

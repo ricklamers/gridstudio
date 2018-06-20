@@ -31,6 +31,12 @@
 	function getMinOfArray(numArray) {
 		return Math.min.apply(null, numArray);
 	}
+
+	function CutCopyPasteSelection(cells, sheetIndex, type){
+		this.cells = cells;
+		this.sheetIndex = sheetIndex;
+		this.type = type;
+	}
 	
 	function dataURLtoBytes(url){
 		return (fetch(url)
@@ -91,8 +97,7 @@
 		this.pixelRatio = window.devicePixelRatio;
 
 		this.selectedCells = [[0,0],[0,0]];
-		this.copySelectionCells;
-		this.isCutOperation = false;
+		this.cutCopyPasteSelection;
 
 		this.activeSheet = 0;
 		this.sheetSizes = [];
@@ -494,26 +499,24 @@
 		}
 
 		this.cutSelection = function(){
-			this.copySelectionCells = this.getSelectedCellsInOrder();
-			this.isCutOperation = true;
+			this.cutCopyPasteSelection = new CutCopyPasteSelection(this.getSelectedCellsInOrder(), this.activeSheet, 'cut');
 		}
 
 		this.copySelection = function(){
-			this.copySelectionCells = this.getSelectedCellsInOrder();
+			this.cutCopyPasteSelection = new CutCopyPasteSelection(this.getSelectedCellsInOrder(), this.activeSheet, 'copy');
 		}
 		this.pasteSelection = function(){
-			if(this.copySelectionCells){
+			if(this.cutCopyPasteSelection){
 
 				// send copy command
-				var sourceRange = this.cellArrayToStringRange(this.copySelectionCells);
+				var sourceRange = this.cellArrayToStringRange(this.cutCopyPasteSelection.cells);
 				var destinationRange = this.cellArrayToStringRange(this.getSelectedCellsInOrder());
 
-				if(this.isCutOperation){
-					this.isCutOperation = false;
-					this.copySelectionCells = undefined;
-					this.wsManager.send(JSON.stringify({arguments: ["CUT", sourceRange, destinationRange]}))
+				if(this.cutCopyPasteSelection.type == 'cut'){
+					this.wsManager.send(JSON.stringify({arguments: ["CUT", sourceRange, this.cutCopyPasteSelection.sheetIndex + "", destinationRange, this.activeSheet+""]}))
+					this.cutCopyPasteSelection = undefined;
 				}else{
-					this.wsManager.send(JSON.stringify({arguments: ["COPY", sourceRange, destinationRange]}))
+					this.wsManager.send(JSON.stringify({arguments: ["COPY", sourceRange, this.cutCopyPasteSelection.sheetIndex + "", destinationRange, this.activeSheet+""]}))
 				}
 			}
 		}
@@ -547,11 +550,17 @@
 
 			$('.sheet-tabs .sheet-tab').eq(this.activeSheet).addClass('active');
 
+			// switch to first sheet
+			this.switchSheet(0);
 		}
 
 		this.switchSheet = function(index){
 			_this.activeSheet = index;
 			$('.sheet-tabs .sheet-tab').eq(index).addClass('active').siblings().removeClass('active');
+
+			_this.wsManager.send(JSON.stringify({arguments: ["SWITCHSHEET", _this.activeSheet+""]}))
+
+			this.setSheetSize(_this.sheetSizes[_this.activeSheet][0], _this.sheetSizes[_this.activeSheet][1]);
 
 			_this.refreshView();
 		}
@@ -1057,10 +1066,8 @@
 			this.numColumns = columns;
 
 			this.computeScrollBounds();
-
 			this.sizeSizer();
 
-			this.refreshView();
 		}
 
 		this.cellArrayToStringRange = function(cellRange){
@@ -1151,7 +1158,7 @@
 				}
 			}
 
-			_this.wsManager.send(JSON.stringify({arguments: ["RANGE","SETSINGLE",  startCell+":"+endCell, "", _this.activeSheet+""]}));
+			_this.wsManager.send(JSON.stringify({arguments: ["RANGE","SETSINGLE",  startCell+":"+endCell, _this.activeSheet+"", ""]}));
 		}
 
 		this.selectionToLowerUpper = function(selectedCells){

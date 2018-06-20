@@ -108,6 +108,49 @@ func getDataFromRef(reference Reference, grid *Grid) DynamicValue {
 	return grid.Data[getMapIndexFromReference(reference)]
 }
 
+func getRefFromString(formula string, sheetIndex int8, grid *Grid) Reference {
+	if !strings.Contains(formula, "!") {
+		return Reference{String: formula, SheetIndex: sheetIndex}
+	} else {
+		splittedFormula := strings.Split(formula, "!")
+		sheetName := strings.Replace(splittedFormula[0], "'", "", -1)
+		return Reference{String: splittedFormula[1], SheetIndex: grid.SheetNames[sheetName]}
+	}
+}
+func getRangeReferenceFromString(formula string, sheetIndex int8, grid *Grid) ReferenceRange {
+	if !strings.Contains(formula, "!") {
+		return ReferenceRange{String: formula, SheetIndex: sheetIndex}
+	} else {
+		splittedFormula := strings.Split(formula, "!")
+		sheetName := strings.Replace(splittedFormula[0], "'", "", -1)
+		return ReferenceRange{String: splittedFormula[1], SheetIndex: grid.SheetNames[sheetName]}
+	}
+}
+
+func referenceRangeToRelativeString(referenceRange ReferenceRange, sheetIndex int8, grid *Grid) string {
+	if referenceRange.SheetIndex == sheetIndex {
+		return referenceRange.String
+	} else {
+		return getPrefixFromSheetName(grid.SheetList[referenceRange.SheetIndex]) + "!" + referenceRange.String
+	}
+}
+
+func referenceToRelativeString(reference Reference, sheetIndex int8, grid *Grid) string {
+	if reference.SheetIndex == sheetIndex {
+		return reference.String
+	} else {
+		return getPrefixFromSheetName(grid.SheetList[reference.SheetIndex]) + "!" + reference.String
+	}
+}
+
+func getPrefixFromSheetName(sheetName string) string {
+	if strings.Contains(sheetName, " ") {
+		return "'" + sheetName + "'"
+	} else {
+		return sheetName
+	}
+}
+
 func checkIfRefExists(reference Reference, grid *Grid) bool {
 	if _, ok := grid.Data[getMapIndexFromReference(reference)]; ok {
 		return true
@@ -228,48 +271,43 @@ func findReferenceStrings(formula string) []string {
 	return references
 }
 
-func findRanges(formula string) []string {
+func findRanges(formula string, sheetIndex int8) []ReferenceRange {
 
-	rangeReferences := []string{}
-	references := findReferenceStrings(formula)
+	rangeReferences := []ReferenceRange{}
+	referenceStrings := findReferenceStrings(formula)
 
 	// expand references when necessary
-	for _, reference := range references {
-
-		if strings.Contains(reference, ":") {
-			rangeReferences = append(rangeReferences, reference)
+	for _, referenceString := range referenceStrings {
+		if strings.Contains(referenceString, ":") {
+			rangeReferences = append(rangeReferences, ReferenceRange{String: referenceString, SheetIndex: sheetIndex})
 		}
-
 	}
 
 	return rangeReferences
 }
 
-func findReferences(formula string, includeRanges bool) map[string]bool {
+func findReferences(formula string, sheetIndex int8, includeRanges bool, grid *Grid) map[Reference]bool {
 
-	references := findReferenceStrings(formula)
+	referenceStrings := findReferenceStrings(formula)
+
+	references := []Reference{}
 
 	// expand references when necessary
-	for k, reference := range references {
+	for _, referenceString := range referenceStrings {
 
-		if strings.Contains(reference, ":") {
-
-			// remove from references
-			// split operation (if 1 just replace with empty, if bigger replace) else, remove reference from references
-			if len(references) > 1 {
-				references = append(references[:k], references[k+1:]...)
-			} else {
-				references = []string{}
-			}
+		if strings.Contains(referenceString, ":") {
 
 			if includeRanges {
-				references = append(references, cellRangeToCells(reference)...)
+				references = append(references, cellRangeToCells(getRangeReferenceFromString(referenceString, sheetIndex, grid))...)
 			}
+		} else {
+
+			references = append(references, getRefFromString(referenceString, sheetIndex, grid))
 		}
 
 	}
 
-	finalMap := make(map[string]bool)
+	finalMap := make(map[Reference]bool)
 
 	for _, reference := range references {
 		finalMap[reference] = true
@@ -348,10 +386,10 @@ func referencesToUpperCase(formula string) string {
 	return formula
 }
 
-func cellRangeToCells(cellRange string) []string {
-	references := []string{}
+func cellRangeToCells(referenceRange ReferenceRange) []Reference {
+	references := []Reference{}
 
-	cell1Row, cell1Column, cell2Row, cell2Column := cellRangeBoundaries(cellRange)
+	cell1Row, cell1Column, cell2Row, cell2Column := cellRangeBoundaries(referenceRange.String)
 
 	// illegal argument, cell1Row should always be lower
 	if cell1Row > cell2Row {
@@ -370,7 +408,7 @@ func cellRangeToCells(cellRange string) []string {
 
 	for x := cell1Column; x <= cell2Column; x++ {
 		for y := cell1Row; y <= cell2Row; y++ {
-			references = append(references, indexToLetters(x)+strconv.Itoa(y))
+			references = append(references, Reference{String: indexToLetters(x) + strconv.Itoa(y), SheetIndex: referenceRange.SheetIndex})
 		}
 	}
 
@@ -380,12 +418,12 @@ func cellRangeToCells(cellRange string) []string {
 func setDependencies(reference Reference, dv DynamicValue, grid *Grid) DynamicValue {
 
 	standardIndex := getMapIndexFromReference(reference)
-	var references map[string]bool
+	var references map[Reference]bool
 	// explosiveFormulas never have dependencies
 	if dv.ValueType == DynamicValueTypeExplosiveFormula {
-		references = make(map[string]bool)
+		references = make(map[Reference]bool)
 	} else {
-		references = findReferences(dv.DataFormula, true)
+		references = findReferences(dv.DataFormula, dv.SheetIndex, true, grid)
 	}
 
 	// every cell that this depended on needs to get removed
@@ -395,10 +433,9 @@ func setDependencies(reference Reference, dv DynamicValue, grid *Grid) DynamicVa
 		delete(*getDataByNormalRef(ref, grid).DependOut, standardIndex)
 	}
 
-	for ref, inSet := range references {
+	for thisRef, inSet := range references {
 
 		// when findReferences is called and a reference is not in grid.Data[] the reference is invalid
-		thisRef := Reference{String: ref, SheetIndex: reference.SheetIndex}
 		if checkIfRefExists(thisRef, grid) {
 			thisDv := getDataFromRef(thisRef, grid)
 
@@ -406,7 +443,7 @@ func setDependencies(reference Reference, dv DynamicValue, grid *Grid) DynamicVa
 			thisDvStandardRef := getMapIndexFromReference(thisRef)
 
 			if inSet {
-				if ref == reference.String {
+				if thisRef == reference {
 					// cell is dependent on self
 					fmt.Println("Circular reference error!")
 					dv.ValueType = DynamicValueTypeString
@@ -423,7 +460,7 @@ func setDependencies(reference Reference, dv DynamicValue, grid *Grid) DynamicVa
 			}
 
 		} else {
-			dv.DataFormula = "\"#REF: " + ref + "\""
+			dv.DataFormula = "\"#REF: " + referenceToRelativeString(thisRef, reference.SheetIndex, grid) + "\""
 		}
 
 	}
@@ -473,6 +510,15 @@ func copyToDirty(dv DynamicValue, index string, grid *Grid) {
 
 	}
 
+}
+
+func containsReferences(s []Reference, e Reference) bool {
+	for _, a := range s {
+		if a == e {
+			return true
+		}
+	}
+	return false
 }
 
 func contains(s []string, e string) bool {
@@ -722,7 +768,7 @@ func parse(formula DynamicValue, grid *Grid, targetRef Reference) DynamicValue {
 			} else {
 
 				// when references contain dollar signs, remove them here
-				return getDataFromRef(Reference{String: singleElement.DataFormula, SheetIndex: targetRef.SheetIndex}, grid)
+				return getDataFromRef(getRefFromString(singleElement.DataFormula, targetRef.SheetIndex, grid), grid)
 
 			}
 

@@ -97,6 +97,7 @@
                             
                         }else if(json[0] == "SHEETSIZE"){
                             _this.app.setSheetSize(parseInt(json[1]),parseInt(json[2]));
+                            _this.app.refreshView();
                         }
                         else if(json[0] == "SAVED"){
                 			alert("Saved workspace");
