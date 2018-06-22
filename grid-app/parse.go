@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 
 	matrix "github.com/skelterjohn/go.matrix"
 )
@@ -198,6 +199,7 @@ func findReferenceStrings(formula string) []string {
 
 	// loop over string, if double quote is found, ignore input for references,
 	quoteLevel := 0
+	singleQuoteLevel := 0
 	previousChar := ""
 
 	var buf bytes.Buffer
@@ -215,7 +217,17 @@ func findReferenceStrings(formula string) []string {
 			}
 		}
 
-		if quoteLevel == 0 {
+		if c == '\'' && singleQuoteLevel == 0 {
+			singleQuoteLevel++
+		} else if c == '\'' && singleQuoteLevel == 1 {
+			singleQuoteLevel--
+		}
+
+		if quoteLevel == 0 && singleQuoteLevel == 1 {
+			buf.WriteString(char)
+		}
+
+		if quoteLevel == 0 && singleQuoteLevel == 0 {
 
 			// assume everything not in quotes is a reference
 			// if we find open brace it must be a function name
@@ -236,9 +248,7 @@ func findReferenceStrings(formula string) []string {
 			// edge case for number, if first char of buffer is number, can't be reference
 			if buf.Len() == 0 {
 
-				_, err := strconv.Atoi(char)
-
-				if err == nil || char == "." { // check for both numbers and . character
+				if unicode.IsDigit(c) || char == "." { // check for both numbers and . character
 
 					// found number can't be reference
 					buf.Reset()

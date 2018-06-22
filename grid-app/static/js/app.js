@@ -97,6 +97,8 @@
 		this.pixelRatio = window.devicePixelRatio;
 
 		this.selectedCells = [[0,0],[0,0]];
+		this.selectedCellsPerSheet = [];
+
 		this.cutCopyPasteSelection;
 
 		this.activeSheet = 0;
@@ -138,12 +140,12 @@
 				return value;
 			}
 		}
-		this.get_range = function(cell1, cell2) {
+		this.get_range = function(cell1, cell2, sheetIndex) {
 			var data = [];
 
 			for(var x = cell1[0]; x <= cell2[0]; x++){
 				for(var y = cell1[1]; y <= cell2[1]; y++){
-					data.push(this.get([x, y], this.activeSheet));
+					data.push(this.get([x, y], sheetIndex));
 				}
 			}
 			return data;
@@ -175,12 +177,12 @@
 			// refresh data only on initial plot
 			if(x_range.length > 0){
 				var rangeString = this.cellArrayToStringRange([x_range[0],x_range[1]]);
-				this.refreshDataRange(rangeString);
+				this.refreshDataRange(rangeString, plot.sheetIndex);
 			}
 
 			if(y_range.length > 0){
 				var rangeString = this.cellArrayToStringRange([y_range[0],y_range[1]]);
-				this.refreshDataRange(rangeString);
+				this.refreshDataRange(rangeString, plot.sheetIndex);
 			}
 
 		}
@@ -425,7 +427,7 @@
 			var columns = parseInt(prompt("Column count:", this.numColumns));
 
 			if(!isNaN(rows) && !isNaN(columns) && rows >= 1 && columns >= 1){
-				this.wsManager.send(JSON.stringify({arguments:["SETSIZE",""+rows,""+columns]}))
+				this.wsManager.send(JSON.stringify({arguments:["SETSIZE",""+rows,""+columns, ""+this.activeSheet]}))
 			}
 
 		};
@@ -459,6 +461,21 @@
 				}
 				if(event.offsetY <= _this.sidebarSize){
 					$('.context-menu .column-only').show();
+				}
+
+				// make sure contextMenu is always in view
+				var contextMenuHeight = $('.context-menu').outerHeight();
+				var contextMenuWidth = $('.context-menu').outerWidth();
+				if(contextMenuHeight + event.clientY > $(window).height()){
+					$(".context-menu").css({
+						top: $(window).height() - contextMenuHeight + "px"
+					});
+				}
+
+				if(contextMenuWidth + event.clientX > $(window).width()){
+					$(".context-menu").css({
+						left: $(window).width() - contextMenuWidth + "px"
+					});
 				}
 
 			});
@@ -531,43 +548,66 @@
 			this.dataFormulas = [];
 			this.sheetSizes = [];
 			this.sheetNames = [];
+			this.selectedCellsPerSheet = [];
 
-			$('.sheet-tabs').html("");
+			$('.sheet-tabs-holder').html("");
 
 			for(var x = 0; x < sheetsArray.length; x+= 3){
 				var sheetName = sheetsArray[x];
-				var rowCount = sheetsArray[x+1];
-				var columnCount = sheetsArray[x+2];
+				var rowCount = parseInt(sheetsArray[x+1]);
+				var columnCount = parseInt(sheetsArray[x+2]);
 
 				this.sheetSizes.push([rowCount, columnCount]);
 				this.sheetNames.push(sheetName);
 
-				$('.sheet-tabs').append("<div class='sheet-tab'>"+sheetName+"</div>");
+				$('.sheet-tabs-holder').append("<div class='sheet-tab'>"+sheetName+"</div>");
 
 				this.data.push([]);
 				this.dataFormulas.push([]);
+				this.selectedCellsPerSheet.push([[0,0],[0,0]]);
 			}
 
-			$('.sheet-tabs .sheet-tab').eq(this.activeSheet).addClass('active');
+			$('.sheet-tabs-holder .sheet-tab').eq(this.activeSheet).addClass('active');
 
 			// switch to first sheet
 			this.switchSheet(0);
 		}
 
 		this.switchSheet = function(index){
-			_this.activeSheet = index;
+
+			// store current selectedCells in selectedCellsPerSheet
+			this.selectedCellsPerSheet[this.activeSheet] = this.selectedCells;
+			this.activeSheet = index;
+			this.selectedCells = this.selectedCellsPerSheet[this.activeSheet];
+
 			$('.sheet-tabs .sheet-tab').eq(index).addClass('active').siblings().removeClass('active');
 
-			_this.wsManager.send(JSON.stringify({arguments: ["SWITCHSHEET", _this.activeSheet+""]}))
+			this.wsManager.send(JSON.stringify({arguments: ["SWITCHSHEET", this.activeSheet+""]}))
 
-			this.setSheetSize(_this.sheetSizes[_this.activeSheet][0], _this.sheetSizes[_this.activeSheet][1]);
+			this.setSheetSize(this.sheetSizes[this.activeSheet][0], this.sheetSizes[this.activeSheet][1]);
 
-			_this.refreshView();
+			this.drawSheet();
+
+			// get sheet data for view
+			this.refreshView();
+
+			this.positionViewOnSelectedCells();
 		}
 
 		this.initSheetTabs = function(){
 			$('.sheet-tabs').on('click', '.sheet-tab', function(){
 				_this.switchSheet($(this).index());
+			});
+
+			$('.add-sheet').click(function(){
+				var numberOfCurrentSheets = _this.sheetSizes.length;
+				var sheetName = prompt("Enter a name", "Sheet" + (numberOfCurrentSheets+1));
+
+				if(sheetName.length != 0){
+					_this.wsManager.send(JSON.stringify({arguments: ["ADDSHEET", sheetName]}));
+				}else{
+					alert("You have to enter a sheet name, aborting.");
+				}
 			});
 		}
 
@@ -847,9 +887,7 @@
 				if(_this.resizingIndicator){
 					_this.resizingIndicator = false;
 					// recompute bounds on mouse up
-					_this.computeScrollBounds();
-					_this.sizeSizer();
-					_this.drawSheet();
+					_this.resizeSheet();
 				}
 				
 			});
@@ -1060,14 +1098,22 @@
 			});
 		}
 
+		this.updateSheetSize = function(rowCount, columnCount, sheetIndex){
+
+			this.sheetSizes[sheetIndex] = [rowCount, columnCount];
+
+			if(sheetIndex == this.activeSheet){
+				this.setSheetSize(rowCount, columnCount);
+				this.refreshView();
+			}
+		}
+
 		this.setSheetSize = function(rows, columns){
 
 			this.numRows = rows;
 			this.numColumns = columns;
 
-			this.computeScrollBounds();
-			this.sizeSizer();
-
+			this.resizeSheet();
 		}
 
 		this.cellArrayToStringRange = function(cellRange){
@@ -1084,14 +1130,14 @@
 			// send websocket request for this range
 			var rangeString = this.cellArrayToStringRange([[this.drawRowStart, this.drawColumnStart],[this.drawRowEnd, this.drawColumnEnd]]);
 
-			this.refreshDataRange(rangeString);
+			this.refreshDataRange(rangeString, this.activeSheet);
 
 			// also refresh plot
 			this.reloadPlotsData();
 		}
 
-		this.refreshDataRange = function(range){
-			this.wsManager.send('{"arguments":["GET","'+range+'","'+this.activeSheet+'"]}')
+		this.refreshDataRange = function(range, sheetIndex){
+			this.wsManager.send('{"arguments":["GET","'+range+'","'+sheetIndex+'"]}')
 		}
 
 		this.deselect_input_field = function(set_values){
@@ -1662,7 +1708,6 @@
 			// add for testing
 			this.computeRowHeight();
 			this.computeColumnWidth();
-
 			this.computeScrollBounds();
 			
 		}
@@ -1718,20 +1763,19 @@
 				
 				// close editor
 				$(this.editor.dom).css({width: 0})
-				$(this.sheetDom).css({width: '100%'});
+				$('.left-panel').css({width: '100%'});
 				
 			}else{
 				
 				// open editor
 				$(this.editor.dom).css({width: ''})
-				$(this.sheetDom).css({width: ''});
-				
+				$('.left-panel').css({width: ''});
 			}
 			
+			this.codeOpen = !this.codeOpen;
+
 			// resize spreadsheet
 			this.resizeSheet();
-			
-			this.codeOpen = !this.codeOpen;
 		}
 		
 		this.openFile = function(){
@@ -2076,8 +2120,8 @@
 
 		}
 		
-		this.get_range_float = function(range){
-			return this.get_range(range[0],range[1]).map(this.parseFloatForced);
+		this.get_range_float = function(range, sheetIndex){
+			return this.get_range(range[0],range[1], sheetIndex).map(this.parseFloatForced);
 		}
 		
 		this.update_plot = function(plot){
@@ -2088,14 +2132,14 @@
 
 			if (x_range.length > 0){
 				data_update = {
-					x: this.get_range_float(x_range),
+					x: this.get_range_float(x_range, plot.sheetIndex),
 				};
 				Plotly.restyle(plot.plot_id, 'x', [data_update.x]);
 			}
 			
 			if(y_range.length > 0){
 				data_update = {
-					y: this.get_range_float(y_range)
+					y: this.get_range_float(y_range, plot.sheetIndex)
 				};
 				Plotly.restyle(plot.plot_id, 'y', [data_update.y]);
 			}
@@ -2221,17 +2265,18 @@
 			this.plot_draggable(plot_div[0]);
 			
 			// add plot
-			this.plots[plot_id] = {plot_id, type: type, data: [x_range, y_range]}
+			var plotObject = {plot_id, type: type, data: [x_range, y_range], sheetIndex: this.activeSheet};
+			this.plots[plot_id] = plotObject
 
 			// refresh data only on initial plot
 			if(x_range.length > 0){
 				var rangeString = this.cellArrayToStringRange([x_range[0],x_range[1]]);
-				this.refreshDataRange(rangeString);
+				this.refreshDataRange(rangeString, plotObject.sheetIndex);
 			}
 
 			if(y_range.length > 0){
 				var rangeString = this.cellArrayToStringRange([y_range[0],y_range[1]]);
-				this.refreshDataRange(rangeString);
+				this.refreshDataRange(rangeString, plotObject.sheetIndex);
 			}
 
 		}

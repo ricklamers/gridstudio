@@ -72,6 +72,9 @@
                                 // filter empty response
                                 _this.app.set_formula(position, json[i+2], false, parseInt(json[i+3]));
                             }
+
+                            // re-render plots
+                            _this.app.update_plots();
                         }
                         else if(json[0] == "SETSHEETS"){
                         
@@ -96,8 +99,12 @@
                             _this.app.showTab("console");
                             
                         }else if(json[0] == "SHEETSIZE"){
-                            _this.app.setSheetSize(parseInt(json[1]),parseInt(json[2]));
-                            _this.app.refreshView();
+
+                            var rowCount = parseInt(json[1]);
+                            var columnCount = parseInt(json[2]);
+                            var sheetIndex = parseInt(json[3]);
+                            
+                            _this.app.updateSheetSize(rowCount, columnCount, sheetIndex);
                         }
                         else if(json[0] == "SAVED"){
                 			alert("Saved workspace");
@@ -154,9 +161,6 @@
                 
                 // re-render on receive data
                 _this.app.drawSheet();
-                
-                // re-render plots
-                _this.app.update_plots();
     
             };
         }

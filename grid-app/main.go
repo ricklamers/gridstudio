@@ -12,6 +12,7 @@ import (
 )
 
 var addr = flag.String("addr", ":8080", "http service address")
+var mode = flag.String("mode", "server", "program run mode")
 
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile `file`")
 var memprofile = flag.String("memprofile", "", "write memory profile to `file`")
@@ -35,9 +36,31 @@ func main() {
 	// END PROFILING //
 
 	flag.Parse()
-
 	parseInit()
 
+	if *mode == "server" {
+		runServer()
+	} else if *mode == "testing" {
+		runTests()
+	}
+
+	// PROFILING //
+	// if *memprofile != "" {
+	// 	f, err := os.Create(*memprofile)
+	// 	if err != nil {
+	// 		log.Fatal("could not create memory profile: ", err)
+	// 	}
+	// 	runtime.GC() // get up-to-date statistics
+	// 	if err := pprof.WriteHeapProfile(f); err != nil {
+	// 		log.Fatal("could not write memory profile: ", err)
+	// 	}
+	// 	f.Close()
+	// }
+	// END PROFILING //
+
+}
+
+func runServer() {
 	fs := http.FileServer(http.Dir("static"))
 
 	// withoutGz := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -95,25 +118,6 @@ func main() {
 
 	fmt.Println("Go server listening on port " + *addr)
 	log.Fatal(http.ListenAndServe(*addr, nil))
-
-	// for i := 0; i < 1000000; i++ {
-	// 	dv = parse(DynamicValue{ValueType: DynamicValueTypeFormula, DataString: "MATH.C(\"E\")^(2*A5)"})
-	// }
-
-	// PROFILING //
-	// if *memprofile != "" {
-	// 	f, err := os.Create(*memprofile)
-	// 	if err != nil {
-	// 		log.Fatal("could not create memory profile: ", err)
-	// 	}
-	// 	runtime.GC() // get up-to-date statistics
-	// 	if err := pprof.WriteHeapProfile(f); err != nil {
-	// 		log.Fatal("could not write memory profile: ", err)
-	// 	}
-	// 	f.Close()
-	// }
-	// END PROFILING //
-
 }
 
 // func createDv(formula string) DynamicValue {

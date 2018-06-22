@@ -292,6 +292,7 @@ func isValidFormula(formula string) bool {
 
 			if inFunction && r == ')' {
 				inFunction = false
+				operatorAllowed = true
 			}
 
 			if referenceFoundRange && !inReference && unicode.IsLetter(r) {
@@ -1063,7 +1064,7 @@ func copySourceToDestination(sourceRange ReferenceRange, destinationRange Refere
 	for destinationRef, sourceRef := range destinationMapping {
 
 		if !haveOperationDifference {
-			operationRowDifference, operationColumnDifference, _, _ = getReferenceDifference(destinationRef.String, sourceRef.String)
+			operationRowDifference, operationColumnDifference = getReferenceDifference(destinationRef.String, sourceRef.String)
 			haveOperationDifference = true
 		}
 
@@ -1082,16 +1083,32 @@ func copySourceToDestination(sourceRange ReferenceRange, destinationRange Refere
 
 			for reference := range sourceReferences {
 
-				rowDifference, columnDifference, _, _ := getReferenceDifference(destinationRef.String, sourceRef.String)
+				rowDifference, columnDifference := getReferenceDifference(destinationRef.String, sourceRef.String)
+
+				fixedRow, fixedColumn := getReferenceFixedBools(reference.String)
+
+				if fixedRow {
+					rowDifference = 0
+				}
+				if fixedColumn {
+					columnDifference = 0
+				}
 
 				referenceMapping[reference] = changeReferenceIndex(reference, rowDifference, columnDifference, grid)
 			}
 
 			for _, rangeReference := range sourceRanges {
 
-				// reference := strings.Split(rangeReference, ":")[0]
+				rowDifference, columnDifference := getReferenceDifference(destinationRef.String, sourceRef.String)
 
-				rowDifference, columnDifference, _, _ := getReferenceDifference(destinationRef.String, sourceRef.String)
+				fixedRow, fixedColumn := getReferenceFixedBools(rangeReference.String)
+
+				if fixedRow {
+					rowDifference = 0
+				}
+				if fixedColumn {
+					columnDifference = 0
+				}
 
 				newRangeReference := changeRangeReference(rangeReference, rowDifference, columnDifference, grid)
 				referenceRangeMapping[rangeReference] = newRangeReference
@@ -1248,7 +1265,7 @@ func getReferenceFixedBools(reference string) (bool, bool) {
 	return fixedRow, fixedColumn
 }
 
-func getReferenceDifference(reference string, sourceReference string) (int, int, bool, bool) {
+func getReferenceDifference(reference string, sourceReference string) (int, int) {
 
 	rowIndex := getReferenceRowIndex(reference)
 	columnIndex := getReferenceColumnIndex(reference)
@@ -1260,9 +1277,7 @@ func getReferenceDifference(reference string, sourceReference string) (int, int,
 
 	columnDifference := columnIndex - sourceColumnIndex
 
-	fixedRow, fixedColumn := getReferenceFixedBools(reference)
-
-	return rowDifference, columnDifference, fixedRow, fixedColumn
+	return rowDifference, columnDifference
 }
 
 func setFile(path string, dataString string, c *Client) {
@@ -1472,6 +1487,7 @@ func replaceReferenceStringInFormula(formula string, referenceMap map[string]str
 	referenceEndIndex := 0
 	haveValidReference := false
 	inQuoteSection := false
+	inSingleQuote := false
 
 	for {
 
@@ -1492,11 +1508,19 @@ func replaceReferenceStringInFormula(formula string, referenceMap map[string]str
 				referenceEndIndex = index + 1
 			}
 
+		} else if inSingleQuote {
+
+			if character == '\'' {
+				// exit quote section
+				inSingleQuote = false
+			}
+			referenceEndIndex = index
+
 		} else if character == '"' {
 			inQuoteSection = true
 		} else if haveValidReference {
 
-			if character == ':' {
+			if character == ':' || character == '!' || character == '\'' {
 
 				referenceEndIndex = index
 				haveValidReference = false
@@ -1531,7 +1555,11 @@ func replaceReferenceStringInFormula(formula string, referenceMap map[string]str
 				referenceEndIndex = index + 1
 			}
 
-		} else if unicode.IsLetter(character) || character == '$' || character == ':' {
+		} else if unicode.IsLetter(character) || character == '$' || character == ':' || character == '!' || character == '\'' {
+
+			if character == '\'' {
+				inSingleQuote = true
+			}
 
 			referenceEndIndex = index + 1
 
@@ -1685,13 +1713,16 @@ func (c *Client) writePump() {
 
 	var grid Grid
 
+	defaultColumnCount := 10
+	defaultRowCount := 100
+
 	// if Grid serialized file exists try to load that
 	sheetFile := "/home/user/sheet.serialized"
 	if _, err := os.Stat(sheetFile); os.IsNotExist(err) {
 
 		// initialize the datastructure for the matrix
-		columnCount := 10
-		rowCount := 100
+		columnCount := defaultColumnCount
+		rowCount := defaultRowCount
 
 		sheetSizes := []SheetSize{SheetSize{RowCount: rowCount, ColumnCount: columnCount}, SheetSize{RowCount: rowCount, ColumnCount: columnCount}}
 
@@ -1955,6 +1986,27 @@ func (c *Client) writePump() {
 			case "GET-DIRECTORY":
 
 				getDirectory(parsed[1], c)
+
+			case "ADDSHEET":
+
+				sheetName := parsed[1]
+
+				sheetIndex := int8(len(grid.SheetList))
+
+				grid.SheetNames[sheetName] = int8(sheetIndex)
+				grid.SheetList = append(grid.SheetList, sheetName)
+				grid.SheetSizes = append(grid.SheetSizes, SheetSize{RowCount: defaultRowCount, ColumnCount: defaultColumnCount})
+
+				// populate new sheet
+				for x := 1; x <= defaultColumnCount; x++ {
+					for y := 1; y <= defaultRowCount; y++ {
+						dv := makeDv("")
+						dv.SheetIndex = sheetIndex
+						grid.Data[strconv.Itoa(int(sheetIndex))+"!"+indexToLetters(x)+strconv.Itoa(y)] = dv
+					}
+				}
+
+				sendSheets(c, &grid)
 
 			case "COPY":
 

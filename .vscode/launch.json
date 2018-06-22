@@ -26,6 +26,19 @@
         ]
     },
         {
+            "name": "Run Tests",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "remotePath": "",
+            "port": 2345,
+            "host": "127.0.0.1",
+            "program": "${workspaceRoot}/grid-app/",
+            "env": {},
+            "args": ["-mode=testing"],
+            "showLog": true
+        },
+        {
             "name": "Launch Go server",
             "type": "go",
             "request": "launch",
@@ -33,7 +46,7 @@
             "remotePath": "",
             "port": 2345,
             "host": "127.0.0.1",
-            "program": "${fileDirname}",
+            "program": "${workspaceRoot}/grid-app/",
             "env": {},
             "args": ["-addr=:4000"],
             "showLog": true

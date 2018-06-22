@@ -139,6 +139,29 @@ body {
 
 	.sheet-tabs {
 		height: 30px;
+		border: 1px solid #aaa;
+		
+		.add-sheet {
+			height: 31px;
+			margin-top:-1px;
+			padding: 7px;
+			float: left;
+			padding-top: 8px;
+			cursor: pointer;
+
+			&:hover {
+				background: #333;
+				img {
+					filter: invert(100%);
+				}
+			}
+		}
+	}
+
+	.sheet-tabs-holder {
+		height: 31px;
+		margin-top: -1px;
+		float: left;
 		.sheet-tab {
 			display: flex;
 			float: left;
@@ -146,7 +169,9 @@ body {
 			justify-content: center;
 			align-items: center;
 			padding: 0 10px;
+			font-size: 13px;
 			cursor: pointer;
+			user-select: none;
 
 			&.active, &:hover {
 				background: #333;
