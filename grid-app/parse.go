@@ -109,7 +109,7 @@ func getDataFromRef(reference Reference, grid *Grid) DynamicValue {
 	return grid.Data[getMapIndexFromReference(reference)]
 }
 
-func getRefFromString(formula string, sheetIndex int8, grid *Grid) Reference {
+func getReferenceFromString(formula string, sheetIndex int8, grid *Grid) Reference {
 	if !strings.Contains(formula, "!") {
 		return Reference{String: formula, SheetIndex: sheetIndex}
 	} else {
@@ -281,7 +281,7 @@ func findReferenceStrings(formula string) []string {
 	return references
 }
 
-func findRanges(formula string, sheetIndex int8) []ReferenceRange {
+func findRanges(formula string, sheetIndex int8, grid *Grid) []ReferenceRange {
 
 	rangeReferences := []ReferenceRange{}
 	referenceStrings := findReferenceStrings(formula)
@@ -289,7 +289,7 @@ func findRanges(formula string, sheetIndex int8) []ReferenceRange {
 	// expand references when necessary
 	for _, referenceString := range referenceStrings {
 		if strings.Contains(referenceString, ":") {
-			rangeReferences = append(rangeReferences, ReferenceRange{String: referenceString, SheetIndex: sheetIndex})
+			rangeReferences = append(rangeReferences, getRangeReferenceFromString(referenceString, sheetIndex, grid))
 		}
 	}
 
@@ -312,7 +312,7 @@ func findReferences(formula string, sheetIndex int8, includeRanges bool, grid *G
 			}
 		} else {
 
-			references = append(references, getRefFromString(referenceString, sheetIndex, grid))
+			references = append(references, getReferenceFromString(referenceString, sheetIndex, grid))
 		}
 
 	}
@@ -442,6 +442,9 @@ func setDependencies(reference Reference, dv DynamicValue, grid *Grid) DynamicVa
 	for ref := range *referenceDv.DependIn {
 		delete(*getDataByNormalRef(ref, grid).DependOut, standardIndex)
 	}
+
+	// always clear incoming references, if they still exist
+	*dv.DependIn = make(map[string]bool)
 
 	for thisRef, inSet := range references {
 
@@ -778,7 +781,7 @@ func parse(formula DynamicValue, grid *Grid, targetRef Reference) DynamicValue {
 			} else {
 
 				// when references contain dollar signs, remove them here
-				return getDataFromRef(getRefFromString(singleElement.DataFormula, targetRef.SheetIndex, grid), grid)
+				return getDataFromRef(getReferenceFromString(singleElement.DataFormula, targetRef.SheetIndex, grid), grid)
 
 			}
 
@@ -1192,7 +1195,7 @@ func average(arguments []DynamicValue, grid *Grid) DynamicValue {
 
 		// check if argument is range
 		if dv.ValueType == DynamicValueTypeReference {
-			dvs := getDataRange(dv, grid)
+			dvs := getDvsFromReferenceRange(getRangeReferenceFromString(dv.DataString, dv.SheetIndex, grid), grid)
 			dv = average(dvs, grid)
 		} else {
 			dv = convertToFloat(dv)
@@ -1204,34 +1207,40 @@ func average(arguments []DynamicValue, grid *Grid) DynamicValue {
 	return DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: total / float64(len(arguments))}
 }
 
-func getDataRange(dv DynamicValue, grid *Grid) []DynamicValue {
+func getDvsFromReferenceRange(referenceRange ReferenceRange, grid *Grid) []DynamicValue {
 
-	if dv.ValueType == DynamicValueTypeReference {
+	references := getReferencesFromRange(referenceRange)
 
-		// get range
-		cells := strings.Split(dv.DataString, ":")
+	dvs := []DynamicValue{}
 
-		column1 := getReferenceColumnIndex(cells[0])
-		row1 := getReferenceRowIndex(cells[0])
-
-		column2 := getReferenceColumnIndex(cells[1])
-		row2 := getReferenceRowIndex(cells[1])
-
-		dvs := []DynamicValue{}
-
-		for x := column1; x <= column2; x++ {
-			for y := row1; y <= row2; y++ {
-				dvs = append(dvs, getDataFromRef(Reference{String: indexToLetters(x) + strconv.Itoa(y), SheetIndex: dv.SheetIndex}, grid))
-			}
-		}
-
-		return dvs
-
-	} else {
-		log.Fatal("Tried to get range of non-range DV")
+	for _, ref := range references {
+		dvs = append(dvs, getDataFromRef(ref, grid))
 	}
 
-	return []DynamicValue{DynamicValue{}}
+	return dvs
+}
+
+func getReferencesFromRange(referenceRange ReferenceRange) []Reference {
+
+	// get range
+	cells := strings.Split(referenceRange.String, ":")
+
+	column1 := getReferenceColumnIndex(cells[0])
+	row1 := getReferenceRowIndex(cells[0])
+
+	column2 := getReferenceColumnIndex(cells[1])
+	row2 := getReferenceRowIndex(cells[1])
+
+	references := []Reference{}
+
+	for x := column1; x <= column2; x++ {
+		for y := row1; y <= row2; y++ {
+			references = append(references, Reference{String: indexToLetters(x) + strconv.Itoa(y), SheetIndex: referenceRange.SheetIndex})
+		}
+	}
+
+	return references
+
 }
 
 func getReferenceColumnIndex(ref string) int {
@@ -1251,7 +1260,7 @@ func count(arguments []DynamicValue, grid *Grid) DynamicValue {
 
 		// check if argument is range
 		if dv.ValueType == DynamicValueTypeReference {
-			dvs := getDataRange(dv, grid)
+			dvs := getDvsFromReferenceRange(getRangeReferenceFromString(dv.DataString, dv.SheetIndex, grid), grid)
 			dv = count(dvs, grid)
 			countValue += dv.DataFloat
 		} else {
@@ -1273,8 +1282,18 @@ func sum(arguments []DynamicValue, grid *Grid) DynamicValue {
 
 		// check if argument is range
 		if dv.ValueType == DynamicValueTypeReference {
-			dvs := getDataRange(dv, grid)
+
+			var dvs []DynamicValue
+
+			if strings.Contains(dv.DataString, ":") {
+				rangeRef := getRangeReferenceFromString(dv.DataString, dv.SheetIndex, grid)
+				dvs = getDvsFromReferenceRange(rangeRef, grid)
+			} else {
+				dvs = []DynamicValue{getDataFromRef(getReferenceFromString(dv.DataString, dv.SheetIndex, grid), grid)}
+			}
+
 			dv = sum(dvs, grid)
+
 		} else {
 			dv = convertToFloat(dv)
 		}
@@ -1424,7 +1443,7 @@ func olsExplosive(arguments []DynamicValue, grid *Grid, targetRef Reference) Dyn
 
 	for x := 0; x < independentsCount; x++ {
 
-		thisXDVs := getDataRange(arguments[x+1], grid) // plus one, x ranges start at index 1
+		thisXDVs := getDvsFromReferenceRange(getRangeReferenceFromString(arguments[x+1].DataString, targetRef.SheetIndex, grid), grid) // plus one, x ranges start at index 1
 
 		// set dataSize based on getDataRange
 		dataSize = len(thisXDVs)
@@ -1454,7 +1473,7 @@ func olsExplosive(arguments []DynamicValue, grid *Grid, targetRef Reference) Dyn
 	// get the y values
 	yDataSet := []float64{}
 
-	yDVs := getDataRange(arguments[0], grid)
+	yDVs := getDvsFromReferenceRange(getRangeReferenceFromString(arguments[0].DataString, targetRef.SheetIndex, grid), grid)
 
 	for _, dv := range yDVs {
 		dv := convertToFloat(dv)

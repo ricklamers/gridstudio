@@ -139,7 +139,7 @@ body {
 
 	.sheet-tabs {
 		height: 30px;
-		border: 1px solid #aaa;
+		border-top: 1px solid #aaa;
 		
 		.add-sheet {
 			height: 31px;
@@ -162,6 +162,8 @@ body {
 		height: 31px;
 		margin-top: -1px;
 		float: left;
+		user-select: none;
+
 		.sheet-tab {
 			display: flex;
 			float: left;
@@ -171,7 +173,6 @@ body {
 			padding: 0 10px;
 			font-size: 13px;
 			cursor: pointer;
-			user-select: none;
 
 			&.active, &:hover {
 				background: #333;

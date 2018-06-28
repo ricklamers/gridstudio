@@ -621,6 +621,17 @@
 
 			// initialize wsManager
 			this.wsManager.init();
+
+			this.wsManager.ws.onclose = function(){
+				alert("Lost connection to the server");
+				// alert("Lost connection to the server, redirecting to dashboard");
+				// setTimeout(function(){
+				// 	var currentUrl = window.location.href;
+				// 	var newUrl = currentUrl.replace("/workspace/","/destruct/");
+				// 	window.location.href = newUrl;
+				// },100);
+			}
+
 			this.wsManager.onconnect = function(){
 				_this.refreshView();
 				// _this.getSheets();
@@ -954,7 +965,7 @@
 						
 						if(_this.formula_input.is(":focus")){
 							var inputValue = _this.formula_input.val();
-							_this.set_formula(_this.selectedCells[0], inputValue, true, this.activeSheet);
+							_this.set_formula(_this.selectedCells[0], inputValue, true, _this.activeSheet);
 							_this.formula_input.blur();
 						}
 						else if(_this.input_field.is(":focus")){
@@ -1891,14 +1902,6 @@
 
 			menu.find('menu-item.close-workspace').click(function(e){
 				e.preventDefault();
-
-				_this.wsManager.ws.onclose = function(){
-					setTimeout(function(){
-						var currentUrl = window.location.href;
-						var newUrl = currentUrl.replace("/workspace/","/destruct/");
-						window.location.href = newUrl;
-					},100);
-				}
 
 				_this.termManager.term.socket.onclose = function(){
 					_this.wsManager.ws.close();

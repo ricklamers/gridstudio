@@ -886,14 +886,36 @@ func sortRange(direction string, cellRange string, sortColumn string, grid *Grid
 	for _, sortGridItem := range sortGridItemArray {
 
 		newRef := Reference{String: indexesToReference(currentRow, sortColumnIndex), SheetIndex: sortGridItem.reference.SheetIndex}
-		newGrid[newRef] = getDataFromRef(sortGridItem.reference, grid)
 
 		oldRowIndex := getReferenceRowIndex(sortGridItem.reference.String)
+
+		// update formula to update relative references
+		sourceFormula := sortGridItem.dv.DataFormula
+		newFormula := incrementFormula(sourceFormula, sortGridItem.reference, newRef, false, grid)
+
+		newDv := getDataFromRef(sortGridItem.reference, grid)
+
+		if sourceFormula != newFormula {
+			newDv.DataFormula = newFormula
+		}
+
+		newGrid[newRef] = newDv
 
 		for _, nonSortingColumnIndex := range nonSortingColumns {
 			oldRef := Reference{String: indexesToReference(oldRowIndex, nonSortingColumnIndex), SheetIndex: sortGridItem.reference.SheetIndex}
 			newRef := Reference{String: indexesToReference(currentRow, nonSortingColumnIndex), SheetIndex: sortGridItem.reference.SheetIndex}
-			newGrid[newRef] = getDataFromRef(oldRef, grid)
+
+			oldDv := getDataFromRef(oldRef, grid)
+			sourceFormula := oldDv.DataFormula
+			newFormula := incrementFormula(sourceFormula, oldRef, newRef, false, grid)
+
+			newDv := oldDv
+
+			if sourceFormula != newFormula {
+				newDv.DataFormula = newFormula
+			}
+
+			newGrid[newRef] = newDv
 		}
 
 		currentRow++
@@ -901,16 +923,17 @@ func sortRange(direction string, cellRange string, sortColumn string, grid *Grid
 
 	// then finally assign newGrid to grid
 	for k, v := range newGrid {
-		setDataByRef(k, v, grid)
+		setDataByRef(k, setDependencies(k, v, grid), grid)
 	}
+
 }
 
-func changeReferenceIndex(reference Reference, rowDifference int, columnDifference int, grid *Grid) Reference {
+func changeReferenceIndex(reference Reference, rowDifference int, columnDifference int, targetSheetIndex int8, grid *Grid) Reference {
 
 	referenceString := reference.String
 
 	if rowDifference == 0 && columnDifference == 0 {
-		return reference
+		return Reference{String: reference.String, SheetIndex: targetSheetIndex}
 	}
 
 	refRow := getReferenceRowIndex(referenceString)
@@ -936,19 +959,100 @@ func changeReferenceIndex(reference Reference, rowDifference int, columnDifferen
 
 	fixedRow, fixedColumn := getReferenceFixedBools(reference.String)
 
-	return Reference{String: indexesToReferenceWithFixed(refRow, refColumn, fixedRow, fixedColumn), SheetIndex: reference.SheetIndex}
+	return Reference{String: indexesToReferenceWithFixed(refRow, refColumn, fixedRow, fixedColumn), SheetIndex: targetSheetIndex}
 }
 
-func changeRangeReference(rangeReference ReferenceRange, rowDifference int, columnDifference int, grid *Grid) ReferenceRange {
+func changeRangeReference(rangeReference ReferenceRange, rowDifference int, columnDifference int, targetSheetIndex int8, grid *Grid) ReferenceRange {
 
 	rangeReferenceString := rangeReference.String
 	rangeReferences := strings.Split(rangeReferenceString, ":")
 	rangeStartReference := Reference{String: rangeReferences[0], SheetIndex: rangeReference.SheetIndex}
 	rangeEndReference := Reference{String: rangeReferences[1], SheetIndex: rangeReference.SheetIndex}
 
-	rangeReferenceString = changeReferenceIndex(rangeStartReference, rowDifference, columnDifference, grid).String + ":" + changeReferenceIndex(rangeEndReference, rowDifference, columnDifference, grid).String
+	rangeReferenceString = changeReferenceIndex(rangeStartReference, rowDifference, columnDifference, rangeStartReference.SheetIndex, grid).String + ":" + changeReferenceIndex(rangeEndReference, rowDifference, columnDifference, rangeEndReference.SheetIndex, grid).String
 
-	return ReferenceRange{String: rangeReferenceString, SheetIndex: rangeReference.SheetIndex}
+	return ReferenceRange{String: rangeReferenceString, SheetIndex: targetSheetIndex}
+}
+
+func incrementFormula(sourceFormula string, sourceRef Reference, destinationRef Reference, isCut bool, grid *Grid) string {
+
+	referenceMapping := make(map[Reference]Reference)
+	referenceRangeMapping := make(map[ReferenceRange]ReferenceRange)
+
+	sourceReferences := findReferences(sourceFormula, sourceRef.SheetIndex, false, grid)
+	sourceRanges := findRanges(sourceFormula, sourceRef.SheetIndex, grid)
+
+	newFormula := sourceFormula
+
+	// find and replace the references and rangeReferences in the sourceCell itself
+	for reference := range sourceReferences {
+
+		rowDifference, columnDifference := getReferenceStringDifference(destinationRef.String, sourceRef.String)
+
+		// when cutting, only the targetSheet is updated, so no difference in row or Column
+		targetSheetIndex := destinationRef.SheetIndex
+		if isCut {
+			rowDifference = 0
+			columnDifference = 0
+
+			if reference.SheetIndex != sourceRef.SheetIndex {
+				targetSheetIndex = reference.SheetIndex
+			} else {
+				targetSheetIndex = sourceRef.SheetIndex
+			}
+		}
+
+		fixedRow, fixedColumn := getReferenceFixedBools(reference.String)
+
+		if fixedRow {
+			rowDifference = 0
+		}
+		if fixedColumn {
+			columnDifference = 0
+		}
+
+		referenceMapping[reference] = changeReferenceIndex(reference, rowDifference, columnDifference, targetSheetIndex, grid)
+	}
+
+	for _, rangeReference := range sourceRanges {
+
+		rowDifference, columnDifference := getReferenceStringDifference(destinationRef.String, sourceRef.String)
+
+		// when cutting, only the targetSheet is updated, so no difference in row or Column
+		targetSheetIndex := destinationRef.SheetIndex
+		if isCut {
+			rowDifference = 0
+			columnDifference = 0
+
+			if rangeReference.SheetIndex != sourceRef.SheetIndex {
+				targetSheetIndex = rangeReference.SheetIndex
+			} else {
+				targetSheetIndex = sourceRef.SheetIndex
+			}
+		}
+
+		fixedRow, fixedColumn := getReferenceFixedBools(rangeReference.String)
+
+		if fixedRow {
+			rowDifference = 0
+		}
+		if fixedColumn {
+			columnDifference = 0
+		}
+
+		newRangeReference := changeRangeReference(rangeReference, rowDifference, columnDifference, targetSheetIndex, grid)
+		referenceRangeMapping[rangeReference] = newRangeReference
+	}
+
+	if len(sourceReferences) > 0 {
+		newFormula = replaceReferencesInFormula(sourceFormula, sourceRef.SheetIndex, destinationRef.SheetIndex, referenceMapping, grid)
+	}
+
+	if len(sourceRanges) > 0 {
+		newFormula = replaceReferenceRangesInFormula(newFormula, sourceRef.SheetIndex, destinationRef.SheetIndex, referenceRangeMapping, grid)
+	}
+
+	return newFormula
 }
 
 func copySourceToDestination(sourceRange ReferenceRange, destinationRange ReferenceRange, grid *Grid, isCut bool) []Reference {
@@ -1058,65 +1162,23 @@ func copySourceToDestination(sourceRange ReferenceRange, destinationRange Refere
 
 	var operationRowDifference int
 	var operationColumnDifference int
+	var operationTargetSheet int8
 
 	haveOperationDifference := false
 
 	for destinationRef, sourceRef := range destinationMapping {
 
 		if !haveOperationDifference {
-			operationRowDifference, operationColumnDifference = getReferenceDifference(destinationRef.String, sourceRef.String)
+			operationRowDifference, operationColumnDifference = getReferenceStringDifference(destinationRef.String, sourceRef.String)
 			haveOperationDifference = true
+			operationTargetSheet = destinationRef.SheetIndex
 		}
 
 		finalDestinationCells = append(finalDestinationCells, destinationRef)
 
-		referenceMapping := make(map[Reference]Reference)
-		referenceRangeMapping := make(map[ReferenceRange]ReferenceRange)
-
 		sourceFormula := getDataFromRef(sourceRef, grid).DataFormula
-		sourceReferences := findReferences(sourceFormula, sourceRef.SheetIndex, false, grid)
-		sourceRanges := findRanges(sourceFormula, sourceRef.SheetIndex)
-
-		newFormula := sourceFormula
-
-		if !isCut {
-
-			for reference := range sourceReferences {
-
-				rowDifference, columnDifference := getReferenceDifference(destinationRef.String, sourceRef.String)
-
-				fixedRow, fixedColumn := getReferenceFixedBools(reference.String)
-
-				if fixedRow {
-					rowDifference = 0
-				}
-				if fixedColumn {
-					columnDifference = 0
-				}
-
-				referenceMapping[reference] = changeReferenceIndex(reference, rowDifference, columnDifference, grid)
-			}
-
-			for _, rangeReference := range sourceRanges {
-
-				rowDifference, columnDifference := getReferenceDifference(destinationRef.String, sourceRef.String)
-
-				fixedRow, fixedColumn := getReferenceFixedBools(rangeReference.String)
-
-				if fixedRow {
-					rowDifference = 0
-				}
-				if fixedColumn {
-					columnDifference = 0
-				}
-
-				newRangeReference := changeRangeReference(rangeReference, rowDifference, columnDifference, grid)
-				referenceRangeMapping[rangeReference] = newRangeReference
-			}
-
-			newFormula = replaceReferencesInFormula(sourceFormula, sourceRef.SheetIndex, referenceMapping, grid)
-			newFormula = replaceReferenceRangesInFormula(newFormula, sourceRef.SheetIndex, referenceRangeMapping, grid)
-		}
+		sourceRanges := findRanges(sourceFormula, sourceRef.SheetIndex, grid)
+		newFormula := incrementFormula(sourceFormula, sourceRef, destinationRef, isCut, grid)
 
 		previousDv := getDataFromRef(destinationRef, grid)
 		destinationDv := makeDv(newFormula)
@@ -1132,13 +1194,13 @@ func copySourceToDestination(sourceRange ReferenceRange, destinationRange Refere
 				thisReference := getReferenceFromMapIndex(ref)
 
 				// if DependOut not in source (will not be moved/deleted)
-				originalDv := getDvAndRefForCopyModify(getReferenceFromMapIndex(ref), operationRowDifference, operationColumnDifference, newDvs, grid)
+				originalDv := getDvAndRefForCopyModify(getReferenceFromMapIndex(ref), operationRowDifference, operationColumnDifference, destinationRef.SheetIndex, newDvs, grid)
 				originalFormula := originalDv.DataFormula
 
 				outgoingDvReferences := findReferences(originalFormula, originalDv.SheetIndex, false, grid)
 
 				if !containsReferences(sourceCells, thisReference) {
-					outgoingRanges := findRanges(originalFormula, thisReference.SheetIndex)
+					outgoingRanges := findRanges(originalFormula, thisReference.SheetIndex, grid)
 					rangesToCheck[thisReference] = outgoingRanges
 				}
 
@@ -1147,16 +1209,16 @@ func copySourceToDestination(sourceRange ReferenceRange, destinationRange Refere
 				for reference := range outgoingDvReferences {
 
 					if reference == sourceRef {
-						referenceMapping[reference] = changeReferenceIndex(reference, operationRowDifference, operationColumnDifference, grid)
+						referenceMapping[reference] = changeReferenceIndex(reference, operationRowDifference, operationColumnDifference, destinationRef.SheetIndex, grid)
 					}
 
 				}
 
-				newFormula := replaceReferencesInFormula(originalFormula, originalDv.SheetIndex, referenceMapping, grid)
+				newFormula := replaceReferencesInFormula(originalFormula, originalDv.SheetIndex, destinationRef.SheetIndex, referenceMapping, grid)
 
 				newDependOutDv := makeDv(newFormula)
 				newDependOutDv.DependOut = originalDv.DependOut
-				putDvForCopyModify(getReferenceFromMapIndex(ref), newDependOutDv, operationRowDifference, operationColumnDifference, newDvs, grid)
+				putDvForCopyModify(getReferenceFromMapIndex(ref), newDependOutDv, operationRowDifference, operationColumnDifference, destinationRef.SheetIndex, newDvs, grid)
 
 			}
 
@@ -1177,7 +1239,7 @@ func copySourceToDestination(sourceRange ReferenceRange, destinationRange Refere
 
 		outgoingReference := outgoingRef
 
-		outgoingRefDv := getDvAndRefForCopyModify(outgoingReference, 0, 0, newDvs, grid)
+		outgoingRefDv := getDvAndRefForCopyModify(outgoingReference, 0, 0, outgoingRef.SheetIndex, newDvs, grid)
 		outgoingRefFormula := outgoingRefDv.DataFormula
 
 		replacedFormula := false
@@ -1196,7 +1258,7 @@ func copySourceToDestination(sourceRange ReferenceRange, destinationRange Refere
 				replacedFormula = true
 
 				// whole range is in here, increment outgoingRef's range (could be replacing more outgoingRanges)
-				referenceRangeMapping[rangeReference] = changeRangeReference(rangeReference, operationRowDifference, operationColumnDifference, grid)
+				referenceRangeMapping[rangeReference] = changeRangeReference(rangeReference, operationRowDifference, operationColumnDifference, operationTargetSheet, grid)
 
 			}
 
@@ -1204,12 +1266,12 @@ func copySourceToDestination(sourceRange ReferenceRange, destinationRange Refere
 
 		if replacedFormula {
 
-			outgoingRefFormula = replaceReferenceRangesInFormula(outgoingRefFormula, outgoingRefDv.SheetIndex, referenceRangeMapping, grid)
+			outgoingRefFormula = replaceReferenceRangesInFormula(outgoingRefFormula, sourceCells[0].SheetIndex, outgoingRefDv.SheetIndex, referenceRangeMapping, grid)
 
 			newDv := makeDv(outgoingRefFormula)
 			newDv.DependOut = outgoingRefDv.DependOut
 
-			putDvForCopyModify(outgoingReference, newDv, 0, 0, newDvs, grid)
+			putDvForCopyModify(outgoingReference, newDv, 0, 0, outgoingRef.SheetIndex, newDvs, grid)
 
 		}
 
@@ -1226,9 +1288,9 @@ func copySourceToDestination(sourceRange ReferenceRange, destinationRange Refere
 
 }
 
-func getDvAndRefForCopyModify(reference Reference, diffRow int, diffCol int, newDvs map[Reference]DynamicValue, grid *Grid) DynamicValue {
+func getDvAndRefForCopyModify(reference Reference, diffRow int, diffCol int, targetSheetIndex int8, newDvs map[Reference]DynamicValue, grid *Grid) DynamicValue {
 
-	newlyMappedRef := changeReferenceIndex(reference, diffRow, diffCol, grid)
+	newlyMappedRef := changeReferenceIndex(reference, diffRow, diffCol, targetSheetIndex, grid)
 
 	if _, ok := newDvs[newlyMappedRef]; ok {
 		return newDvs[newlyMappedRef]
@@ -1237,8 +1299,8 @@ func getDvAndRefForCopyModify(reference Reference, diffRow int, diffCol int, new
 	}
 }
 
-func putDvForCopyModify(reference Reference, dv DynamicValue, diffRow int, diffCol int, newDvs map[Reference]DynamicValue, grid *Grid) {
-	newlyMappedRef := changeReferenceIndex(reference, diffRow, diffCol, grid)
+func putDvForCopyModify(reference Reference, dv DynamicValue, diffRow int, diffCol int, targetSheetIndex int8, newDvs map[Reference]DynamicValue, grid *Grid) {
+	newlyMappedRef := changeReferenceIndex(reference, diffRow, diffCol, targetSheetIndex, grid)
 
 	if _, ok := newDvs[newlyMappedRef]; ok {
 		newDvs[newlyMappedRef] = dv
@@ -1265,7 +1327,7 @@ func getReferenceFixedBools(reference string) (bool, bool) {
 	return fixedRow, fixedColumn
 }
 
-func getReferenceDifference(reference string, sourceReference string) (int, int) {
+func getReferenceStringDifference(reference string, sourceReference string) (int, int) {
 
 	rowIndex := getReferenceRowIndex(reference)
 	columnIndex := getReferenceColumnIndex(reference)
@@ -1591,30 +1653,30 @@ func replaceReferenceStringInFormula(formula string, referenceMap map[string]str
 	return formula
 }
 
-func replaceReferencesInFormula(formula string, sheetIndex int8, referenceMap map[Reference]Reference, grid *Grid) string {
+func replaceReferencesInFormula(formula string, sourceIndex int8, targetIndex int8, referenceMap map[Reference]Reference, grid *Grid) string {
 	referenceStrings := findReferenceStrings(formula)
 
 	stringReferenceMap := make(map[string]string)
 
 	for _, referenceString := range referenceStrings {
 		if !strings.Contains(referenceString, ":") {
-			reference := getRefFromString(referenceString, sheetIndex, grid)
-			stringReferenceMap[referenceToRelativeString(reference, sheetIndex, grid)] = referenceToRelativeString(referenceMap[reference], sheetIndex, grid)
+			reference := getReferenceFromString(referenceString, sourceIndex, grid)
+			stringReferenceMap[referenceString] = referenceToRelativeString(referenceMap[reference], targetIndex, grid)
 		}
 	}
 
 	return replaceReferenceStringInFormula(formula, stringReferenceMap)
 }
 
-func replaceReferenceRangesInFormula(formula string, sheetIndex int8, referenceRangeMap map[ReferenceRange]ReferenceRange, grid *Grid) string {
+func replaceReferenceRangesInFormula(formula string, sourceIndex int8, targetIndex int8, referenceRangeMap map[ReferenceRange]ReferenceRange, grid *Grid) string {
 	referenceStrings := findReferenceStrings(formula)
 
 	stringReferenceMap := make(map[string]string)
 
 	for _, referenceString := range referenceStrings {
 		if strings.Contains(referenceString, ":") {
-			referenceRange := getRangeReferenceFromString(referenceString, sheetIndex, grid)
-			stringReferenceMap[referenceRangeToRelativeString(referenceRange, sheetIndex, grid)] = referenceRangeToRelativeString(referenceRangeMap[referenceRange], sheetIndex, grid)
+			referenceRange := getRangeReferenceFromString(referenceString, sourceIndex, grid)
+			stringReferenceMap[referenceString] = referenceRangeToRelativeString(referenceRangeMap[referenceRange], targetIndex, grid)
 		}
 	}
 
@@ -2304,6 +2366,7 @@ func (c *Client) writePump() {
 				c.send <- []byte("[\"SAVED\"]")
 			case "SORT":
 				sortRange(parsed[1], parsed[2], parsed[3], &grid) // direction (ASC,DESC), range ("A1:B20"), column ("B")
+				computeDirtyCells(&grid)
 				invalidateView(&grid, c)
 			}
 
