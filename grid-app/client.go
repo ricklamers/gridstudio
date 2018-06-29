@@ -1899,7 +1899,6 @@ func (c *Client) writePump() {
 
 					// get row of first reference
 					// initRow := getReferenceRowIndex(references[0])
-
 					incrementAmount := 0 // start at index 0
 
 					// first add all to grid

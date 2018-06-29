@@ -1,10 +1,10 @@
-<h2>Start Grid workspace</h2>
-<form method="post" class="new-workspace-form" action="/initialize">
-    <button>Open new workspace</button>
-</form>
+<div class="dashboard-view">
+    <a class="logout" href="/logout"><button>Logout</button></a>
 
+    <h1>Your workspaces</h1>
+    <div class='workspace-list'><div class='loading'>Loading...</div></div>
 
-<h2>Existing workspaces</h2>
-<div class='workspace-list'>Loading...</div>
-
-<a href="/logout">Logout</a>
+    <form method="post" class="new-workspace-form" action="/initialize">
+        <button>Open new workspace</button>
+    </form>
+</div>

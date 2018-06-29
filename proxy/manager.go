@@ -106,10 +106,11 @@ func checkQuickHTTPResponse(requestURL string) bool {
 }
 
 type WorkspaceRow struct {
-	ID    int    `json:"id"`
-	Owner int    `json:"owner"`
-	Slug  string `json:"slug"`
-	Name  string `json:"name"`
+	ID      int    `json:"id"`
+	Owner   int    `json:"owner"`
+	Slug    string `json:"slug"`
+	Name    string `json:"name"`
+	Created string `json:"created"`
 }
 
 func getUserId(r *http.Request, db *sql.DB) int {
@@ -418,22 +419,23 @@ func main() {
 
 			userId := getUserId(r, db)
 
-			rows, err := db.Query("SELECT id, owner, slug, name FROM workspaces WHERE owner = ?", userId)
+			rows, err := db.Query("SELECT id, owner, slug, name, created FROM workspaces WHERE owner = ?", userId)
 			defer rows.Close()
 
 			var (
-				id    int
-				owner int
-				slug  string
-				name  string
+				id      int
+				owner   int
+				slug    string
+				name    string
+				created string
 			)
 
 			for rows.Next() {
-				err := rows.Scan(&id, &owner, &slug, &name)
+				err := rows.Scan(&id, &owner, &slug, &name, &created)
 				if err != nil {
 					log.Fatal(err)
 				}
-				row := WorkspaceRow{ID: id, Owner: owner, Slug: slug, Name: name}
+				row := WorkspaceRow{ID: id, Owner: owner, Slug: slug, Name: name, Created: created}
 
 				workspaces = append(workspaces, row)
 			}
@@ -564,8 +566,9 @@ func main() {
 
 				newName := oldName + " (Copy)"
 
+				created := time.Now().Format(time.RFC1123)
 				// create database entry
-				_, err2 := db.Exec("INSERT INTO workspaces (owner, slug, name) VALUES (?,?,?)", userID, newUuid, newName)
+				_, err2 := db.Exec("INSERT INTO workspaces (owner, slug, name, created) VALUES (?,?,?,?)", userID, newUuid, newName, created)
 				if err2 != nil {
 					fmt.Println(err2)
 				}
@@ -613,7 +616,8 @@ func main() {
 			userID := getUserId(r, db)
 
 			// create database entry
-			_, err := db.Exec("INSERT INTO workspaces (owner, slug, name) VALUES (?,?,?)", userID, uuidString, "Untitled")
+			created := time.Now().Format(time.RFC1123)
+			_, err := db.Exec("INSERT INTO workspaces (owner, slug, name, created) VALUES (?,?,?,?)", userID, uuidString, "Untitled", created)
 			if err != nil {
 				fmt.Println(err)
 			}

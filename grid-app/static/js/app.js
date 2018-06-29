@@ -623,8 +623,7 @@
 			this.wsManager.init();
 
 			this.wsManager.ws.onclose = function(){
-				alert("Lost connection to the server");
-				// alert("Lost connection to the server, redirecting to dashboard");
+				alert("Lost connection to the server, redirecting to dashboard");
 				// setTimeout(function(){
 				// 	var currentUrl = window.location.href;
 				// 	var newUrl = currentUrl.replace("/workspace/","/destruct/");

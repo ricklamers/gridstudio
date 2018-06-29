@@ -192,7 +192,7 @@ def sheet(cell_range, data = None, headers = False):
             
             newList = list(map(convert_to_json_string, data))
 
-            arguments =  ['RANGE', 'SETLIST', '0', cell_range]
+            arguments =  ['RANGE', 'SETLIST', cell_range, '0']
 
             # append list
             arguments = arguments + newList
@@ -212,7 +212,7 @@ def sheet(cell_range, data = None, headers = False):
                 # string meant as string, escape
                 data = "\"" + data + "\""
 
-            data = {'arguments': ['RANGE', 'SETSINGLE', '0', cell_range, ''.join(["=",str(data)])]}
+            data = {'arguments': ['RANGE', 'SETSINGLE', cell_range, '0', ''.join(["=",str(data)])]}
             data = ''.join(['#PARSE#', json.dumps(data),'#ENDPARSE#'])
             real_print(data, flush=True, end='')
     
