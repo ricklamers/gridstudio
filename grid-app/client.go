@@ -20,6 +20,8 @@ import (
 	"time"
 	"unicode"
 
+	"./detector"
+
 	"github.com/gorilla/websocket"
 )
 
@@ -84,6 +86,7 @@ type Grid struct {
 	DirtyCells          map[string]DynamicValue
 	ActiveSheet         int8
 	SheetNames          map[string]int8
+	PerformanceCounting map[string]int
 	SheetList           []string
 	SheetSizes          []SheetSize
 	PythonResultChannel chan string
@@ -473,17 +476,10 @@ func computeDirtyCells(grid *Grid) []Reference {
 	changedRefs := []Reference{}
 
 	// for every DV in dirtyCells clean up the DependInTemp list with refs not in DirtyCells
-	for _, thisDv := range grid.DirtyCells {
 
-		// if DependInTemp or DependOutTemp not defined, create here
-		if thisDv.DependInTemp == nil {
-			DependInTemp := make(map[string]bool)
-			thisDv.DependInTemp = &DependInTemp
-		}
-		if thisDv.DependOutTemp == nil {
-			DependOutTemp := make(map[string]bool)
-			thisDv.DependOutTemp = &DependOutTemp
-		}
+	// EXPLANATION: this code removes DependInTemp's that don't need to be recomputed, however, checking this might be more expensive than just including all dependintemp's
+
+	for _, thisDv := range grid.DirtyCells {
 
 		for ref := range *thisDv.DependInTemp {
 
@@ -562,19 +558,6 @@ func computeDirtyCells(grid *Grid) []Reference {
 			changedRefs = append(changedRefs, newReference)
 
 		}
-
-		// do always send (also explosive formulas)
-		// restore state after compute
-		// stringAfter := convertToString(newDv)
-
-		// adjusting to client needs here
-
-		// details: originalIsString is maintained because parse() affects the original Dv's ValueType
-		// formulaString := "=" + newDv.DataFormula
-
-		// if originalIsString {
-		// formulaString = newDv.DataString
-		// }
 
 		delete(grid.DirtyCells, index)
 
@@ -991,6 +974,10 @@ func incrementFormula(sourceFormula string, sourceRef Reference, destinationRef 
 
 		// when cutting, only the targetSheet is updated, so no difference in row or Column
 		targetSheetIndex := destinationRef.SheetIndex
+		if reference.SheetIndex != sourceRef.SheetIndex {
+			targetSheetIndex = reference.SheetIndex
+		}
+
 		if isCut {
 			rowDifference = 0
 			columnDifference = 0
@@ -1055,6 +1042,39 @@ func incrementFormula(sourceFormula string, sourceRef Reference, destinationRef 
 	return newFormula
 }
 
+func removeSheet(sheetIndex int8, grid *Grid) {
+
+	for currentSheetIndex := int(sheetIndex + 1); currentSheetIndex < len(grid.SheetList); currentSheetIndex++ {
+
+		for column := 1; column < grid.SheetSizes[currentSheetIndex].ColumnCount; column++ {
+
+			for row := 1; row < grid.SheetSizes[currentSheetIndex].RowCount; row++ {
+
+				indexString := strconv.Itoa(currentSheetIndex) + "!" + indexesToReference(row, column)
+				newIndexString := strconv.Itoa(currentSheetIndex-1) + "!" + indexesToReference(row, column)
+
+				toBeMovedDv := grid.Data[indexString]
+				toBeMovedDv.SheetIndex = int8(currentSheetIndex - 1)
+				grid.Data[newIndexString] = toBeMovedDv
+
+			}
+
+		}
+	}
+
+	// change grid.SheetList, grid.SheetNames, grid.SheetSizes
+	delete(grid.SheetNames, grid.SheetList[sheetIndex])
+
+	grid.SheetList = append(grid.SheetList[0:sheetIndex], grid.SheetList[sheetIndex+1:]...)
+	grid.SheetSizes = append(grid.SheetSizes[0:sheetIndex], grid.SheetSizes[sheetIndex+1:]...)
+
+	index := 0
+	for _, sheetName := range grid.SheetList {
+		grid.SheetNames[sheetName] = int8(index)
+		index++
+	}
+}
+
 func copySourceToDestination(sourceRange ReferenceRange, destinationRange ReferenceRange, grid *Grid, isCut bool) []Reference {
 
 	// case 1: sourceRange and destinationRange have equal size
@@ -1114,7 +1134,9 @@ func copySourceToDestination(sourceRange ReferenceRange, destinationRange Refere
 				destinationRef := Reference{String: indexesToReference(dRow, dColumn), SheetIndex: destinationRange.SheetIndex}
 				sourceRef := Reference{String: indexesToReference(sRow, sColumn), SheetIndex: sourceRange.SheetIndex}
 
-				destinationMapping[destinationRef] = sourceRef
+				if !(dRow > grid.SheetSizes[destinationRange.SheetIndex].RowCount || dColumn > grid.SheetSizes[destinationRange.SheetIndex].ColumnCount) {
+					destinationMapping[destinationRef] = sourceRef
+				}
 
 				if sRow < sourceRowEnd {
 					sRow++
@@ -1144,7 +1166,9 @@ func copySourceToDestination(sourceRange ReferenceRange, destinationRange Refere
 				destinationRef := Reference{String: indexesToReference(dRow, dColumn), SheetIndex: destinationRange.SheetIndex}
 				sourceRef := Reference{String: indexesToReference(sRow, sColumn), SheetIndex: sourceRange.SheetIndex}
 
-				destinationMapping[destinationRef] = sourceRef
+				if !(dRow > grid.SheetSizes[destinationRange.SheetIndex].RowCount || dColumn > grid.SheetSizes[destinationRange.SheetIndex].ColumnCount) {
+					destinationMapping[destinationRef] = sourceRef
+				}
 
 				// fmt.Println(destinationRef + "->" + sourceRef)
 
@@ -1691,8 +1715,12 @@ func changeSheetSize(newRowCount int, newColumnCount int, sheetIndex int8, c *Cl
 		for currentColumn := 0; currentColumn <= newColumnCount; currentColumn++ {
 			for currentRow := 0; currentRow <= newRowCount; currentRow++ {
 				if currentColumn > grid.SheetSizes[sheetIndex].ColumnCount || currentRow > grid.SheetSizes[sheetIndex].RowCount {
+
 					reference := Reference{String: indexesToReference(currentRow, currentColumn), SheetIndex: sheetIndex}
-					setDataByRef(reference, makeEmptyDv(), grid)
+
+					if !checkDataPresenceFromRef(reference, grid) {
+						setDataByRef(reference, makeEmptyDv(), grid)
+					}
 				}
 			}
 		}
@@ -1795,7 +1823,7 @@ func (c *Client) writePump() {
 
 		sheetList := []string{"Sheet1", "Sheet2"}
 
-		grid = Grid{Data: make(map[string]DynamicValue), DirtyCells: make(map[string]DynamicValue), ActiveSheet: 0, SheetNames: sheetNames, SheetList: sheetList, SheetSizes: sheetSizes}
+		grid = Grid{Data: make(map[string]DynamicValue), PerformanceCounting: make(map[string]int), DirtyCells: make(map[string]DynamicValue), ActiveSheet: 0, SheetNames: sheetNames, SheetList: sheetList, SheetSizes: sheetSizes}
 
 		cellCount := 1
 
@@ -1866,6 +1894,7 @@ func (c *Client) writePump() {
 
 			switch parsed[0] {
 			case "RANGE":
+
 				// send value for cell(s)
 				// c.send <- []byte(convertToString(grid[parsed[1]]).DataString)
 
@@ -1963,9 +1992,7 @@ func (c *Client) writePump() {
 					valuesIndex := 0
 					for _, ref := range references {
 
-						thisReference := ref
-
-						OriginalDependOut := getDataFromRef(thisReference, &grid).DependOut
+						OriginalDependOut := getDataFromRef(ref, &grid).DependOut
 
 						var dv DynamicValue
 
@@ -1989,12 +2016,12 @@ func (c *Client) writePump() {
 						// newDvs[ref] = dv
 
 						// set to grid for access during setDependencies
-						parsedDv := parse(dv, &grid, thisReference)
+						parsedDv := parse(dv, &grid, ref)
 						parsedDv.DataFormula = values[valuesIndex]
 						parsedDv.DependIn = &NewDependIn
 						parsedDv.DependOut = OriginalDependOut
 
-						setDataByRef(thisReference, parsedDv, &grid)
+						setDataByRef(ref, parsedDv, &grid)
 
 						valuesIndex++
 
@@ -2020,6 +2047,10 @@ func (c *Client) writePump() {
 					// computeAndSend(&grid, c)
 
 				}
+			case "EXIT":
+
+				c.hub.mainThreadChannel <- "EXIT"
+
 			case "GET":
 
 				sendCellsInRange(ReferenceRange{String: parsed[1], SheetIndex: getIndexFromString(parsed[2])}, &grid, c)
@@ -2069,14 +2100,31 @@ func (c *Client) writePump() {
 
 				sendSheets(c, &grid)
 
+			case "REMOVESHEET":
+
+				sheetIndex := getIndexFromString(parsed[1])
+				removeSheet(sheetIndex, &grid)
+				sendSheets(c, &grid)
+
 			case "COPY":
+
+				start := time.Now() // debug
 
 				sourceRange := ReferenceRange{parsed[1], getIndexFromString(parsed[2])}
 				destinationRange := ReferenceRange{parsed[3], getIndexFromString(parsed[4])}
 
 				copySourceToDestination(sourceRange, destinationRange, &grid, false)
 
+				elapsed := time.Since(start)                           // debug
+				log.Printf("copySourceToDestination took %s", elapsed) // debug
+
+				start = time.Now() // debug
+
 				changedCells := computeDirtyCells(&grid)
+
+				elapsed = time.Since(start)                      // debug
+				log.Printf("computeDirtyCells took %s", elapsed) // debug
+
 				sendDirtyOrInvalidate(changedCells, &grid, c)
 
 			case "INSERTROWCOL":
@@ -2206,11 +2254,15 @@ func (c *Client) writePump() {
 
 					OriginalDependOut := getDataFromRef(reference, &grid).DependOut
 
+					// escape double quotes
+					formulaString := strings.Replace(parsed[2], "\"", "\\\"", -1)
+
 					dv := DynamicValue{
 						ValueType:   DynamicValueTypeString,
 						DataString:  parsed[2],
-						DataFormula: "\"" + parsed[2] + "\""}
+						DataFormula: "\"" + formulaString + "\""}
 
+					// if input is empty string, set formula to empty string without quotes
 					if len(parsed[2]) == 0 {
 						dv.DataFormula = ""
 					}
@@ -2244,13 +2296,29 @@ func (c *Client) writePump() {
 				// TODO: grow the grid to minimum size
 				minColumnSize := 0
 
+				// replace \r\n to \n
+				csvString := strings.Replace(parsed[1], "\r\n", "\n", -1)
+
 				// replace \r to \n
-				csvString := strings.Replace(parsed[1], "\r", "\n", -1)
+				csvString = strings.Replace(csvString, "\r", "\n", -1)
 				csvStringReader := strings.NewReader(csvString)
 				reader := csv.NewReader(csvStringReader)
 
-				reader.Comma = ','
+				detector := detector.New()
+				delimiters := detector.DetectDelimiter(csvStringReader, '"')
+
+				// reset for CSV reader
+				csvStringReader.Reset(csvString)
+
+				if len(delimiters) > 0 {
+					reader.Comma = []rune(delimiters[0])[0]
+				} else {
+					reader.Comma = ','
+				}
+
 				lineCount := 0
+
+				newDvs := make(map[Reference]DynamicValue)
 
 				for {
 					// read just one record, but we could ReadAll() as well
@@ -2280,14 +2348,16 @@ func (c *Client) writePump() {
 
 						newDv := makeEmptyDv()
 
-						newDv.DataFormula = inputString
-
 						// if not number, escape with quotes
 						if !numberOnlyFilter.MatchString(inputString) {
 							newDv.ValueType = DynamicValueTypeString
 							newDv.DataString = inputString
+							newDv.DataFormula = "\"" + inputString + "\""
+
 						} else {
 							newDv.ValueType = DynamicValueTypeFloat
+							newDv.DataFormula = inputString
+
 							floatValue, err := strconv.ParseFloat(inputString, 64)
 
 							if err != nil {
@@ -2298,14 +2368,14 @@ func (c *Client) writePump() {
 							newDv.DataFloat = floatValue
 						}
 
-						oldDv := grid.Data[cellIndex]
+						reference := Reference{String: cellIndex, SheetIndex: grid.ActiveSheet}
+						oldDv := getDataFromRef(reference, &grid)
 						if oldDv.DependOut != nil {
 							newDv.DependOut = oldDv.DependOut // regain external dependencies, in case of oldDv
 						}
 
 						// this will add it to dirtyCells for re-compute
-						// grid.Data[cellIndex] = setDependencies(cellIndex, newDv, &grid)
-						grid.Data[cellIndex] = newDv
+						newDvs[reference] = newDv
 
 					}
 					// fmt.Println()
@@ -2325,10 +2395,11 @@ func (c *Client) writePump() {
 					newColumnCount = minColumnSize
 				}
 
-				grid.SheetSizes[grid.ActiveSheet].RowCount = newRowCount
-				grid.SheetSizes[grid.ActiveSheet].ColumnCount = newColumnCount
+				changeSheetSize(newRowCount, newColumnCount, grid.ActiveSheet, c, &grid)
 
-				sendSheetSize(c, grid.ActiveSheet, &grid)
+				for ref, dv := range newDvs {
+					setDataByRef(ref, setDependencies(ref, dv, &grid), &grid)
+				}
 
 				changedCells := computeDirtyCells(&grid)
 				sendDirtyOrInvalidate(changedCells, &grid, c)

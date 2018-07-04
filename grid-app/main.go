@@ -19,15 +19,16 @@ var memprofile = flag.String("memprofile", "", "write memory profile to `file`")
 
 func main() {
 
-	// initialize map
+	flag.Parse()
 
 	// PROFILING //
-	// flag.Parse()
 	// if *cpuprofile != "" {
+
 	// 	f, err := os.Create(*cpuprofile)
 	// 	if err != nil {
 	// 		log.Fatal("could not create CPU profile: ", err)
 	// 	}
+
 	// 	if err := pprof.StartCPUProfile(f); err != nil {
 	// 		log.Fatal("could not start CPU profile: ", err)
 	// 	}
@@ -35,7 +36,7 @@ func main() {
 	// }
 	// END PROFILING //
 
-	flag.Parse()
+	// initialize map
 	parseInit()
 
 	if *mode == "server" {
@@ -106,7 +107,10 @@ func runServer() {
 		}
 	})
 
-	hub := newHub()
+	mainThreadChannel := make(chan string)
+
+	hub := newHub(mainThreadChannel)
+
 	go hub.run()
 
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
@@ -117,7 +121,35 @@ func runServer() {
 	})
 
 	fmt.Println("Go server listening on port " + *addr)
-	log.Fatal(http.ListenAndServe(*addr, nil))
+	srv := startHttpServer(*addr)
+
+Loop:
+	for {
+		select {
+		case message := <-mainThreadChannel:
+			if message == "EXIT" {
+				break Loop
+			}
+		}
+	}
+
+	if err := srv.Shutdown(nil); err != nil {
+		panic(err) // failure/timeout shutting down the server gracefully
+	}
+}
+
+func startHttpServer(addr string) *http.Server {
+	srv := &http.Server{Addr: addr}
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil {
+			// cannot panic, because this probably is an intentional close
+			log.Printf("Httpserver: ListenAndServe() error: %s", err)
+		}
+	}()
+
+	// returning reference so caller can call Shutdown()
+	return srv
 }
 
 // func createDv(formula string) DynamicValue {

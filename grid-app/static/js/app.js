@@ -254,6 +254,8 @@
 			if(value == "="){
 				value = "";
 			}
+			// unescape "
+			value = value.replace(/\\\"/g, "\"")
 
 			if(!this.dataFormulas[sheet][position[0]]){
 				this.dataFormulas[sheet][position[0]] = [];
@@ -283,12 +285,13 @@
 		this.initTabs = function(){
 
 			 // Tabbed area
-			 $('.dev-tabs .tab').click(function(){
+			$('.dev-tabs .tab').click(function(){
 
 				var selector = $(this).attr('data-tab');
 				_this.showTab(selector);
 				
 			});
+			
 		}
 
 		this.showTab = function(selector){
@@ -306,6 +309,8 @@
 			}
 
 		}
+
+
 
 		this.ctx.a_moveTo = function(x,y){
 			_this.ctx.moveTo(x+0.5,y+0.5);
@@ -368,6 +373,8 @@
 
 			this.sheetSizer.style.height = sizerHeight + "px";
 			this.sheetSizer.style.width = sizerWidth + "px";
+
+			this.updateOffset();
 		}
 
 		this.initImagePlotTab = function(){
@@ -440,13 +447,13 @@
 		}
 
 		this.registerContextMenu = function(){
-			$('div-sheet').bind("contextmenu", function (event) {
+			$(_this.sheetDom).bind("contextmenu", function (event) {
     
 				// Avoid the real one
 				event.preventDefault();
 
-				_this.mouseRightClickLocation = [event.offsetX, event.offsetY];
-				
+				_this.mouseRightClickLocation = [event.offsetX -_this.sheetDom.scrollLeft, event.offsetY - _this.sheetDom.scrollTop];
+
 				// Show contextmenu
 				$(".context-menu").toggleClass("shown").css({
 					left: event.clientX + "px",
@@ -586,12 +593,12 @@
 
 			this.setSheetSize(this.sheetSizes[this.activeSheet][0], this.sheetSizes[this.activeSheet][1]);
 
+			// drawSheet is required for positionViewOnSelectedCells to work TODO: decouple
 			this.drawSheet();
 
-			// get sheet data for view
-			this.refreshView();
-
 			this.positionViewOnSelectedCells();
+
+			this.refreshView();
 		}
 
 		this.initSheetTabs = function(){
@@ -609,6 +616,28 @@
 					alert("You have to enter a sheet name, aborting.");
 				}
 			});
+
+			$('.sheet-tabs').on('dblclick', '.sheet-tab', function(){
+
+				var tabIndex = $(this).index();
+
+				if($('.sheet-tabs .sheet-tab').length == 1){
+					alert("You can't remove the last sheet.");
+					return
+				}
+
+				var remove = confirm("Are you sure you want to remove sheet: "+$(this).text()+"?");
+
+				if(remove){
+					_this.wsManager.send(JSON.stringify({arguments:["REMOVESHEET",tabIndex+""]}))
+				}
+				
+			});
+		}
+
+		this.updateOffset = function(){
+			this.scrollOffsetX = this.sheetDom.scrollLeft;
+			this.scrollOffsetY = this.sheetDom.scrollTop;
 		}
 
 		this.init = function(){
@@ -623,12 +652,15 @@
 			this.wsManager.init();
 
 			this.wsManager.ws.onclose = function(){
-				alert("Lost connection to the server, redirecting to dashboard");
-				// setTimeout(function(){
-				// 	var currentUrl = window.location.href;
-				// 	var newUrl = currentUrl.replace("/workspace/","/destruct/");
-				// 	window.location.href = newUrl;
-				// },100);
+				var destr = prompt("Lost connection to the server. Redirect to dashboard?", "yes");
+
+				if(destr == "yes") {
+					setTimeout(function(){
+						var currentUrl = window.location.href;
+						var newUrl = currentUrl.replace("/workspace/","/destruct/");
+						window.location.href = newUrl;
+					},100);
+				}
 			}
 
 			this.wsManager.onconnect = function(){
@@ -662,17 +694,19 @@
 
 			this.sheetDom.addEventListener('scroll',function(e){
 
-				_this.scrollOffsetX = _this.sheetDom.scrollLeft;
-				_this.scrollOffsetY = _this.sheetDom.scrollTop;
+				_this.updateOffset();
 
 				// draw canvas on scroll event
 				_this.drawSheet();
 
 			});
+
+			
 			
 			// resize listener
 			window.addEventListener('resize',function(){
 				_this.resizeSheet();
+				_this.drawSheet();
 			});
 			
 			this.isFocusedOnElement = function(){
@@ -769,15 +803,15 @@
 
 			this.sheetDom.addEventListener('mousedown',function(e){
 
+				var canvasMouseX = e.offsetX - _this.sheetDom.scrollLeft;
+				var canvasMouseY = e.offsetY - _this.sheetDom.scrollTop;
+
 				if(e.which == 1 && !_this.input_field.is(':focus')){
 
 					// also check for sheetSizer (for scrollbar), don't fall through to deselect_input_field
 					if(e.target == _this.sheetSizer){
 						_this.mouse_down_canvas = true;
-
-						var canvasMouseX = e.offsetX - _this.sheetDom.scrollLeft;
-						var canvasMouseY = e.offsetY - _this.sheetDom.scrollTop;
-
+						
 						// check if in indicator ranges -- resize column/rows
 						if(canvasMouseX < _this.sidebarSize || canvasMouseY < _this.sidebarSize){
 							_this.resizingIndicator = true;
@@ -824,7 +858,7 @@
 					if(e.target != _this.input_field[0] && _this.input_field.is(':focus')){
 
 						// if clicked outside of input field, while input field is open append reference of current click position in input
-						var clickedCellPosition = _this.positionToCellLocation(e.offsetX,e.offsetY);
+						var clickedCellPosition = _this.positionToCellLocation(canvasMouseX,canvasMouseY);
 						var clickedCellRef = _this.cellZeroIndexToString(clickedCellPosition[0], clickedCellPosition[1]);
 						_this.input_field.val(_this.input_field.val() + clickedCellRef);
 						e.preventDefault();
@@ -837,7 +871,10 @@
 			// mouse move listener
 			this.sheetDom.addEventListener('mousemove',function(e){
 
-				_this.lastMousePosition = [e.offsetX, e.offsetY];
+				var canvasMouseX = e.offsetX - _this.sheetDom.scrollLeft;
+				var canvasMouseY = e.offsetY - _this.sheetDom.scrollTop;
+
+				_this.lastMousePosition = [canvasMouseX, canvasMouseY];
 
 				if(_this.mouse_down_canvas){
 
@@ -898,6 +935,7 @@
 					_this.resizingIndicator = false;
 					// recompute bounds on mouse up
 					_this.resizeSheet();
+					_this.drawSheet();
 				}
 				
 			});
@@ -1202,14 +1240,30 @@
 			var startCell = this.cellZeroIndexToString(lower_upper_cells[0][0],lower_upper_cells[0][1]);
 			var endCell =  this.cellZeroIndexToString(lower_upper_cells[1][0],lower_upper_cells[1][1]);
 
-			// clear data from cache (? - not sure if scales well to large data sets)
+			// delete visible cells from cache
 			for(var r = lower_upper_cells[0][0]; r <= lower_upper_cells[1][0]; r++){
+
+				if(r < this.drawRowStart){
+					r = this.drawRowStart;
+				}
+				if(r > this.drawRowEnd){
+					break;
+				}
+
 				for(var c = lower_upper_cells[0][1]; c <= lower_upper_cells[1][1]; c++){
-					if(this.data[r]){
-						this.data[r][c] = undefined;
+
+					if(c < this.drawColumnStart){
+						c = this.drawColumnStart;
 					}
-					if(this.dataFormulas[r]){
-						this.dataFormulas[r][c] = undefined;
+					if(c > this.drawColumnEnd){
+						break;
+					}
+
+					if(this.data[this.activeSheet][r]){
+						this.data[this.activeSheet][r][c] = undefined;
+					}
+					if(this.dataFormulas[this.activeSheet][r]){
+						this.dataFormulas[this.activeSheet][r][c] = undefined;
 					}
 				}
 			}
@@ -1518,8 +1572,7 @@
 
 			}
 
-			this.scrollOffsetX = this.sheetDom.scrollLeft;
-			this.scrollOffsetY = this.sheetDom.scrollTop;
+			this.updateOffset();
 
 			// redraw
 			this.drawSheet();
@@ -1761,11 +1814,8 @@
 		this.codeOpen = true;
 		
 		this.resizeSheet = function(){
-			
 			this.computeScrollBounds();
 			this.sizeSizer();
-			this.drawSheet();
-			
 		}
 		
 		this.toggleCode = function(){
@@ -1901,6 +1951,8 @@
 
 			menu.find('menu-item.close-workspace').click(function(e){
 				e.preventDefault();
+
+				_this.wsManager.send(JSON.stringify({arguments:["EXIT"]}))
 
 				_this.termManager.term.socket.onclose = function(){
 					_this.wsManager.ws.close();
@@ -2383,7 +2435,7 @@
 
 			while(true){
 
-				if(currentY > height || i > this.numRows){
+				if(currentY > height + this.rowHeights(i) || i > this.numRows){
 					break;
 				}
 
@@ -2403,7 +2455,7 @@
 
 			while(true){
 				
-				if(currentX > width || d > this.numColumns){
+				if(currentX > width + this.columnWidths(d) || d > this.numColumns){
 					break;
 				}
 

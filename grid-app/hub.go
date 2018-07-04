@@ -10,15 +10,18 @@ type Hub struct {
 	register chan *Client
 
 	unregister chan *Client
+
+	mainThreadChannel chan string
 }
 
-func newHub() *Hub {
+func newHub(mainThreadChannel chan string) *Hub {
 
 	return &Hub{
-		broadcast:  make(chan []byte),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
-		clients:    make(map[*Client]bool),
+		broadcast:         make(chan []byte),
+		register:          make(chan *Client),
+		unregister:        make(chan *Client),
+		clients:           make(map[*Client]bool),
+		mainThreadChannel: mainThreadChannel,
 	}
 
 }

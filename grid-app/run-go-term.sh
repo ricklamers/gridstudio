@@ -21,7 +21,7 @@ fi
 
 cd /home/source/
 # Start the second process
-go run main.go tests.go parse.go hub.go client.go python.go &
+go run *.go &
 status=$?
 if [ $status -ne 0 ]; then
   echo "Failed to start Go webserver: $status"

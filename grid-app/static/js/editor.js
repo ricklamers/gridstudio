@@ -109,7 +109,10 @@
             editor.onPaste = function(e){
                 if(editor.isFocused()){
                     var session = editor.session;
-                    session.remove(session.selection);
+                    if(editor.getSelectedText().length != 0){
+                        var range = editor.selection.getRange();
+                        session.replace(range, '')
+                    }
                     session.insert(editor.getCursorPosition(), e)
                 }
             }
@@ -135,6 +138,9 @@
         this.saveFile = function(){
             if(!this.filepath){
                 var filename = prompt("Enter a filename");
+                if(filename === null){
+                    return;
+                }
                 this.setFilePath( "/home/user/" + filename);
 
                 var extension = filename.split(".")[filename.split(".").length-1];

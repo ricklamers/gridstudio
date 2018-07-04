@@ -108,6 +108,10 @@ func getData(ref1 DynamicValue, grid *Grid) DynamicValue {
 func getDataFromRef(reference Reference, grid *Grid) DynamicValue {
 	return grid.Data[getMapIndexFromReference(reference)]
 }
+func checkDataPresenceFromRef(reference Reference, grid *Grid) bool {
+	_, ok := grid.Data[getMapIndexFromReference(reference)]
+	return ok
+}
 
 func getReferenceFromString(formula string, sheetIndex int8, grid *Grid) Reference {
 	if !strings.Contains(formula, "!") {
@@ -433,7 +437,7 @@ func setDependencies(reference Reference, dv DynamicValue, grid *Grid) DynamicVa
 	if dv.ValueType == DynamicValueTypeExplosiveFormula {
 		references = make(map[Reference]bool)
 	} else {
-		references = findReferences(dv.DataFormula, dv.SheetIndex, true, grid)
+		references = findReferences(dv.DataFormula, reference.SheetIndex, true, grid)
 	}
 
 	// every cell that this depended on needs to get removed
@@ -746,7 +750,16 @@ func parse(formula DynamicValue, grid *Grid, targetRef Reference) DynamicValue {
 
 		} else {
 
-			if strings.Index(singleElement.DataFormula, ":") != -1 {
+			if singleElement.DataFormula[0:1] == "\"" && singleElement.DataFormula[len(singleElement.DataFormula)-1:len(singleElement.DataFormula)] == "\"" {
+
+				stringValue := singleElement.DataFormula[1 : len(singleElement.DataFormula)-1]
+
+				// unescape double quote
+				stringValue = strings.Replace(stringValue, "\\\"", "\"", -1)
+
+				return DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeString, DataString: stringValue}
+
+			} else if strings.Index(singleElement.DataFormula, ":") != -1 {
 
 				cells := strings.Split(singleElement.DataFormula, ":")
 
@@ -758,10 +771,6 @@ func parse(formula DynamicValue, grid *Grid, targetRef Reference) DynamicValue {
 				} else {
 					return DynamicValue{ValueType: DynamicValueTypeReference, SheetIndex: targetRef.SheetIndex, DataString: singleElement.DataFormula}
 				}
-
-			} else if singleElement.DataFormula[0:1] == "\"" && singleElement.DataFormula[len(singleElement.DataFormula)-1:len(singleElement.DataFormula)] == "\"" {
-
-				return DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeString, DataString: singleElement.DataFormula[1 : len(singleElement.DataFormula)-1]}
 
 			} else if numberOnlyFilter.MatchString(singleElement.DataFormula) {
 

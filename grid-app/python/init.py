@@ -146,7 +146,7 @@ def df_to_list(df, include_headers = True):
         data = data + column_data
     return (data,column_length, len(columns))
 
-def sheet(cell_range, data = None, headers = False):
+def sheet(cell_range, data = None, headers = False, sheet_index = 0):
 
     # input data into sheet
     if data is not None:
@@ -192,7 +192,7 @@ def sheet(cell_range, data = None, headers = False):
             
             newList = list(map(convert_to_json_string, data))
 
-            arguments =  ['RANGE', 'SETLIST', cell_range, '0']
+            arguments =  ['RANGE', 'SETLIST', cell_range, str(sheet_index)]
 
             # append list
             arguments = arguments + newList
@@ -212,7 +212,7 @@ def sheet(cell_range, data = None, headers = False):
                 # string meant as string, escape
                 data = "\"" + data + "\""
 
-            data = {'arguments': ['RANGE', 'SETSINGLE', cell_range, '0', ''.join(["=",str(data)])]}
+            data = {'arguments': ['RANGE', 'SETSINGLE', cell_range, str(sheet_index), ''.join(["=",str(data)])]}
             data = ''.join(['#PARSE#', json.dumps(data),'#ENDPARSE#'])
             real_print(data, flush=True, end='')
     
@@ -223,7 +223,7 @@ def sheet(cell_range, data = None, headers = False):
             cell_range = ':'.join([cell_range, cell_range])
 
         # in blocking fashion get latest data of range from Go
-        real_print("#DATA#" + '0!'+ cell_range + '#ENDPARSE#', end='', flush=True)
+        real_print("#DATA#" + str(sheet_index)+'!'+ cell_range + '#ENDPARSE#', end='', flush=True)
         getAndExecuteInputOnce()
         # if everything works, the exec command has filled sheet_data with the appropriate data
         # return data range as arrays
@@ -233,7 +233,7 @@ def sheet(cell_range, data = None, headers = False):
         for column in column_references:
             column_data = []
             for reference in column:
-                column_data.append(sheet_data[reference])
+                column_data.append(sheet_data[str(sheet_index)+'!'+reference])
             result.append(column_data)
 
         return pd.DataFrame(data=result).transpose()

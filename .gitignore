@@ -3,3 +3,4 @@ userdata/
 *.db
 debug
 manager.exe
+cpu.dat

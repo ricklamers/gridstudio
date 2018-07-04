@@ -18,42 +18,45 @@ func runTests() {
 	testFailCount = 0
 
 	if !debug {
-		testBool("((A1 + A10) - (1))", true)
-		testBool("A10 + 0.2", true)
-		testBool("A10 + A0.2", false)
-		testBool("0.1 + 0.2 * 0.3 / 0.1", true)
-		testBool("0.1 + 0.2 * 0.3 / 0.1A", false)
-		testBool("A1 * A20 + 0.2 - \"abc\"", true)
-		testBool("A1 * A + 0.2 - \"abc\"", false)
-		testBool("SUM(A1:10, 10)", false)
-		testBool("A1 ^^ 10", false)
-		testBool("A1 ^ 10", true)
-		testBool("SUM(A1 ^ 10, 1, 1.05))", false)
-		testBool("SUM(A1 ^ 10, 1, 1.05)", true)
-		testBool("SUM(A1 ^ 10, 1, A1.05)", false)
-		testBool("A.01", false)
-		testBool("A10+0.01", true)
-		testBool("A10+A", false)
-		testBool("$A$10+$A1+A$2", true)
+		testFormula("((A1 + A10) - (1))", true)
+		testFormula("A10 + 0.2", true)
+		testFormula("A10 + A0.2", false)
+		testFormula("0.1 + 0.2 * 0.3 / 0.1", true)
+		testFormula("0.1 + 0.2 * 0.3 / 0.1A", false)
+		testFormula("A1 * A20 + 0.2 - \"abc\"", true)
+		testFormula("A1 * A + 0.2 - \"abc\"", false)
+		testFormula("SUM(A1:10, 10)", false)
+		testFormula("A1 ^^ 10", false)
+		testFormula("A1 ^ 10", true)
+		testFormula("SUM(A1 ^ 10, 1, 1.05))", false)
+		testFormula("SUM(A1 ^ 10, 1, 1.05)", true)
+		testFormula("SUM(A1 ^ 10, 1, A1.05)", false)
+		testFormula("A.01", false)
+		testFormula("A10+0.01", true)
+		testFormula("A10+A", false)
+		testFormula("$A$10+$A1+A$2", true)
 
 		// dollar fixing references
-		testBool("$$A1", false)
-		testBool("$A$1", true)
-		testBool("A$1", true)
-		testBool("$A1", true)
-		testBool("A1", true)
+		testFormula("$$A1", false)
+		testFormula("$A$1", true)
+		testFormula("A$1", true)
+		testFormula("$A1", true)
+		testFormula("A1", true)
 
-		testBool("A$$1", false)
-		testBool("'0'!A5 + 'Blad 2'!A10 + A10 - Blad15!$A$100", true)
-		testBool("0!A5 + 'Blad 2'!A10 + A10 - Blad15!$A$100", false)
-		testBool("10+-10/10--10", true)
-		testBool("", true)
-		testBool("10+-10/10---10", false)
-		testBool("A10+(-10)", true)
-		testBool("A10+(--10)", false)
-		testBool("A1*-5", true)
-		testBool("*5", false)
-		testBool("$B$1+CEIL(RAND()*1000)", true)
+		testFormula("A$$1", false)
+		testFormula("'0'!A5 + 'Blad 2'!A10 + A10 - Blad15!$A$100", true)
+		testFormula("0!A5 + 'Blad 2'!A10 + A10 - Blad15!$A$100", false)
+		testFormula("10+-10/10--10", true)
+		testFormula("", true)
+		testFormula("10+-10/10---10", false)
+		testFormula("A10+(-10)", true)
+		testFormula("A10+(--10)", false)
+		testFormula("A1*-5", true)
+		testFormula("*5", false)
+		testFormula("$B$1+CEIL(RAND()*1000)", true)
+
+		referenceCount := findReferenceStrings("\"abudh\\\"ijdso\"")
+		testBool(len(referenceCount) == 0, true)
 
 		referenceMap := make(map[string]string)
 		referenceMap["Sheet2!A1"] = "Sheet2!A2"
@@ -75,7 +78,7 @@ func runTests() {
 
 	} else {
 		// space to run single test cases
-		// testBool("$B$1+CEIL(RAND()*1000)", true)
+		// testFormula("$B$1+CEIL(RAND()*1000)", true)
 
 	}
 
@@ -91,7 +94,17 @@ func testString(result string, expected string) {
 	}
 }
 
-func testBool(formula string, expected bool) {
+func testBool(result bool, expected bool) {
+	testCount++
+	if result != expected {
+		fmt.Println("[Test #" + strconv.Itoa(testCount) + " failed] Expected: " + strconv.FormatBool(expected) + ", got: " + strconv.FormatBool(result))
+		testFailCount++
+	} else {
+		fmt.Println("[Test #" + strconv.Itoa(testCount) + " succeeded] Expected: " + strconv.FormatBool(expected) + ", got: " + strconv.FormatBool(result))
+	}
+}
+
+func testFormula(formula string, expected bool) {
 	testCount++
 	result := isValidFormula(formula)
 	if result != expected {
