@@ -38,9 +38,9 @@ body {
 
 		.workspaceName{
 			position: absolute;
-			width: 200px;
+			width: 30%;
 			left: 50%;
-			margin-left: -100px;
+			margin-left: -15%;
 			top: 6px;
 
 			input{
@@ -368,9 +368,29 @@ body {
 			.path{
 				background: #eee;
 				padding: 4px;
-				input{
+				display: flex;
+
+				.files-home{
+					display: inline-block;
+					width: 27px;
 					padding: 4px;
-					width:100%;
+					padding-left: 0;
+
+					opacity: 0.35;
+					&:hover {
+						opacity: 1;
+					}
+					
+					cursor: pointer;
+					
+					img {
+						width: 100%;
+						
+					}
+				}
+				input{
+					flex: 1;
+					padding: 4px;
 				}
 			}
 			
@@ -454,6 +474,9 @@ body {
 				padding-left: 15px;
 				position: relative;
 				
+				font-family: monospace;
+				white-space: pre;
+	
 				&.error {
 					color: orange;
 				}

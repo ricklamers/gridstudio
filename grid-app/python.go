@@ -25,9 +25,14 @@ func streamPythonEOut(stdoutPipe io.ReadCloser, pythonIn io.WriteCloser, c *Clie
 
 		default:
 			n, err := stdoutPipe.Read(buffer)
+
+			if err != nil {
+				fmt.Println(err)
+			}
+
 			if err == io.EOF {
 				stdoutPipe.Close()
-				break
+				return
 			}
 			if err != nil {
 				fmt.Println(err)
@@ -80,6 +85,11 @@ func streamPythonOut(stdoutPipe io.ReadCloser, pythonIn io.WriteCloser, c *Clien
 
 				if err != nil {
 					fmt.Println(err)
+				}
+
+				if err == io.EOF {
+					stdoutPipe.Close()
+					return
 				}
 				// n, err := io.ReadFull(stdoutPipe, buffer)
 

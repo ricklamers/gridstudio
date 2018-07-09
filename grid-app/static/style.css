@@ -30,9 +30,9 @@ body header {
 }
 body header .workspaceName {
   position: absolute;
-  width: 200px;
+  width: 30%;
   left: 50%;
-  margin-left: -100px;
+  margin-left: -15%;
   top: 6px;
 }
 body header .workspaceName input {
@@ -315,10 +315,25 @@ body div-sheet canvas {
 .code-editor .dev-tabs .filemanager .path {
   background: #eee;
   padding: 4px;
+  display: flex;
+}
+.code-editor .dev-tabs .filemanager .path .files-home {
+  display: inline-block;
+  width: 27px;
+  padding: 4px;
+  padding-left: 0;
+  opacity: 0.35;
+  cursor: pointer;
+}
+.code-editor .dev-tabs .filemanager .path .files-home:hover {
+  opacity: 1;
+}
+.code-editor .dev-tabs .filemanager .path .files-home img {
+  width: 100%;
 }
 .code-editor .dev-tabs .filemanager .path input {
+  flex: 1;
   padding: 4px;
-  width: 100%;
 }
 .code-editor .dev-tabs .filemanager .icon {
   display: block;
@@ -389,6 +404,8 @@ body div-sheet canvas {
 .code-editor .dev-tabs .console .message {
   padding-left: 15px;
   position: relative;
+  font-family: monospace;
+  white-space: pre;
 }
 .code-editor .dev-tabs .console .message.error {
   color: orange;

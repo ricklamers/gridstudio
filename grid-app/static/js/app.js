@@ -56,6 +56,7 @@
 		this.wsManager = new WSManager(this);
 		this.fileManager = new FileManager(this);
 		this.editor = new Editor(this);
+		this.codeGen = new CodeGen(this);
 		this.termManager = new TermManager(this);
 		
  		this.dom = document.querySelector('body');
@@ -510,6 +511,10 @@
 					_this.insertRowColumn('ROW','ABOVE');
 				}else if($(this).hasClass('insert-row-below')){
 					_this.insertRowColumn('ROW','BELOW');
+				}else if($(this).hasClass('codegen')){
+					var method = $(this).attr('data-method');
+					var selection = _this.cellArrayToStringRange(_this.getSelectedCellsInOrder()); 
+					_this.codeGen.generate(method, selection, _this.activeSheet);
 				}
 
 				$('.context-menu').removeClass("shown");
@@ -644,6 +649,9 @@
 
 			// initialize editor
 			this.editor.init();
+
+			// initialize codeGen
+			this.codeGen.init();
 
 			// get workspace details
 			this.getWorkspaceDetails();
@@ -2033,7 +2041,7 @@
 		this.plot_count = 0;
 
 		// init at 9
-		this.plot_z_index = 9;
+		this.plot_z_index = 10000;
 
 		this.plot_draggable = function(elem){
 			
@@ -2122,11 +2130,13 @@
 
 					if(!resize){
 
-						transform[0] += diff[0];
-						transform[1] += diff[1];
-
-						// move
-						$elem.css({left: transform[0] + "px", top: transform[1] + "px"})
+						if(!$(e.target).hasClass('dragcover')){
+							transform[0] += diff[0];
+							transform[1] += diff[1];
+	
+							// move
+							$elem.css({left: transform[0] + "px", top: transform[1] + "px"})
+						}
 						
 					}else{
 						// resize
@@ -2175,6 +2185,9 @@
 		}
 		
 		this.get_range_float = function(range, sheetIndex){
+			if(sheetIndex === undefined){
+				console.error("sheetIndex must be defined for get_range_float")
+			}
 			return this.get_range(range[0],range[1], sheetIndex).map(this.parseFloatForced);
 		}
 		
@@ -2184,19 +2197,24 @@
 			
 			var data_update;
 
-			if (x_range.length > 0){
-				data_update = {
-					x: this.get_range_float(x_range, plot.sheetIndex),
-				};
-				Plotly.restyle(plot.plot_id, 'x', [data_update.x]);
-			}
-			
+			data_update = {};
+
+			data_update.type = plot.traces[0].type;
+			data_update.mode = plot.traces[0].mode;
+
 			if(y_range.length > 0){
-				data_update = {
-					y: this.get_range_float(y_range, plot.sheetIndex)
-				};
-				Plotly.restyle(plot.plot_id, 'y', [data_update.y]);
+				data_update.y = this.get_range_float(y_range, plot.sheetIndex)
 			}
+			if(x_range.length > 0){
+				data_update.x = this.get_range_float(x_range, plot.sheetIndex)
+			}
+
+			Plotly.react(plot.plot_id,[data_update], plot.layout);
+
+			// Plotly.relayout(plot.plot_id, {
+			// 	'xaxis.autorange': true,
+			// 	'yaxis.autorange': true
+			// });
 
 			// recompute 
 			if(plot.type == 'histogram'){
@@ -2225,8 +2243,8 @@
 				y_range = [[selectedCellsOrdered[0][0],selectedCellsOrdered[0][1]+1],[selectedCellsOrdered[1][0],selectedCellsOrdered[1][1]]];
 
 				var trace1 = {
-					x: this.get_range_float(x_range),
-					y: this.get_range_float(y_range),
+					x: this.get_range_float(x_range, this.activeSheet),
+					y: this.get_range_float(y_range, this.activeSheet),
 					mode: 'markers',
 					type: 'scatter'
 				};
@@ -2238,9 +2256,8 @@
 				x_range = [[selectedCellsOrdered[0][0],selectedCellsOrdered[0][1]],[selectedCellsOrdered[1][0],selectedCellsOrdered[1][1]]];
 				
 				var trace1 = {
-					x: this.get_range_float(x_range),
-					type: 'histogram',
-					autobinx: true
+					x: this.get_range_float(x_range, this.activeSheet),
+					type: 'histogram'
 				};
 				// var minArray = getMinOfArray(trace1.x);
 				// var maxArray = getMaxOfArray(trace1.x);
@@ -2257,8 +2274,8 @@
 					y_range = [[selectedCellsOrdered[0][0],selectedCellsOrdered[0][1]+1],[selectedCellsOrdered[1][0],selectedCellsOrdered[1][1]]];
 					
 					var trace1 = {
-						x: this.get_range_float(x_range),
-						y: this.get_range_float(y_range),
+						x: this.get_range_float(x_range, this.activeSheet),
+						y: this.get_range_float(y_range, this.activeSheet),
 						mode: 'lines',
 						type: 'scatter'
 					};
@@ -2267,7 +2284,7 @@
 					y_range = [[selectedCellsOrdered[0][0],selectedCellsOrdered[0][1]],[selectedCellsOrdered[1][0],selectedCellsOrdered[1][1]]];
 					
 					var trace1 = {
-						y: this.get_range_float(y_range),
+						y: this.get_range_float(y_range, this.activeSheet),
 						mode: 'lines',
 						type: 'scatter'
 					};
@@ -2295,8 +2312,6 @@
 
 			$('.main-body').prepend(plot_div);
 			
-			var data = [trace1];
-			
 			var layout = {
 				title: type.capitalize() + " plot",
 				showlegend: false,
@@ -2311,15 +2326,14 @@
 			Plotly.setPlotConfig({
 				modeBarButtonsToRemove: ['sendDataToCloud']
 			});
-			
 				
-			Plotly.newPlot(plot_id, data,layout,{scrollZoom: true});
+			Plotly.newPlot(plot_id, [trace1], layout,{scrollZoom: true});
 
 			this.addPlotToMenu(plot_id);
 			this.plot_draggable(plot_div[0]);
 			
 			// add plot
-			var plotObject = {plot_id, type: type, data: [x_range, y_range], sheetIndex: this.activeSheet};
+			var plotObject = {plot_id, type: type, data: [x_range, y_range], traces: [trace1], layout: layout, sheetIndex: this.activeSheet};
 			this.plots[plot_id] = plotObject
 
 			// refresh data only on initial plot

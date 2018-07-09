@@ -147,6 +147,10 @@
             this.dom = $('.dev-tabs .view.filemanager');
             this.getDir(this.cwd);
 
+            this.dom.find('.files-home').click(function(){
+                _this.getDir("/home/user")
+            })
+
             this.dom.on('click','li.file,li.directory',function(e){
                 var path = $(this).attr("data-path");
 

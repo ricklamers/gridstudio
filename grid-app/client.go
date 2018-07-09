@@ -686,7 +686,7 @@ func determineMinimumRectangle(startRow int, startColumn int, sheetIndex int8, g
 	for r := startRow; r <= grid.SheetSizes[sheetIndex].RowCount; r++ {
 		for c := startColumn; c <= grid.SheetSizes[sheetIndex].ColumnCount; c++ {
 
-			cell := getDataFromRef(Reference{String: indexesToReference(r, c), SheetIndex: sheetIndex}, grid)
+			cell := getDataFromRef(Reference{String: indexesToReferenceString(r, c), SheetIndex: sheetIndex}, grid)
 
 			cellFormula := cell.DataFormula
 
@@ -721,7 +721,7 @@ func generateCSV(grid *Grid) string {
 
 		for c := 1; c <= numberOfColumns; c++ {
 
-			cell := getDataFromRef(Reference{String: indexesToReference(r, c), SheetIndex: grid.ActiveSheet}, grid)
+			cell := getDataFromRef(Reference{String: indexesToReferenceString(r, c), SheetIndex: grid.ActiveSheet}, grid)
 
 			// fmt.Println("Ref: " + doubleIndexToStringRef(r, c))
 			// fmt.Println("cell.DataFormula: " + cell.DataFormula)
@@ -831,7 +831,7 @@ func sortRange(direction string, cellRange string, sortColumn string, grid *Grid
 	var sortGridItemArray []SortGridItem
 
 	for r := lowerRow; r <= upperRow; r++ {
-		reference := Reference{String: indexesToReference(r, sortColumnIndex), SheetIndex: grid.ActiveSheet}
+		reference := Reference{String: indexesToReferenceString(r, sortColumnIndex), SheetIndex: grid.ActiveSheet}
 		sortGridItemArray = append(sortGridItemArray, SortGridItem{reference: reference, dv: getDataFromRef(reference, grid)})
 	}
 
@@ -868,7 +868,7 @@ func sortRange(direction string, cellRange string, sortColumn string, grid *Grid
 
 	for _, sortGridItem := range sortGridItemArray {
 
-		newRef := Reference{String: indexesToReference(currentRow, sortColumnIndex), SheetIndex: sortGridItem.reference.SheetIndex}
+		newRef := Reference{String: indexesToReferenceString(currentRow, sortColumnIndex), SheetIndex: sortGridItem.reference.SheetIndex}
 
 		oldRowIndex := getReferenceRowIndex(sortGridItem.reference.String)
 
@@ -885,8 +885,8 @@ func sortRange(direction string, cellRange string, sortColumn string, grid *Grid
 		newGrid[newRef] = newDv
 
 		for _, nonSortingColumnIndex := range nonSortingColumns {
-			oldRef := Reference{String: indexesToReference(oldRowIndex, nonSortingColumnIndex), SheetIndex: sortGridItem.reference.SheetIndex}
-			newRef := Reference{String: indexesToReference(currentRow, nonSortingColumnIndex), SheetIndex: sortGridItem.reference.SheetIndex}
+			oldRef := Reference{String: indexesToReferenceString(oldRowIndex, nonSortingColumnIndex), SheetIndex: sortGridItem.reference.SheetIndex}
+			newRef := Reference{String: indexesToReferenceString(currentRow, nonSortingColumnIndex), SheetIndex: sortGridItem.reference.SheetIndex}
 
 			oldDv := getDataFromRef(oldRef, grid)
 			sourceFormula := oldDv.DataFormula
@@ -1050,8 +1050,8 @@ func removeSheet(sheetIndex int8, grid *Grid) {
 
 			for row := 1; row < grid.SheetSizes[currentSheetIndex].RowCount; row++ {
 
-				indexString := strconv.Itoa(currentSheetIndex) + "!" + indexesToReference(row, column)
-				newIndexString := strconv.Itoa(currentSheetIndex-1) + "!" + indexesToReference(row, column)
+				indexString := strconv.Itoa(currentSheetIndex) + "!" + indexesToReferenceString(row, column)
+				newIndexString := strconv.Itoa(currentSheetIndex-1) + "!" + indexesToReferenceString(row, column)
 
 				toBeMovedDv := grid.Data[indexString]
 				toBeMovedDv.SheetIndex = int8(currentSheetIndex - 1)
@@ -1077,11 +1077,9 @@ func removeSheet(sheetIndex int8, grid *Grid) {
 
 func copySourceToDestination(sourceRange ReferenceRange, destinationRange ReferenceRange, grid *Grid, isCut bool) []Reference {
 
-	// case 1: sourceRange and destinationRange have equal size
-	// solution: copy every cell to every destinationRange cell
-	// case 2: sourceRange is smaller then destinationRange
+	// case 1: sourceRange is smaller then destinationRange
 	// solution: repeat but only if it fits exactly in destinationRange
-	// case 3: sourceRange is bigger then destinationRange
+	// case 2: sourceRange is bigger then destinationRange
 	// solution: copy everything from source to destination starting at destinationRange cell 1
 
 	// mapping: determine which cell's contents will go where
@@ -1102,8 +1100,8 @@ func copySourceToDestination(sourceRange ReferenceRange, destinationRange Refere
 	// if len(sourceCells) == len(destinationCells) {
 	// 	for key, value := range sourceCells {
 
-	// 		destinationRef := Reference{String: indexesToReference(dRow, dColumn), SheetIndex: destinationRange.SheetIndex}
-	// 		sourceRef := Reference{String: indexesToReference(sRow, sColumn), SheetIndex: sourceRange.SheetIndex}
+	// 		destinationRef := Reference{String: indexesToReferenceString(dRow, dColumn), SheetIndex: destinationRange.SheetIndex}
+	// 		sourceRef := Reference{String: indexesToReferenceString(sRow, sColumn), SheetIndex: sourceRange.SheetIndex}
 
 	// 		destinationMapping[destinationCells[key]] = value
 	// 	}
@@ -1131,8 +1129,8 @@ func copySourceToDestination(sourceRange ReferenceRange, destinationRange Refere
 		for dColumn := destinationColumnStart; dColumn <= destinationColumnEnd; dColumn++ {
 			for dRow := destinationRowStart; dRow <= destinationRowEnd; dRow++ {
 
-				destinationRef := Reference{String: indexesToReference(dRow, dColumn), SheetIndex: destinationRange.SheetIndex}
-				sourceRef := Reference{String: indexesToReference(sRow, sColumn), SheetIndex: sourceRange.SheetIndex}
+				destinationRef := Reference{String: indexesToReferenceString(dRow, dColumn), SheetIndex: destinationRange.SheetIndex}
+				sourceRef := Reference{String: indexesToReferenceString(sRow, sColumn), SheetIndex: sourceRange.SheetIndex}
 
 				if !(dRow > grid.SheetSizes[destinationRange.SheetIndex].RowCount || dColumn > grid.SheetSizes[destinationRange.SheetIndex].ColumnCount) {
 					destinationMapping[destinationRef] = sourceRef
@@ -1163,8 +1161,8 @@ func copySourceToDestination(sourceRange ReferenceRange, destinationRange Refere
 		for sColumn := sourceColumnStart; sColumn <= sourceColumnEnd; sColumn++ {
 			for sRow := sourceRowStart; sRow <= sourceRowEnd; sRow++ {
 
-				destinationRef := Reference{String: indexesToReference(dRow, dColumn), SheetIndex: destinationRange.SheetIndex}
-				sourceRef := Reference{String: indexesToReference(sRow, sColumn), SheetIndex: sourceRange.SheetIndex}
+				destinationRef := Reference{String: indexesToReferenceString(dRow, dColumn), SheetIndex: destinationRange.SheetIndex}
+				sourceRef := Reference{String: indexesToReferenceString(sRow, sColumn), SheetIndex: sourceRange.SheetIndex}
 
 				if !(dRow > grid.SheetSizes[destinationRange.SheetIndex].RowCount || dColumn > grid.SheetSizes[destinationRange.SheetIndex].ColumnCount) {
 					destinationMapping[destinationRef] = sourceRef
@@ -1218,7 +1216,7 @@ func copySourceToDestination(sourceRange ReferenceRange, destinationRange Refere
 				thisReference := getReferenceFromMapIndex(ref)
 
 				// if DependOut not in source (will not be moved/deleted)
-				originalDv := getDvAndRefForCopyModify(getReferenceFromMapIndex(ref), operationRowDifference, operationColumnDifference, destinationRef.SheetIndex, newDvs, grid)
+				originalDv := getDvAndRefForCopyModify(thisReference, operationRowDifference, operationColumnDifference, destinationRef.SheetIndex, newDvs, grid)
 				originalFormula := originalDv.DataFormula
 
 				outgoingDvReferences := findReferences(originalFormula, originalDv.SheetIndex, false, grid)
@@ -1329,7 +1327,7 @@ func putDvForCopyModify(reference Reference, dv DynamicValue, diffRow int, diffC
 	if _, ok := newDvs[newlyMappedRef]; ok {
 		newDvs[newlyMappedRef] = dv
 	} else {
-		setDataByRef(reference, setDependencies(reference, dv, grid), grid)
+		setDataByRef(newlyMappedRef, setDependencies(newlyMappedRef, dv, grid), grid)
 	}
 }
 
@@ -1436,7 +1434,7 @@ func findJumpCell(startCell Reference, direction string, grid *Grid, c *Client) 
 			break
 		}
 
-		thisCellEmpty := isCellEmpty(getDataFromRef(Reference{String: indexesToReference(currentCellRow, currentCellColumn), SheetIndex: startCell.SheetIndex}, grid))
+		thisCellEmpty := isCellEmpty(getDataFromRef(Reference{String: indexesToReferenceString(currentCellRow, currentCellColumn), SheetIndex: startCell.SheetIndex}, grid))
 
 		if isFirstCellCheck && thisCellEmpty && !startCellEmpty {
 			// if first cell check is empty cell and this cell is non-empty find first non-empty cell
@@ -1462,7 +1460,7 @@ func findJumpCell(startCell Reference, direction string, grid *Grid, c *Client) 
 	currentCellRow -= verticalIncrement
 	currentCellColumn -= horizontalIncrement
 
-	newCell := indexesToReference(currentCellRow, currentCellColumn)
+	newCell := indexesToReferenceString(currentCellRow, currentCellColumn)
 
 	jsonData := []string{"JUMPCELL", relativeReferenceString(startCell), direction, newCell}
 
@@ -1716,7 +1714,7 @@ func changeSheetSize(newRowCount int, newColumnCount int, sheetIndex int8, c *Cl
 			for currentRow := 0; currentRow <= newRowCount; currentRow++ {
 				if currentColumn > grid.SheetSizes[sheetIndex].ColumnCount || currentRow > grid.SheetSizes[sheetIndex].RowCount {
 
-					reference := Reference{String: indexesToReference(currentRow, currentColumn), SheetIndex: sheetIndex}
+					reference := Reference{String: indexesToReferenceString(currentRow, currentColumn), SheetIndex: sheetIndex}
 
 					if !checkDataPresenceFromRef(reference, grid) {
 						setDataByRef(reference, makeEmptyDv(), grid)
@@ -1746,11 +1744,11 @@ func insertRowColumn(insertType string, direction string, reference string, c *C
 
 		maximumRow, maximumColumn := determineMinimumRectangle(1, baseColumn, grid.ActiveSheet, grid)
 
-		topLeftRef := indexesToReference(1, baseColumn)
-		bottomRightRef := indexesToReference(maximumRow, maximumColumn)
+		topLeftRef := indexesToReferenceString(1, baseColumn)
+		bottomRightRef := indexesToReferenceString(maximumRow, maximumColumn)
 
-		newTopLeftRef := indexesToReference(1, baseColumn+1)
-		newBottomRightRef := indexesToReference(maximumRow, maximumColumn+1)
+		newTopLeftRef := indexesToReferenceString(1, baseColumn+1)
+		newBottomRightRef := indexesToReferenceString(maximumRow, maximumColumn+1)
 
 		cutCells(ReferenceRange{String: topLeftRef + ":" + bottomRightRef, SheetIndex: grid.ActiveSheet},
 			ReferenceRange{String: newTopLeftRef + ":" + newBottomRightRef, SheetIndex: grid.ActiveSheet}, grid)
@@ -1767,11 +1765,11 @@ func insertRowColumn(insertType string, direction string, reference string, c *C
 
 		maximumRow, maximumColumn := determineMinimumRectangle(baseRow, 1, grid.ActiveSheet, grid)
 
-		topLeftRef := indexesToReference(baseRow, 1)
-		bottomRightRef := indexesToReference(maximumRow, maximumColumn)
+		topLeftRef := indexesToReferenceString(baseRow, 1)
+		bottomRightRef := indexesToReferenceString(maximumRow, maximumColumn)
 
-		newTopLeftRef := indexesToReference(baseRow+1, 1)
-		newBottomRightRef := indexesToReference(maximumRow+1, maximumColumn)
+		newTopLeftRef := indexesToReferenceString(baseRow+1, 1)
+		newBottomRightRef := indexesToReferenceString(maximumRow+1, maximumColumn)
 
 		cutCells(ReferenceRange{String: topLeftRef + ":" + bottomRightRef, SheetIndex: grid.ActiveSheet},
 			ReferenceRange{String: newTopLeftRef + ":" + newBottomRightRef, SheetIndex: grid.ActiveSheet}, grid)

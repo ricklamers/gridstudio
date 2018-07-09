@@ -156,6 +156,10 @@ def sheet(cell_range, data = None, headers = False, sheet_index = 0):
         if data_type_string == "<class 'numpy.ndarray'>":
             data = data.tolist()
 
+        if data_type_string == "<class 'pandas.core.series.Series'>":
+            data = data.to_frame()
+            data_type_string = str(type(data))
+
         if data_type_string == "<class 'pandas.core.frame.DataFrame'>":
 
             df_tuple = df_to_list(data, headers)

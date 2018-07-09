@@ -21,26 +21,18 @@
 			<div class="context-menu-item sort-desc">Sort descending</div>
 			<div class="context-menu-item sheet-size">Change sheet size</div>
 			<div class="context-menu-item dropdown">
-				Descriptives
+				Pandas
 				<div class="context-menu-submenu">
-					<div class="context-menu-item">Average</div>
-					<div class="context-menu-item">Std. deviation</div>
-					<div class="context-menu-item">Variance</div>
-					<div class="context-menu-item">Quartile (25th)</div>
-					<div class="context-menu-item">Quartile (75th)</div>
+					<div class="context-menu-item codegen" data-method='pandas-get-data'>Get data</div>
+					<div class="context-menu-item codegen" data-method='pandas-plot-data'>Plot</div>
+					<div class="context-menu-item codegen" data-method='pandas-plot-hist-data'>Plot histogram</div>
+					<div class="context-menu-item codegen" data-method='pandas-average'>Average</div>
+					<div class="context-menu-item codegen" data-method='pandas-std-deviation'>Std. deviation</div>
+					<div class="context-menu-item codegen" data-method='pandas-variance'>Variance</div>
+					<div class="context-menu-item codegen" data-method='pandas-quartile-q1'>Quartile (25th)</div>
+					<div class="context-menu-item codegen" data-method='pandas-quartile-q3'>Quartile (75th)</div>
+					<div class="context-menu-item codegen" data-method='pandas-frequency-table'>Frequency table</div>
 				</div>
-			</div>
-			<div class="context-menu-item dropdown">
-				Machine learning
-				<div class="context-menu-submenu">
-					<div class="context-menu-item">Linear regression</div>
-					<div class="context-menu-item">Classification</div>
-					<div class="context-menu-item">Clustering</div>
-					<div class="context-menu-item">SVM</div>
-				</div>
-			</div>
-			<div class="context-menu-item dropdown">
-				Cleaning
 			</div>
 		</div>
 		<header>
@@ -113,7 +105,7 @@
 					<div class="view console" style="display:none;"></div>
 					<div class="view plots" style="display:none;"></div>
 					<div class="view filemanager" style="display:none;">
-						<div class="path"><input type="text" value="" /></div>
+						<div class="path"><div class='files-home'><img src="image/home.svg"/></div><input type="text" value="" /></div>
 						<div class="files-view">
 							<div class="files"></div>
 						</div>
@@ -125,12 +117,13 @@
 		<script src="js/libs/es6-promise.auto.min.js"></script>
 		<script src="js/libs/fetch.min.js"></script>
 		<script src="js/libs/jquery-3.3.1.min.js"></script>
-		<script src="js/libs/plotly-finance-latest.min.js" charset="utf-8"></script>
+		<script src="js/libs/plotly-finance.min.js" charset="utf-8"></script>
 		<script src="xterm/dist/main.js"></script>
 		<script src="js/editor/ace.js"></script>
 		<script src="js/editor.js"></script>
 		<script src="js/filemanager.js"></script>
 		<script src="js/ws.js"></script>
+		<script src="js/codegen.js"></script>
 		<script src="js/app.js"></script>
 	</body>
 </html>

@@ -135,6 +135,28 @@
             }
         }
 
+        this.insertAfterCursorLine = function(code){
+            var editor = this.ace;
+
+            selectionRange = editor.getSelectionRange();
+
+            startLine = selectionRange.start.row;
+            endLine = selectionRange.end.row;
+
+            var customPosition = {
+                row: endLine,
+                column: 0
+            };
+
+            if(selectionRange.start.column != 0){
+                code = "\n" + code
+            }
+
+            editor.session.insert(customPosition, code + "\n");
+
+            editor.selection.setRange(selectionRange);
+        }
+
         this.saveFile = function(){
             if(!this.filepath){
                 var filename = prompt("Enter a filename");

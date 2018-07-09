@@ -1050,7 +1050,7 @@ func toChar(i int) rune {
 	return rune('A' - 1 + i)
 }
 
-func indexesToReference(row int, col int) string {
+func indexesToReferenceString(row int, col int) string {
 	return indexToLetters(col) + strconv.Itoa(row)
 }
 
@@ -1583,6 +1583,45 @@ func explosionSetValue(ref Reference, dataDv DynamicValue, grid *Grid) {
 	setDataByRef(ref, setDependencies(ref, dataDv, grid), grid)
 }
 
+func vlookup(arguments []DynamicValue, grid *Grid, targetRef Reference) DynamicValue {
+	if len(arguments) != 3 {
+		return DynamicValue{ValueType: DynamicValueTypeString, DataString: "VLOOKUP only supports 3 arguments"}
+	}
+
+	stringSearchValue := convertToString(arguments[0])
+
+	vlookupRange := getRangeReferenceFromString(arguments[1].DataString, targetRef.SheetIndex, grid)
+
+	// now take only the first column
+	rangeReferences := strings.Split(vlookupRange.String, ":")
+	firstReference := rangeReferences[0]
+	secondReference := rangeReferences[1]
+
+	searchRangeColumn := getReferenceColumnIndex(firstReference)
+	searchRangeStartRow := getReferenceRowIndex(firstReference)
+	searchRangeEndRow := getReferenceRowIndex(secondReference)
+
+	searchRange := ReferenceRange{String: indexesToReferenceString(searchRangeStartRow, searchRangeColumn) + ":" + indexesToReferenceString(searchRangeEndRow, searchRangeColumn), SheetIndex: vlookupRange.SheetIndex}
+
+	rangeDvs := getDvsFromReferenceRange(searchRange, grid)
+
+	returnColumnIndex := int(arguments[2].DataFloat) - 1
+
+	for index, dv := range rangeDvs {
+		checkStringValue := convertToString(dv)
+
+		if checkStringValue.DataString == stringSearchValue.DataString {
+
+			stringMapReference := strconv.Itoa(int(vlookupRange.SheetIndex)) + "!" + indexesToReferenceString(searchRangeStartRow+index, searchRangeColumn+returnColumnIndex)
+
+			return getDataByNormalRef(stringMapReference, grid)
+		}
+	}
+	notFoundDv := makeEmptyDv()
+	notFoundDv.DataString = "#NOTFOUND"
+	return notFoundDv
+}
+
 func abs(arguments []DynamicValue) DynamicValue {
 	if len(arguments) != 1 {
 		return DynamicValue{ValueType: DynamicValueTypeString, DataString: "ABS only supports one argument"}
@@ -1621,6 +1660,8 @@ func executeCommand(command string, arguments []DynamicValue, grid *Grid, target
 		return ceil(arguments)
 	case "ABS":
 		return abs(arguments)
+	case "VLOOKUP":
+		return vlookup(arguments, grid, targetRef)
 	case "OLS":
 		return olsExplosive(arguments, grid, targetRef)
 	default:
