@@ -1668,7 +1668,8 @@ func copySourceToDestination(sourceRange ReferenceRange, destinationRange Refere
 	// so, B1<-A3, B2<-A3, B3<-A3
 
 	// key is the destinationCell, the value is the cell is should take the value from
-	destinationMapping := make(map[Reference]Reference)
+	destinationMapping := []Reference{}
+
 	// todo create destinationMapping
 	// possible: only write for 1 to 1 mapping to check if bug free, then extend for case 2 & 3
 	sourceCells := cellRangeToCells(sourceRange)
@@ -1712,7 +1713,8 @@ func copySourceToDestination(sourceRange ReferenceRange, destinationRange Refere
 				sourceRef := Reference{String: indexesToReferenceString(sRow, sColumn), SheetIndex: sourceRange.SheetIndex}
 
 				if !(dRow > grid.SheetSizes[destinationRange.SheetIndex].RowCount || dColumn > grid.SheetSizes[destinationRange.SheetIndex].ColumnCount) {
-					destinationMapping[destinationRef] = sourceRef
+					destinationMapping = append(destinationMapping, destinationRef)
+					destinationMapping = append(destinationMapping, sourceRef)
 				}
 
 				if sRow < sourceRowEnd {
@@ -1744,7 +1746,8 @@ func copySourceToDestination(sourceRange ReferenceRange, destinationRange Refere
 				sourceRef := Reference{String: indexesToReferenceString(sRow, sColumn), SheetIndex: sourceRange.SheetIndex}
 
 				if !(dRow > grid.SheetSizes[destinationRange.SheetIndex].RowCount || dColumn > grid.SheetSizes[destinationRange.SheetIndex].ColumnCount) {
-					destinationMapping[destinationRef] = sourceRef
+					destinationMapping = append(destinationMapping, destinationRef)
+					destinationMapping = append(destinationMapping, sourceRef)
 				}
 
 				// fmt.Println(destinationRef + "->" + sourceRef)
@@ -1758,6 +1761,7 @@ func copySourceToDestination(sourceRange ReferenceRange, destinationRange Refere
 	}
 
 	newDvs := make(map[Reference]DynamicValue)
+	requiresUpdates := make(map[Reference]DynamicValue)
 
 	rangesToCheck := make(map[Reference][]ReferenceRange)
 
@@ -1767,7 +1771,11 @@ func copySourceToDestination(sourceRange ReferenceRange, destinationRange Refere
 
 	haveOperationDifference := false
 
-	for destinationRef, sourceRef := range destinationMapping {
+	k := 0
+	for k < len(destinationMapping) {
+
+		destinationRef := destinationMapping[k]
+		sourceRef := destinationMapping[k+1]
 
 		if !haveOperationDifference {
 			operationRowDifference, operationColumnDifference = getReferenceStringDifference(destinationRef.String, sourceRef.String)
@@ -1777,8 +1785,9 @@ func copySourceToDestination(sourceRange ReferenceRange, destinationRange Refere
 
 		finalDestinationCells = append(finalDestinationCells, destinationRef)
 
-		sourceFormula := getDataFromRef(sourceRef, grid).DataFormula
-		sourceRanges := findRanges(sourceFormula, sourceRef.SheetIndex, grid)
+		sourceDv := getDataFromRef(sourceRef, grid)
+		sourceFormula := sourceDv.DataFormula
+		sourceRanges := findRanges(sourceFormula, sourceDv.SheetIndex, grid)
 		newFormula := incrementFormula(sourceFormula, sourceRef, destinationRef, isCut, grid)
 
 		previousDv := getDataFromRef(destinationRef, grid)
@@ -1789,15 +1798,14 @@ func copySourceToDestination(sourceRange ReferenceRange, destinationRange Refere
 
 		if isCut {
 
-			// when cutting cells, make sure that single refences in DependOut are also appropriately incremeted
+			// when cutting cells, make sure that refences in DependOut are also appropriately incremented
 			for ref := range *getDataFromRef(sourceRef, grid).DependOut {
 
 				thisReference := getReferenceFromMapIndex(ref)
 
-				// if DependOut not in source (will not be moved/deleted)
 				originalDv := getDvAndRefForCopyModify(thisReference, operationRowDifference, operationColumnDifference, destinationRef.SheetIndex, newDvs, grid)
-				originalFormula := originalDv.DataFormula
 
+				originalFormula := originalDv.DataFormula
 				outgoingDvReferences := findReferences(originalFormula, originalDv.SheetIndex, false, grid)
 
 				if !containsReferences(sourceCells, thisReference) {
@@ -1815,11 +1823,11 @@ func copySourceToDestination(sourceRange ReferenceRange, destinationRange Refere
 
 				}
 
-				newFormula := replaceReferencesInFormula(originalFormula, originalDv.SheetIndex, destinationRef.SheetIndex, referenceMapping, grid)
+				newFormula := replaceReferencesInFormula(originalFormula, originalDv.SheetIndex, thisReference.SheetIndex, referenceMapping, grid)
 
 				newDependOutDv := makeDv(newFormula)
 				newDependOutDv.DependOut = originalDv.DependOut
-				putDvForCopyModify(getReferenceFromMapIndex(ref), newDependOutDv, operationRowDifference, operationColumnDifference, destinationRef.SheetIndex, newDvs, grid)
+				putDvForCopyModify(thisReference, newDependOutDv, operationRowDifference, operationColumnDifference, destinationRef.SheetIndex, newDvs, requiresUpdates, grid)
 
 			}
 
@@ -1830,6 +1838,7 @@ func copySourceToDestination(sourceRange ReferenceRange, destinationRange Refere
 
 		}
 
+		k = k + 2
 	}
 
 	// check whether DependOut ranges
@@ -1872,7 +1881,7 @@ func copySourceToDestination(sourceRange ReferenceRange, destinationRange Refere
 			newDv := makeDv(outgoingRefFormula)
 			newDv.DependOut = outgoingRefDv.DependOut
 
-			putDvForCopyModify(outgoingReference, newDv, 0, 0, outgoingRef.SheetIndex, newDvs, grid)
+			putDvForCopyModify(outgoingReference, newDv, 0, 0, outgoingRef.SheetIndex, newDvs, requiresUpdates, grid)
 
 		}
 
@@ -1880,6 +1889,10 @@ func copySourceToDestination(sourceRange ReferenceRange, destinationRange Refere
 
 	for reference, dv := range newDvs {
 		setDataByRef(reference, setDependencies(reference, dv, grid), grid)
+	}
+
+	for reference, _ := range requiresUpdates {
+		setDataByRef(reference, setDependencies(reference, getDataFromRef(reference, grid), grid), grid)
 	}
 
 	// for each cell mapping, copy contents after substituting the references
@@ -1900,13 +1913,14 @@ func getDvAndRefForCopyModify(reference Reference, diffRow int, diffCol int, tar
 	}
 }
 
-func putDvForCopyModify(reference Reference, dv DynamicValue, diffRow int, diffCol int, targetSheetIndex int8, newDvs map[Reference]DynamicValue, grid *Grid) {
+func putDvForCopyModify(reference Reference, dv DynamicValue, diffRow int, diffCol int, targetSheetIndex int8, newDvs map[Reference]DynamicValue, requiresUpdates map[Reference]DynamicValue, grid *Grid) {
 	newlyMappedRef := changeReferenceIndex(reference, diffRow, diffCol, targetSheetIndex, grid)
 
 	if _, ok := newDvs[newlyMappedRef]; ok {
 		newDvs[newlyMappedRef] = dv
 	} else {
-		setDataByRef(reference, setDependencies(reference, dv, grid), grid)
+		setDataByRef(reference, dv, grid)
+		requiresUpdates[reference] = dv
 	}
 }
 
