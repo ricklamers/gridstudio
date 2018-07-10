@@ -358,12 +358,13 @@
 			if(sizerWidth > 40000){
 				sizerWidth = 40000;
 			}
+			if(sizerWidth < this.sheetDom.clientWidth){
+				sizerWidth = this.sheetDom.clientWidth
+			}
 
 			// determine height based on rowHeights
 			var sizerHeight = this.numRows * this.cellHeight;
-			if(sizerHeight > 40000){
-				sizerHeight = 40000;
-			}
+
 			// adapt based on modified widths
 			for(var key in this.rowHeightsCache){
 				sizerHeight += this.rowHeightsCache[key];
@@ -371,6 +372,13 @@
 			}
 
 			sizerHeight += this.sidebarSize;
+
+			if(sizerHeight > 40000){
+				sizerHeight = 40000;
+			}
+			if(sizerHeight < this.sheetDom.clientHeight){
+				sizerHeight = this.sheetDom.clientHeight
+			}
 
 			this.sheetSizer.style.height = sizerHeight + "px";
 			this.sheetSizer.style.width = sizerWidth + "px";
@@ -1673,7 +1681,7 @@
 			for(var i = 0; i < this.numColumns; i++){
 
 				currentColumnWidth += this.columnWidths(i);
-				if(currentColumnWidth >= rowX){
+				if(currentColumnWidth >= rowX || i+1 == this.numColumns){
 					columnIndex = i;
 					break;
 				}
@@ -1685,7 +1693,7 @@
 
 			for(var i = 0; i < this.numRows; i++){
 				currentRowHeight += this.rowHeights(i);
-				if(currentRowHeight >= rowY){
+				if(currentRowHeight >= rowY || i+1 == this.numRows){
 					rowIndex = i;
 					break;					
 				}
@@ -2390,7 +2398,13 @@
 			// figure out where to start drawing based on scrollOffsetY
 			// TODO: replace this by percentage method that will scale well with large datasets
 			var columnPercentage = this.scrollOffsetX / (this.sheetSizer.clientWidth-width);
+			if(isNaN(columnPercentage)){
+				columnPercentage = 0;
+			}
 			var rowPercentage = this.scrollOffsetY / (this.sheetSizer.clientHeight-height);
+			if(isNaN(rowPercentage)){
+				rowPercentage = 0;
+			}
 
 			// percentage method
 			var drawRowStart = Math.round(rowPercentage * this.finalRow);

@@ -109,6 +109,16 @@
                         else if(json[0] == "SAVED"){
                 			alert("Saved workspace");
                         }
+                        else if(json[0] == "PROGRESSINDICATOR"){
+
+                            var progress = json[1];
+                            if(progress == 1){
+                                $('.progress-indicator-inner').css({width: 0})
+                            }else{
+                                $('.progress-indicator-inner').css({width: progress*100 + "%"})
+                            }
+
+                        }
                         else if(json[0] == "VIEW-INVALIDATED"){
                 			_this.app.refreshView();
                         }

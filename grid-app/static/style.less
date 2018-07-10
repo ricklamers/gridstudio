@@ -11,6 +11,7 @@ html, body {
 }
 
 @padding: 5px;
+@blueColor: #215adc;
 
 .formula-bar {
 
@@ -136,6 +137,23 @@ body {
 	position: absolute;
 	height:100%;
 	width: 61.8%;
+
+	.progress-indicator {
+		position: absolute;
+		right: 10px;
+		bottom: 10px;
+		width: 100px;
+		border-radius: 50px;
+		height: 10px;
+		overflow: hidden;
+
+		.progress-indicator-inner {
+			background: @blueColor;
+			display: block;
+			height: 100%;
+			width: 0;
+		}
+	}
 
 	.sheet-tabs {
 		height: 30px;

@@ -112,6 +112,21 @@ body div-sheet canvas {
   height: 100%;
   width: 61.8%;
 }
+.left-panel .progress-indicator {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 100px;
+  border-radius: 50px;
+  height: 10px;
+  overflow: hidden;
+}
+.left-panel .progress-indicator .progress-indicator-inner {
+  background: #215adc;
+  display: block;
+  height: 100%;
+  width: 0;
+}
 .left-panel .sheet-tabs {
   height: 30px;
   border-top: 1px solid #aaa;
