@@ -122,7 +122,11 @@ func gridInstance(c *Client) {
 			}
 
 			res := StringJSON{}
-			json.Unmarshal(actions, &res)
+			err := json.Unmarshal(actions, &res)
+			if err != nil {
+
+				fmt.Println("Error decoding JSON string: ", err)
+			}
 
 			parsed := res.Arguments
 

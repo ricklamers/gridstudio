@@ -105,6 +105,39 @@ body div-sheet canvas {
 .plotly-notifier {
   font-family: "Open Sans", sans-serif !important;
 }
+.view.plots .plot-holder img {
+  display: none;
+}
+.view.plots .plot-holder img.active {
+  display: block;
+}
+.view.plots .plot-navigator {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+}
+.view.plots .plot-navigator .plot-left,
+.view.plots .plot-navigator .plot-right {
+  display: block;
+  float: left;
+  width: 20px;
+  height: 20px;
+  background: url('image/icon-arrow.svg');
+  background-size: contain;
+  cursor: pointer;
+}
+.view.plots .plot-navigator .plot-left.disabled,
+.view.plots .plot-navigator .plot-right.disabled {
+  opacity: 0.2;
+}
+.view.plots .plot-navigator .plot-left {
+  transform: rotate(180deg);
+}
+.view.plots .plot-navigator .plot-counter {
+  text-align: center;
+  padding: 2px 1px;
+  float: left;
+}
 .left-panel {
   display: flex;
   flex-direction: column;

@@ -131,6 +131,47 @@ body {
 	font-family: "Open Sans", sans-serif !important;
 }
 
+.view.plots {
+
+	.plot-holder {
+		img {
+			display: none;
+			&.active {
+				display: block;
+			}
+		}
+	}
+
+	.plot-navigator {
+		position: absolute;
+		left: 10px;
+		top: 10px;
+
+		.plot-left, .plot-right {
+			display: block;
+			float: left;
+			width: 20px;
+			height: 20px;
+			background: url('image/icon-arrow.svg');
+			background-size: contain;
+			cursor: pointer;
+
+			&.disabled {
+				opacity: 0.2;
+			}
+		}
+		.plot-left {
+			transform: rotate(180deg);
+		}
+		.plot-counter {
+			text-align: center;
+			padding: 2px 1px;
+			float: left;
+		}
+	}
+
+}
+
 .left-panel {
 	display: flex;
 	flex-direction: column;

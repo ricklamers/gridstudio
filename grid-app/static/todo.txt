@@ -1,2 +1,0 @@
-// TODO: lighten the mousemove function call (cache on mousedown?)
-// TODO: fix mac os shortcuts

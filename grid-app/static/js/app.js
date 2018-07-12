@@ -295,6 +295,56 @@
 			
 		}
 
+		this.addStaticPlot = function(img){
+
+			this.staticPlotCount++;
+			$('.view.plots .plot-holder').append(img);
+
+			this.setStaticPlotIndex(this.staticPlotCount-1);
+
+		}
+
+		this.updateStaticPlotText = function(){
+			$('.view.plots .plot-counter').html((this.currentStaticPlot+1) + "/" + this.staticPlotCount);
+		}
+
+		this.setStaticPlotIndex = function(index){
+
+			this.currentStaticPlot = index;
+
+			// mark left arrow half opacity if 
+			$('.view.plots .plot-navigator').children().removeClass('disabled');
+
+			if(index == 0){
+				$('.view.plots .plot-left').addClass('disabled');
+			}
+			if(index == this.staticPlotCount-1){
+				$('.view.plots .plot-right').addClass('disabled');
+			}
+
+			$('.view.plots .plot-holder img').eq(index).addClass('active').siblings().removeClass('active');
+
+			this.updateStaticPlotText();
+		}
+
+		this.initStaticPlots = function(){
+			this.staticPlotCount = 0;
+			this.currentStaticPlot = 0;
+
+			$('.view.plots .plot-left, .view.plots .plot-right').click(function(){
+				var direction = 1;
+				if($(this).hasClass('plot-left')){
+					direction = -1;
+				}
+
+				var newIndex = _this.currentStaticPlot+direction;
+				if(newIndex >= 0 && newIndex < _this.staticPlotCount){
+					_this.setStaticPlotIndex(newIndex);					
+				}
+
+			});
+		}
+
 		this.showTab = function(selector){
 
 			$('.dev-tabs .tab[data-tab="'+selector+'"]').addClass('current').siblings().removeClass('current');
@@ -691,6 +741,8 @@
 			this.termManager.init();
 
 			this.initTabs();
+
+			this.initStaticPlots();
 
 			this.initSheetTabs();
 
@@ -2758,8 +2810,6 @@
 		}
 	}
 
-	
-
 	function fittingString(c, str, maxWidth) {
 		var width = c.measureText(str).width;
 		if(width < maxWidth){
@@ -2767,12 +2817,20 @@
 		}else{
 			var ellipsis = '…';
 			var ellipsisWidth = c.measureText(ellipsis).width;
-			var len = str.length;
-			while (width>=maxWidth-ellipsisWidth && len-->0) {
-				str = str.substring(0, len);
-				width = c.measureText(str).width;
+			var len = 1;
+			var newString = str;
+			var width = 0;
+
+			while (width<=maxWidth-ellipsisWidth && len < str.length) {
+				newString = str.substring(0, len);
+				width = c.measureText(newString).width;
+				len++;
 			}
-			return str+ellipsis;
+
+			len -= 2;
+			newString = str.substring(0, len);
+
+			return newString+ellipsis;
 		}
 	}
 

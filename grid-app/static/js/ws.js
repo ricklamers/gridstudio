@@ -152,7 +152,8 @@
                             var img = document.createElement('img');
                             img.setAttribute("title","Click to enlarge");
                             img.src = "data:image/svg+xml;base64, " + json.arguments[1];
-                            $(".dev-tabs .plots").html(img);
+
+                            _this.app.addStaticPlot(img);
 
                             _this.app.showTab("plots");
                             

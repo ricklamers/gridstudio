@@ -67,7 +67,7 @@ func streamPythonEOut(stdoutPipe io.ReadCloser, pythonIn io.WriteCloser, c *Clie
 }
 
 func streamPythonOut(stdoutPipe io.ReadCloser, pythonIn io.WriteCloser, c *Client, closeChannel chan string) {
-	buffer := make([]byte, 100000)
+	buffer := make([]byte, 65536/2) // make read buffer smaller than Python stdout limit
 
 	var bufferHolder bytes.Buffer
 
@@ -93,6 +93,7 @@ func streamPythonOut(stdoutPipe io.ReadCloser, pythonIn io.WriteCloser, c *Clien
 				}
 				// n, err := io.ReadFull(stdoutPipe, buffer)
 
+				// testing wether the stdoutPipe.Read max of 65536 was reached // recheck stdoutPipe again
 				if n != len(buffer) {
 					// error implies that the buffer could not be fully filled, hence some sort of end was found in stdoutPipe
 					subbuffer := buffer[:n]
