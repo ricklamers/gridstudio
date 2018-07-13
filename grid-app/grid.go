@@ -765,7 +765,7 @@ func isValidFormula(formula string) bool {
 				inReference = true
 
 				// skip next char !
-				skipNextChar = true
+				// skipNextChar = true
 			}
 
 			continue
@@ -822,7 +822,11 @@ func isValidFormula(formula string) bool {
 				return false
 			}
 
-			if inReference && !dollarInColumn && r == '$' {
+			if inReference && r == '$' && dollarInRow {
+				return false
+			}
+
+			if inReference && !dollarInRow && r == '$' {
 				dollarInRow = true
 			}
 
@@ -831,6 +835,8 @@ func isValidFormula(formula string) bool {
 				validReference = false
 				referenceFoundRange = true
 				foundReferenceMark = false
+				dollarInColumn = false
+				dollarInRow = false
 			}
 
 			if inReference && validReference && unicode.IsLetter(r) {
@@ -861,7 +867,7 @@ func isValidFormula(formula string) bool {
 				validReference = true
 			}
 
-			if inReference && referenceFoundRange && !(unicode.IsDigit(r) || unicode.IsLetter(r)) {
+			if inReference && referenceFoundRange && !(unicode.IsDigit(r) || unicode.IsLetter(r) || r == '$') {
 
 				if !validReference {
 					return false
@@ -1076,7 +1082,7 @@ func computeDirtyCells(grid *Grid, c *Client) []Reference {
 		// we are certain whether cells are dirty or not
 
 		if len(noDependInDirtyCells) == 0 {
-			log.Fatal("Error: should have an element in noDependInDirtyCells when DirtyCells is not empty")
+			fmt.Println("Error: should have an element in noDependInDirtyCells when DirtyCells is not empty")
 			break
 		}
 

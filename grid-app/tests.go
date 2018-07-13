@@ -38,6 +38,31 @@ func runTests() {
 
 		// dollar fixing references
 		testFormula("$$A1", false)
+
+		testFormula("Sheet!$A$$1", false)
+		testFormula("Sheet!$A$1", true)
+
+		testFormula("Sheet1!$A$$1", false)
+		testFormula("Sheet1!$A$1", true)
+		testFormula("VLOOKUP(Sheet1!$A$1)", true)
+		testFormula("VLOOKUP(A1,Sheet1!$A$1,1)", true)
+		testFormula("VLOOKUP(A1,Sheet1!$A$1:$A$1,1)", true)
+		testFormula("SUM(Sheet1!$A$1:$A$1)", true)
+		testFormula("SUM($A$1:$A$1)", true)
+		testFormula("SUM($A$$1:$A$1)", false)
+		testFormula("SUM($$A$1:$A$1)", false)
+		testFormula("SUM($A$$1:$A$$1)", false)
+		testFormula("Sheet1!$A1", true)
+		testFormula("Sheet1!A$1", true)
+		testFormula("Sheet1!A1", true)
+		testFormula("'Sheet 1'!$A$1", true)
+		testFormula("'Sheet 1'!$A1", true)
+		testFormula("'Sheet 1'!A$1", true)
+		testFormula("'Sheet 1'!A1", true)
+		testFormula("'Sheet1'!$A$1", true)
+		testFormula("'Sheet1'!$A1", true)
+		testFormula("'Sheet1'!A$1", true)
+		testFormula("'Sheet1'!A1", true)
 		testFormula("$A$1", true)
 		testFormula("A$1", true)
 		testFormula("$A1", true)
@@ -79,6 +104,8 @@ func runTests() {
 	} else {
 		// space to run single test cases
 		// testFormula("$B$1+CEIL(RAND()*1000)", true)
+		// testFormula("'Sheet1'!$A$1", true)
+		testFormula("VLOOKUP(A1,Sheet1!$A$1:$A$1,1)", true)
 
 	}
 
