@@ -498,6 +498,12 @@
 
 		};
 
+		this.deleteRowColumn = function(type){
+			
+			var clickedCellPosition = _this.positionToCellLocation(_this.mouseRightClickLocation[0],_this.mouseRightClickLocation[1]);
+			_this.wsManager.send(JSON.stringify({arguments: [type, this.cellZeroIndexToString(clickedCellPosition[0], clickedCellPosition[1])]}));
+		}
+
 		this.insertRowColumn = function(type, direction){
 			
 			var clickedCellPosition = _this.positionToCellLocation(_this.mouseRightClickLocation[0],_this.mouseRightClickLocation[1]);
@@ -511,7 +517,7 @@
 				// Avoid the real one
 				event.preventDefault();
 
-				_this.mouseRightClickLocation = [event.offsetX -_this.sheetDom.scrollLeft, event.offsetY - _this.sheetDom.scrollTop];
+				_this.mouseRightClickLocation = [event.offsetX - _this.sheetDom.scrollLeft, event.offsetY - _this.sheetDom.scrollTop];
 
 				// Show contextmenu
 				$(".context-menu").toggleClass("shown").css({
@@ -522,10 +528,11 @@
 				$('.context-menu .hide').hide();
 
 				// show contextual items
-				if(event.offsetX <= _this.sidebarSize){
+				
+				if(_this.mouseRightClickLocation[0] <= _this.sidebarSize){
 					$('.context-menu .row-only').show();
 				}
-				if(event.offsetY <= _this.sidebarSize){
+				if(_this.mouseRightClickLocation[1] <= _this.sidebarSize){
 					$('.context-menu .column-only').show();
 				}
 
@@ -569,6 +576,10 @@
 					_this.insertRowColumn('ROW','ABOVE');
 				}else if($(this).hasClass('insert-row-below')){
 					_this.insertRowColumn('ROW','BELOW');
+				}else if($(this).hasClass('delete-column')){
+					_this.deleteRowColumn('DELETECOLUMN');
+				}else if($(this).hasClass('delete-row')){
+					_this.deleteRowColumn('DELETEROW');
 				}else if($(this).hasClass('codegen')){
 					var method = $(this).attr('data-method');
 					var selection = _this.cellArrayToStringRange(_this.getSelectedCellsInOrder()); 
@@ -1280,6 +1291,12 @@
 			if(formula && formula[0] == "=" && formula[1] == '"' && formula[formula.length-1] == '"'){
 				formula = formula.substring(2,formula.length-1);
 			}
+
+			// if formula contains error string in formula, remove error message
+			if(formula && formula[0] == "E" && formula.indexOf("Error in formula:") != -1){
+				formula = "=" + formula.replace("Error in formula: ", "");
+			}
+
 			this.input_field.val(formula);
 
 			this.init_input_field_backup_value = this.input_field.val();
@@ -2716,6 +2733,24 @@
 						drawY, 
 						drawWidth, 
 						drawHeight);
+
+
+					// draw two rectangles in left sidebar and top column bar
+					this.ctx.fillStyle = "rgba(0,0,0,0.1)";
+					
+					this.ctx.fillRect(
+						0,
+						drawY,
+						this.sidebarSize,
+						drawHeight
+					);
+
+					this.ctx.fillRect(
+						drawX,
+						0,
+						drawWidth,
+						this.sidebarSize
+					);
 				}
 
 			}

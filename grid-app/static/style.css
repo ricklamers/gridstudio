@@ -453,7 +453,7 @@ body div-sheet canvas {
   padding-left: 15px;
   position: relative;
   font-family: monospace;
-  white-space: pre;
+  white-space: pre-wrap;
 }
 .code-editor .dev-tabs .console .message.error {
   color: orange;

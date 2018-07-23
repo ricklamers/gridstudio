@@ -195,9 +195,8 @@ func gridInstance(c *Client) {
 							}
 						}
 
-						NewDependIn := make(map[string]bool)
-						dv.DependIn = &NewDependIn       // new dependin (new formula)
-						dv.DependOut = OriginalDependOut // dependout remain
+						dv.DependIn = make(map[string]bool) // new dependin (new formula)
+						dv.DependOut = OriginalDependOut    // dependout remain
 
 						// range auto reference manipulation, increment row automatically for references in this formula for each iteration
 						newDvs[ref] = dv
@@ -250,7 +249,7 @@ func gridInstance(c *Client) {
 						}
 
 						NewDependIn := make(map[string]bool)
-						dv.DependIn = &NewDependIn       // new dependin (new formula)
+						dv.DependIn = NewDependIn        // new dependin (new formula)
 						dv.DependOut = OriginalDependOut // dependout remain
 
 						// range auto reference manipulation, increment row automatically for references in this formula for each iteration
@@ -259,7 +258,7 @@ func gridInstance(c *Client) {
 						// set to grid for access during setDependencies
 						parsedDv := parse(dv, &grid, ref)
 						parsedDv.DataFormula = values[valuesIndex]
-						parsedDv.DependIn = &NewDependIn
+						parsedDv.DependIn = NewDependIn
 						parsedDv.DependOut = OriginalDependOut
 
 						setDataByRef(ref, parsedDv, &grid)
@@ -267,7 +266,7 @@ func gridInstance(c *Client) {
 						valuesIndex++
 
 						// add all OriginalDependOut to dirty
-						for key, _ := range *OriginalDependOut {
+						for key, _ := range OriginalDependOut {
 							copyToDirty(grid.Data[key], key, &grid)
 						}
 
@@ -378,6 +377,58 @@ func gridInstance(c *Client) {
 
 				invalidateView(&grid, c)
 
+			case "DELETEROW":
+
+				referenceString := parsed[1]
+
+				rowIndex := getReferenceRowIndex(referenceString)
+				// columnIndex := getReferenceColumnIndex(referenceString)
+
+				cutFromRangeString := indexesToReferenceString(rowIndex+1, 1) + ":" + indexesToReferenceString(grid.SheetSizes[grid.ActiveSheet].RowCount, grid.SheetSizes[grid.ActiveSheet].ColumnCount)
+
+				cutToRangeString := indexesToReferenceString(rowIndex, 1) + ":" + indexesToReferenceString(rowIndex, 1)
+
+				cutFromRange := ReferenceRange{String: cutFromRangeString, SheetIndex: grid.ActiveSheet}
+				cutToRange := ReferenceRange{String: cutToRangeString, SheetIndex: grid.ActiveSheet}
+
+				// clear everything in row of reference
+				clearCells := cellRangeToCells(ReferenceRange{String: indexesToReferenceString(rowIndex, 1) + ":" + indexesToReferenceString(rowIndex, grid.SheetSizes[grid.ActiveSheet].ColumnCount)})
+
+				for _, k := range clearCells {
+					clearCell(k, &grid)
+				}
+
+				// move everything below reference up
+				cutCells(cutFromRange, cutToRange, &grid, c)
+
+				invalidateView(&grid, c)
+
+			case "DELETECOLUMN":
+
+				referenceString := parsed[1]
+
+				// rowIndex := getReferenceRowIndex(referenceString)
+				columnIndex := getReferenceColumnIndex(referenceString)
+
+				cutFromRangeString := indexesToReferenceString(1, columnIndex+1) + ":" + indexesToReferenceString(grid.SheetSizes[grid.ActiveSheet].RowCount, grid.SheetSizes[grid.ActiveSheet].ColumnCount)
+
+				cutToRangeString := indexesToReferenceString(1, columnIndex) + ":" + indexesToReferenceString(1, columnIndex)
+
+				cutFromRange := ReferenceRange{String: cutFromRangeString, SheetIndex: grid.ActiveSheet}
+				cutToRange := ReferenceRange{String: cutToRangeString, SheetIndex: grid.ActiveSheet}
+
+				// clear everything in row of reference
+				clearCells := cellRangeToCells(ReferenceRange{String: indexesToReferenceString(1, columnIndex) + ":" + indexesToReferenceString(grid.SheetSizes[grid.ActiveSheet].RowCount, columnIndex)})
+
+				for _, k := range clearCells {
+					clearCell(k, &grid)
+				}
+
+				// move everything below reference up
+				cutCells(cutFromRange, cutToRange, &grid, c)
+
+				invalidateView(&grid, c)
+
 			case "CUT":
 
 				sourceRange := parsed[1]
@@ -424,9 +475,8 @@ func gridInstance(c *Client) {
 							DataFormula: "\"Error in formula: " + formula + "\"",
 						}
 
-						NewDependIn := make(map[string]bool)
-						dv.DependIn = &NewDependIn       // new dependin (new formula)
-						dv.DependOut = OriginalDependOut // dependout remain
+						dv.DependIn = make(map[string]bool) // new dependin (new formula)
+						dv.DependOut = OriginalDependOut    // dependout remain
 
 						setDataByRef(reference, setDependencies(reference, dv, &grid), &grid)
 
@@ -451,9 +501,7 @@ func gridInstance(c *Client) {
 							dv = parse(dv, &grid, Reference{String: parsed[1], SheetIndex: getIndexFromString(parsed[3])})
 
 							// don't need dependend information for parsing, hence assign after parse
-							NewDependIn := make(map[string]bool)
-
-							dv.DependIn = &NewDependIn                      // new dependin (new formula)
+							dv.DependIn = make(map[string]bool)             // new dependin (new formula)
 							dv.DependOut = OriginalDependOut                // dependout remain
 							dv.ValueType = DynamicValueTypeExplosiveFormula // shouldn't be necessary, is return type of olsExplosive()
 							dv.DataFormula = formula                        // re-assigning of formula is usually saved for computeDirty but this will be skipped there
@@ -477,9 +525,8 @@ func gridInstance(c *Client) {
 								DataFormula: formula,
 							}
 
-							NewDependIn := make(map[string]bool)
-							dv.DependIn = &NewDependIn       // new dependin (new formula)
-							dv.DependOut = OriginalDependOut // dependout remain
+							dv.DependIn = make(map[string]bool) // new dependin (new formula)
+							dv.DependOut = OriginalDependOut    // dependout remain
 
 							setDataByRef(thisReference, setDependencies(thisReference, dv, &grid), &grid)
 						}
@@ -508,9 +555,7 @@ func gridInstance(c *Client) {
 						dv.DataFormula = ""
 					}
 
-					DependIn := make(map[string]bool)
-
-					dv.DependIn = &DependIn
+					dv.DependIn = make(map[string]bool)
 					dv.DependOut = OriginalDependOut
 
 					newDv := setDependencies(reference, dv, &grid)
@@ -1039,6 +1084,22 @@ func computeDirtyCells(grid *Grid, c *Client) []Reference {
 		indicateProgress = true
 	}
 
+	/// initialize DependInTemp and DependOutTemp for resolving
+	for ref, thisDv := range grid.DirtyCells {
+
+		thisDv.DependInTemp = make(map[string]bool)
+		thisDv.DependOutTemp = make(map[string]bool)
+
+		for ref, inSet := range thisDv.DependIn {
+			thisDv.DependInTemp[ref] = inSet
+		}
+		for ref, inSet := range thisDv.DependOut {
+			thisDv.DependOutTemp[ref] = inSet
+		}
+
+		grid.DirtyCells[ref] = thisDv
+	}
+
 	// for every DV in dirtyCells clean up the DependInTemp list with refs not in DirtyCells
 
 	// When a cell is not in DirtyCells but IS in the DependInTemp of a cell, it needs to be removed from it since it needs to have zero DependInTemp before it can be evaluated
@@ -1047,16 +1108,27 @@ func computeDirtyCells(grid *Grid, c *Client) []Reference {
 
 	for stringRef, thisDv := range grid.DirtyCells {
 
-		for stringRef := range *thisDv.DependInTemp {
+		for stringRefInner := range thisDv.DependInTemp {
 
 			// if ref is not in dirty cells, remove from depend in
-			if _, ok := (grid.DirtyCells)[stringRef]; !ok {
-				delete(*thisDv.DependInTemp, stringRef)
+			if _, ok := (grid.DirtyCells)[stringRefInner]; !ok {
+				delete(thisDv.DependInTemp, stringRefInner)
+			}
+
+			if stringRefInner == stringRef {
+				// circular reference detected, collapse Dv
+				thisDv.DataFormula = "\"Circular reference: " + thisDv.DataFormula + " \""
+
+				// make depend on nothing
+				thisDv.DependInTemp = make(map[string]bool)
+				grid.DirtyCells[stringRef] = thisDv
+
+				// by clearing DependInTemp thisDv at stringRef should become part of noDependInDirtyCells[stringRef]
 			}
 		}
 
 		// if after this removal DependInTemp is 0, add to list to be processed
-		if len(*thisDv.DependInTemp) == 0 {
+		if len(thisDv.DependInTemp) == 0 {
 			noDependInDirtyCells[stringRef] = true
 		}
 
@@ -1095,14 +1167,14 @@ func computeDirtyCells(grid *Grid, c *Client) []Reference {
 
 		// compute thisDv and update all DependOn values
 		if dv.DependOutTemp != nil {
-			for ref, inSet := range *dv.DependOutTemp {
+			for ref, inSet := range dv.DependOutTemp {
 				if inSet {
 
 					// only delete dirty dependencies for cells marked in dirtycells
 					if _, ok := (grid.DirtyCells)[ref]; ok {
-						delete(*(grid.DirtyCells)[ref].DependInTemp, index)
+						delete(grid.DirtyCells[ref].DependInTemp, index)
 
-						if len(*(grid.DirtyCells)[ref].DependInTemp) == 0 {
+						if len(grid.DirtyCells[ref].DependInTemp) == 0 {
 
 							// TO VALIDATE: is the below a problem?
 							// check to see if every time when trying to add to noDependInDirtyCells it is not contained in it
@@ -1471,6 +1543,12 @@ func sortRange(direction string, cellRange string, sortColumn string, grid *Grid
 			newDv.DataFormula = newFormula
 		}
 
+		// DependIn will be constructed in setDependencies based on formula content
+
+		// copy DependOuts from current newRef in Grid to newDv
+		newRefDependOut := getDataFromRef(newRef, grid).DependOut
+		newDv.DependOut = newRefDependOut
+
 		newGrid[newRef] = newDv
 
 		for _, nonSortingColumnIndex := range nonSortingColumns {
@@ -1486,6 +1564,10 @@ func sortRange(direction string, cellRange string, sortColumn string, grid *Grid
 			if sourceFormula != newFormula {
 				newDv.DataFormula = newFormula
 			}
+
+			// copy DependOuts from current newRef in Grid to newDv
+			newRefDependOut := getDataFromRef(newRef, grid).DependOut
+			newDv.DependOut = newRefDependOut
 
 			newGrid[newRef] = newDv
 		}
@@ -1809,7 +1891,7 @@ func copySourceToDestination(sourceRange ReferenceRange, destinationRange Refere
 		if isCut {
 
 			// when cutting cells, make sure that refences in DependOut are also appropriately incremented
-			for ref := range *getDataFromRef(sourceRef, grid).DependOut {
+			for ref := range getDataFromRef(sourceRef, grid).DependOut {
 
 				thisReference := getReferenceFromMapIndex(ref)
 
@@ -2063,9 +2145,8 @@ func clearCell(ref Reference, grid *Grid) {
 		DataFormula: "",
 	}
 
-	NewDependIn := make(map[string]bool)
-	dv.DependIn = &NewDependIn       // new dependin (new formula)
-	dv.DependOut = OriginalDependOut // dependout remain
+	dv.DependIn = make(map[string]bool) // new dependin (new formula)
+	dv.DependOut = OriginalDependOut    // dependout remain
 
 	setDataByRef(ref, setDependencies(ref, dv, grid), grid)
 }

@@ -29,10 +29,10 @@ type DynamicValue struct {
 	DataBool      bool
 	DataFormula   string
 	SheetIndex    int8
-	DependIn      *map[string]bool
-	DependOut     *map[string]bool
-	DependInTemp  *map[string]bool
-	DependOutTemp *map[string]bool
+	DependIn      map[string]bool
+	DependOut     map[string]bool
+	DependInTemp  map[string]bool
+	DependOutTemp map[string]bool
 }
 
 var numberOnlyReg *regexp.Regexp
@@ -46,11 +46,8 @@ var breakChars []string
 func makeEmptyDv() DynamicValue {
 	dv := DynamicValue{}
 
-	DependIn := make(map[string]bool)
-	DependOut := make(map[string]bool)
-
-	dv.DependIn = &DependIn
-	dv.DependOut = &DependOut
+	dv.DependIn = make(map[string]bool)
+	dv.DependOut = make(map[string]bool)
 
 	return dv
 }
@@ -58,11 +55,8 @@ func makeEmptyDv() DynamicValue {
 func makeDv(formula string) DynamicValue {
 	dv := DynamicValue{ValueType: DynamicValueTypeFormula, DataFormula: formula}
 
-	DependIn := make(map[string]bool)
-	DependOut := make(map[string]bool)
-
-	dv.DependIn = &DependIn
-	dv.DependOut = &DependOut
+	dv.DependIn = make(map[string]bool)
+	dv.DependOut = make(map[string]bool)
 
 	return dv
 }
@@ -443,12 +437,12 @@ func setDependencies(reference Reference, dv DynamicValue, grid *Grid) DynamicVa
 	// every cell that this depended on needs to get removed
 	referenceDv := getDataFromRef(reference, grid)
 
-	for ref := range *referenceDv.DependIn {
-		delete(*getDataByNormalRef(ref, grid).DependOut, standardIndex)
+	for ref := range referenceDv.DependIn {
+		delete(getDataByNormalRef(ref, grid).DependOut, standardIndex)
 	}
 
 	// always clear incoming references, if they still exist
-	*dv.DependIn = make(map[string]bool)
+	dv.DependIn = make(map[string]bool)
 
 	for thisRef, inSet := range references {
 
@@ -460,20 +454,20 @@ func setDependencies(reference Reference, dv DynamicValue, grid *Grid) DynamicVa
 			thisDvStandardRef := getMapIndexFromReference(thisRef)
 
 			if inSet {
-				if thisRef == reference {
-					// cell is dependent on self
-					fmt.Println("Circular reference error!")
-					dv.ValueType = DynamicValueTypeString
-					dv.DataFormula = "\"#Error, circular reference: " + dv.DataFormula + "\""
-				} else {
+				// if thisRef == reference {
+				// 	// cell is dependent on self
+				// 	fmt.Println("Circular reference error!")
+				// 	dv.ValueType = DynamicValueTypeString
+				// 	dv.DataFormula = "\"#Error, circular reference: " + dv.DataFormula + "\""
+				// } else {
 
-					(*dv.DependIn)[thisDvStandardRef] = true
-					(*thisDv.DependOut)[standardIndex] = true
+				// }
 
-					// copy
-					copyToDirty(thisDv, thisDvStandardRef, grid)
+				dv.DependIn[thisDvStandardRef] = true
+				thisDv.DependOut[standardIndex] = true
 
-				}
+				// copy
+				copyToDirty(thisDv, thisDvStandardRef, grid)
 			}
 
 		} else {
@@ -485,46 +479,33 @@ func setDependencies(reference Reference, dv DynamicValue, grid *Grid) DynamicVa
 	// always add self to dirty (after setting references DependIn for self - loop above)
 	copyToDirty(dv, standardIndex, grid)
 
-	// mark all cells dirty that depend on this cell
-	for ref, inSet := range *dv.DependOut {
-		if inSet {
+	// // mark all cells dirty that depend on this cell
+	// for ref, inSet := range dv.DependOut {
+	// 	if inSet {
 
-			dv := (grid.Data)[ref]
-			copyToDirty(dv, ref, grid)
-		}
-	}
+	// 		dv := (grid.Data)[ref]
+	// 		copyToDirty(dv, ref, grid)
+	// 	}
+	// }
 
 	return dv
 }
 
 func copyToDirty(dv DynamicValue, index string, grid *Grid) {
 
-	// only add if not already in
-	// if _, ok := (grid.DirtyCells)[index]; !ok {
+	// only add
+	if _, ok := grid.DirtyCells[index]; !ok {
+		grid.DirtyCells[index] = dv
 
-	// copy the DependIn/DependOut maps to retain original
-	DependInTemp := make(map[string]bool)
-	DependOutTemp := make(map[string]bool)
+		for ref, inSet := range dv.DependOut {
+			if inSet {
 
-	dv.DependInTemp = &DependInTemp
-	dv.DependOutTemp = &DependOutTemp
-
-	// copy in
-	(grid.DirtyCells)[index] = dv
-	// }
-
-	// always copy dependencies
-	for ref, inSet := range *dv.DependIn {
-		(*(grid.DirtyCells)[index].DependInTemp)[ref] = inSet
-	}
-	for ref, inSet := range *dv.DependOut {
-		(*(grid.DirtyCells)[index].DependOutTemp)[ref] = inSet
-
-		// if outgoing dependency not in dirtCells, add it now
-		if _, ok := (grid.DirtyCells)[ref]; !ok {
-			copyToDirty((grid.Data)[ref], ref, grid)
+				dv := (grid.Data)[ref]
+				copyToDirty(dv, ref, grid)
+			}
 		}
-
+	} else {
+		fmt.Println("Notice: tried to add to dirty twice (" + index + ")")
 	}
 
 }
@@ -1564,9 +1545,8 @@ func explosionSetValue(ref Reference, dataDv DynamicValue, grid *Grid) {
 
 	OriginalDependOut := getDataFromRef(ref, grid).DependOut
 
-	NewDependIn := make(map[string]bool)
-	dataDv.DependIn = &NewDependIn       // new dependin (new formula)
-	dataDv.DependOut = OriginalDependOut // dependout remain
+	dataDv.DependIn = make(map[string]bool) // new dependin (new formula)
+	dataDv.DependOut = OriginalDependOut    // dependout remain
 
 	// TODO for now add formula so re-compute succeeds: later optimize for performance
 	if dataDv.ValueType == DynamicValueTypeString {
