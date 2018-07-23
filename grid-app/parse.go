@@ -43,22 +43,22 @@ var maxOperatorSize int
 var operatorsBroken []map[string]int
 var breakChars []string
 
-func makeEmptyDv() DynamicValue {
+func makeEmptyDv() *DynamicValue {
 	dv := DynamicValue{}
 
 	dv.DependIn = make(map[string]bool)
 	dv.DependOut = make(map[string]bool)
 
-	return dv
+	return &dv
 }
 
-func makeDv(formula string) DynamicValue {
+func makeDv(formula string) *DynamicValue {
 	dv := DynamicValue{ValueType: DynamicValueTypeFormula, DataFormula: formula}
 
 	dv.DependIn = make(map[string]bool)
 	dv.DependOut = make(map[string]bool)
 
-	return dv
+	return &dv
 }
 
 func parseInit() {
@@ -95,11 +95,11 @@ func parseInit() {
 	numberOnlyFilter, _ = regexp.Compile(`^-?[0-9]\d*(\.\d+)?$`)
 }
 
-func getData(ref1 DynamicValue, grid *Grid) DynamicValue {
+func getData(ref1 DynamicValue, grid *Grid) *DynamicValue {
 	return (grid.Data)[ref1.DataString]
 }
 
-func getDataFromRef(reference Reference, grid *Grid) DynamicValue {
+func getDataFromRef(reference Reference, grid *Grid) *DynamicValue {
 	return grid.Data[getMapIndexFromReference(reference)]
 }
 func checkDataPresenceFromRef(reference Reference, grid *Grid) bool {
@@ -157,11 +157,11 @@ func checkIfRefExists(reference Reference, grid *Grid) bool {
 	return false
 }
 
-func getDataByNormalRef(ref string, grid *Grid) DynamicValue {
+func getDataByNormalRef(ref string, grid *Grid) *DynamicValue {
 	return grid.Data[ref]
 }
 
-func setDataByRef(reference Reference, dv DynamicValue, grid *Grid) {
+func setDataByRef(reference Reference, dv *DynamicValue, grid *Grid) {
 	dv.SheetIndex = reference.SheetIndex
 	mapIndex := getMapIndexFromReference(reference)
 	grid.Data[mapIndex] = dv
@@ -423,7 +423,7 @@ func cellRangeToCells(referenceRange ReferenceRange) []Reference {
 	return references
 }
 
-func setDependencies(reference Reference, dv DynamicValue, grid *Grid) DynamicValue {
+func setDependencies(reference Reference, dv *DynamicValue, grid *Grid) *DynamicValue {
 
 	standardIndex := getMapIndexFromReference(reference)
 	var references map[Reference]bool
@@ -467,7 +467,7 @@ func setDependencies(reference Reference, dv DynamicValue, grid *Grid) DynamicVa
 				thisDv.DependOut[standardIndex] = true
 
 				// copy
-				copyToDirty(thisDv, thisDvStandardRef, grid)
+				copyToDirty(thisDvStandardRef, grid)
 			}
 
 		} else {
@@ -477,7 +477,7 @@ func setDependencies(reference Reference, dv DynamicValue, grid *Grid) DynamicVa
 	}
 
 	// always add self to dirty (after setting references DependIn for self - loop above)
-	copyToDirty(dv, standardIndex, grid)
+	copyToDirty(standardIndex, grid)
 
 	// // mark all cells dirty that depend on this cell
 	// for ref, inSet := range dv.DependOut {
@@ -491,17 +491,15 @@ func setDependencies(reference Reference, dv DynamicValue, grid *Grid) DynamicVa
 	return dv
 }
 
-func copyToDirty(dv DynamicValue, index string, grid *Grid) {
+func copyToDirty(index string, grid *Grid) {
 
 	// only add
 	if _, ok := grid.DirtyCells[index]; !ok {
-		grid.DirtyCells[index] = dv
+		grid.DirtyCells[index] = true
 
-		for ref, inSet := range dv.DependOut {
+		for ref, inSet := range getDataByNormalRef(index, grid).DependOut {
 			if inSet {
-
-				dv := (grid.Data)[ref]
-				copyToDirty(dv, ref, grid)
+				copyToDirty(ref, grid)
 			}
 		}
 	} else {
@@ -528,7 +526,18 @@ func contains(s []string, e string) bool {
 	return false
 }
 
-func parse(formula DynamicValue, grid *Grid, targetRef Reference) DynamicValue {
+func copyDv(dv *DynamicValue) *DynamicValue {
+	newDv := DynamicValue{}
+	newDv.DataBool = dv.DataBool
+	newDv.DataFloat = dv.DataFloat
+	newDv.DataString = dv.DataString
+	newDv.DataFormula = dv.DataFormula
+	newDv.SheetIndex = dv.SheetIndex
+	newDv.ValueType = dv.ValueType
+	return &newDv
+}
+
+func parse(formula *DynamicValue, grid *Grid, targetRef Reference) *DynamicValue {
 
 	if formula.ValueType == DynamicValueTypeFloat {
 		return formula
@@ -539,7 +548,7 @@ func parse(formula DynamicValue, grid *Grid, targetRef Reference) DynamicValue {
 		return formula
 	}
 
-	elements := []DynamicValue{}
+	elements := []*DynamicValue{}
 	operatorsFound := []string{}
 	parenDepth := 0
 	quoteDepth := 0
@@ -617,10 +626,12 @@ func parse(formula DynamicValue, grid *Grid, targetRef Reference) DynamicValue {
 						if len(identifiedOperator) > 0 {
 
 							// add to elements everything in buffer before operator
-							elements = append(elements, DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeFormula, DataFormula: strings.TrimSpace(buffer.String())})
+							newDv := DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeFormula, DataFormula: strings.TrimSpace(buffer.String())}
+							elements = append(elements, &newDv)
 
+							newDv2 := DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeOperator, DataFormula: identifiedOperator}
 							// add operator to elements
-							elements = append(elements, DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeOperator, DataFormula: identifiedOperator})
+							elements = append(elements, &newDv2)
 
 							skipCharacters = len(identifiedOperator) - 1
 
@@ -646,7 +657,8 @@ func parse(formula DynamicValue, grid *Grid, targetRef Reference) DynamicValue {
 
 	}
 
-	elements = append(elements, DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeFormula, DataFormula: strings.TrimSpace(buffer.String())})
+	newDv := DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeFormula, DataFormula: strings.TrimSpace(buffer.String())}
+	elements = append(elements, &newDv)
 
 	// if first and last element in elements are parens, remove parens
 	for k, e := range elements {
@@ -719,12 +731,11 @@ func parse(formula DynamicValue, grid *Grid, targetRef Reference) DynamicValue {
 
 			arguments = append(arguments, strings.TrimSpace(buffer.String()))
 
-			var argumentFormulas []DynamicValue
-
-			argumentFormulas = []DynamicValue{}
+			argumentFormulas := []*DynamicValue{}
 
 			for _, e := range arguments {
-				argumentFormulas = append(argumentFormulas, parse(DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeFormula, DataFormula: e}, grid, targetRef))
+				newDv := DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeFormula, DataFormula: e}
+				argumentFormulas = append(argumentFormulas, parse(&newDv, grid, targetRef))
 			}
 
 			return executeCommand(command, argumentFormulas, grid, targetRef)
@@ -738,7 +749,7 @@ func parse(formula DynamicValue, grid *Grid, targetRef Reference) DynamicValue {
 				// unescape double quote
 				stringValue = strings.Replace(stringValue, "\\\"", "\"", -1)
 
-				return DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeString, DataString: stringValue}
+				return &DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeString, DataString: stringValue}
 
 			} else if strings.Index(singleElement.DataFormula, ":") != -1 {
 
@@ -750,7 +761,7 @@ func parse(formula DynamicValue, grid *Grid, targetRef Reference) DynamicValue {
 					log.Fatal("Wrong reference specifier")
 
 				} else {
-					return DynamicValue{ValueType: DynamicValueTypeReference, SheetIndex: targetRef.SheetIndex, DataString: singleElement.DataFormula}
+					return &DynamicValue{ValueType: DynamicValueTypeReference, SheetIndex: targetRef.SheetIndex, DataString: singleElement.DataFormula}
 				}
 
 			} else if numberOnlyFilter.MatchString(singleElement.DataFormula) {
@@ -760,18 +771,19 @@ func parse(formula DynamicValue, grid *Grid, targetRef Reference) DynamicValue {
 					log.Fatal(err)
 				}
 
-				return DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeFloat, DataFloat: float64(floatValue)}
+				return &DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeFloat, DataFloat: float64(floatValue)}
 
 			} else if singleElement.DataFormula == "FALSE" || singleElement.DataFormula == "TRUE" {
 				newDv := DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeBool, DataBool: false}
 				if singleElement.DataFormula == "TRUE" {
 					newDv.DataBool = true
 				}
-				return newDv
+				return &newDv
 			} else {
 
 				// when references contain dollar signs, remove them here
-				return getDataFromRef(getReferenceFromString(singleElement.DataFormula, targetRef.SheetIndex, grid), grid)
+				newDv := copyDv(getDataFromRef(getReferenceFromString(singleElement.DataFormula, targetRef.SheetIndex, grid), grid))
+				return newDv
 
 			}
 
@@ -839,7 +851,7 @@ func parse(formula DynamicValue, grid *Grid, targetRef Reference) DynamicValue {
 					}
 
 					arrayEnd := elements[operatorLocation+2:]
-					elements = append(elements[:operatorLocation-1], result)
+					elements = append(elements[:operatorLocation-1], &result)
 					elements = append(elements, arrayEnd...)
 
 					operatorLocation = findFirstOperatorOccurence(elements, operatorSet)
@@ -889,7 +901,7 @@ func dynamicToBool(A DynamicValue) bool {
 	}
 }
 
-func booleanCompare(LHS DynamicValue, RHS DynamicValue, operator string) DynamicValue {
+func booleanCompare(LHS *DynamicValue, RHS *DynamicValue, operator string) DynamicValue {
 
 	// for now, cast all values to float for comparison
 
@@ -967,7 +979,7 @@ func intersections(section1, section2 []string) (intersection []string) {
 	return
 }
 
-func indexOfOperator(ds []DynamicValue, s string) int {
+func indexOfOperator(ds []*DynamicValue, s string) int {
 	for k, e := range ds {
 		if e.DataFormula == s {
 			return k
@@ -976,7 +988,7 @@ func indexOfOperator(ds []DynamicValue, s string) int {
 	return -1
 }
 
-func findFirstOperatorOccurence(elements []DynamicValue, operatorSet []string) int {
+func findFirstOperatorOccurence(elements []*DynamicValue, operatorSet []string) int {
 
 	operatorLocation := math.MaxInt32
 
@@ -1097,7 +1109,7 @@ func lettersToIndex(letters string) int {
 	return sum
 }
 
-func convertToBool(dv DynamicValue) DynamicValue {
+func convertToBool(dv *DynamicValue) *DynamicValue {
 
 	boolDv := DynamicValue{ValueType: DynamicValueTypeBool, DataBool: false}
 
@@ -1113,11 +1125,11 @@ func convertToBool(dv DynamicValue) DynamicValue {
 		}
 	}
 
-	return boolDv
+	return &boolDv
 
 }
 
-func convertToString(dv DynamicValue) DynamicValue {
+func convertToString(dv *DynamicValue) *DynamicValue {
 
 	if dv.ValueType == DynamicValueTypeBool {
 		dv.DataString = "FALSE"
@@ -1137,11 +1149,11 @@ func convertToString(dv DynamicValue) DynamicValue {
 	return dv
 }
 
-func isCellEmpty(dv DynamicValue) bool {
+func isCellEmpty(dv *DynamicValue) bool {
 	return len(dv.DataFormula) == 0
 }
 
-func convertToFloat(dv DynamicValue) DynamicValue {
+func convertToFloat(dv *DynamicValue) *DynamicValue {
 
 	if !(dv.ValueType == DynamicValueTypeBool ||
 		dv.ValueType == DynamicValueTypeFloat ||
@@ -1149,7 +1161,7 @@ func convertToFloat(dv DynamicValue) DynamicValue {
 
 		fmt.Println("Can't convert any other type to float")
 
-		return DynamicValue{ValueType: DynamicValueTypeFloat}
+		return &DynamicValue{ValueType: DynamicValueTypeFloat}
 	}
 
 	if dv.ValueType == DynamicValueTypeString {
@@ -1161,7 +1173,7 @@ func convertToFloat(dv DynamicValue) DynamicValue {
 		if err != nil {
 			fmt.Println("Can't make number from " + dv.DataString)
 
-			return DynamicValue{ValueType: DynamicValueTypeFloat}
+			return &DynamicValue{ValueType: DynamicValueTypeFloat}
 		}
 		dv.DataFloat = value
 	}
@@ -1178,7 +1190,7 @@ func convertToFloat(dv DynamicValue) DynamicValue {
 
 }
 
-func average(arguments []DynamicValue, grid *Grid) DynamicValue {
+func average(arguments []*DynamicValue, grid *Grid) *DynamicValue {
 
 	var total float64
 	for _, dv := range arguments {
@@ -1194,14 +1206,14 @@ func average(arguments []DynamicValue, grid *Grid) DynamicValue {
 		total += dv.DataFloat
 	}
 
-	return DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: total / float64(len(arguments))}
+	return &DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: total / float64(len(arguments))}
 }
 
-func getDvsFromReferenceRange(referenceRange ReferenceRange, grid *Grid) []DynamicValue {
+func getDvsFromReferenceRange(referenceRange ReferenceRange, grid *Grid) []*DynamicValue {
 
 	references := getReferencesFromRange(referenceRange)
 
-	dvs := []DynamicValue{}
+	dvs := []*DynamicValue{}
 
 	for _, ref := range references {
 		dvs = append(dvs, getDataFromRef(ref, grid))
@@ -1243,7 +1255,7 @@ func getReferenceRowIndex(ref string) int {
 	return row
 }
 
-func count(arguments []DynamicValue, grid *Grid) DynamicValue {
+func count(arguments []*DynamicValue, grid *Grid) *DynamicValue {
 
 	var countValue float64
 	for _, dv := range arguments {
@@ -1262,10 +1274,10 @@ func count(arguments []DynamicValue, grid *Grid) DynamicValue {
 		}
 	}
 
-	return DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: countValue}
+	return &DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: countValue}
 }
 
-func sum(arguments []DynamicValue, grid *Grid) DynamicValue {
+func sum(arguments []*DynamicValue, grid *Grid) *DynamicValue {
 
 	var total float64
 	for _, dv := range arguments {
@@ -1273,13 +1285,13 @@ func sum(arguments []DynamicValue, grid *Grid) DynamicValue {
 		// check if argument is range
 		if dv.ValueType == DynamicValueTypeReference {
 
-			var dvs []DynamicValue
+			var dvs []*DynamicValue
 
 			if strings.Contains(dv.DataString, ":") {
 				rangeRef := getRangeReferenceFromString(dv.DataString, dv.SheetIndex, grid)
 				dvs = getDvsFromReferenceRange(rangeRef, grid)
 			} else {
-				dvs = []DynamicValue{getDataFromRef(getReferenceFromString(dv.DataString, dv.SheetIndex, grid), grid)}
+				dvs = []*DynamicValue{getDataFromRef(getReferenceFromString(dv.DataString, dv.SheetIndex, grid), grid)}
 			}
 
 			dv = sum(dvs, grid)
@@ -1291,13 +1303,13 @@ func sum(arguments []DynamicValue, grid *Grid) DynamicValue {
 		total += dv.DataFloat
 	}
 
-	return DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: total}
+	return &DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: total}
 }
 
-func ifFunc(arguments []DynamicValue) DynamicValue {
+func ifFunc(arguments []*DynamicValue) *DynamicValue {
 
 	if len(arguments) != 3 {
-		return DynamicValue{ValueType: DynamicValueTypeString, DataString: "IF requires 3 params"}
+		return &DynamicValue{ValueType: DynamicValueTypeString, DataString: "IF requires 3 params"}
 	}
 	if arguments[0].ValueType != DynamicValueTypeBool {
 		arguments[0] = convertToBool(arguments[0])
@@ -1311,35 +1323,35 @@ func ifFunc(arguments []DynamicValue) DynamicValue {
 
 }
 
-func mathConstant(arguments []DynamicValue) DynamicValue {
+func mathConstant(arguments []*DynamicValue) *DynamicValue {
 
 	if len(arguments) != 1 {
-		return DynamicValue{ValueType: DynamicValueTypeString, DataString: "MATH.C only takes one argument"}
+		return &DynamicValue{ValueType: DynamicValueTypeString, DataString: "MATH.C only takes one argument"}
 	}
 
 	switch constant := arguments[0].DataString; constant {
 	case "e", "E":
-		return DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: math.E}
+		return &DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: math.E}
 	case "π", "pi", "PI", "Pi":
-		return DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: math.Pi}
+		return &DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: math.Pi}
 	}
 
 	// couldn't find constant (didn't return before)
-	return DynamicValue{ValueType: DynamicValueTypeString, DataString: "constant requested not found: " + arguments[0].DataString}
+	return &DynamicValue{ValueType: DynamicValueTypeString, DataString: "constant requested not found: " + arguments[0].DataString}
 
 }
 
-func sqrt(arguments []DynamicValue) DynamicValue {
+func sqrt(arguments []*DynamicValue) *DynamicValue {
 	if len(arguments) != 1 {
-		return DynamicValue{ValueType: DynamicValueTypeString, DataString: "SQRT only takes one argument"}
+		return &DynamicValue{ValueType: DynamicValueTypeString, DataString: "SQRT only takes one argument"}
 	}
 
 	floatDv := convertToFloat(arguments[0])
 
-	return DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: math.Sqrt(floatDv.DataFloat)}
+	return &DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: math.Sqrt(floatDv.DataFloat)}
 }
 
-func concatenate(arguments []DynamicValue) DynamicValue {
+func concatenate(arguments []*DynamicValue) *DynamicValue {
 	var buff bytes.Buffer
 
 	for _, e := range arguments {
@@ -1348,21 +1360,21 @@ func concatenate(arguments []DynamicValue) DynamicValue {
 		}
 		buff.WriteString(e.DataString)
 	}
-	return DynamicValue{ValueType: DynamicValueTypeString, DataString: buff.String()}
+	return &DynamicValue{ValueType: DynamicValueTypeString, DataString: buff.String()}
 }
-func number(arguments []DynamicValue) DynamicValue {
+func number(arguments []*DynamicValue) *DynamicValue {
 
 	if len(arguments) != 1 {
-		return DynamicValue{ValueType: DynamicValueTypeString, DataString: "NUMBER only supports one argument"}
+		return &DynamicValue{ValueType: DynamicValueTypeString, DataString: "NUMBER only supports one argument"}
 	}
 
 	return convertToFloat(arguments[0])
 }
 
-func floor(arguments []DynamicValue) DynamicValue {
+func floor(arguments []*DynamicValue) *DynamicValue {
 
 	if len(arguments) != 1 {
-		return DynamicValue{ValueType: DynamicValueTypeString, DataString: "FLOOR only supports one argument"}
+		return &DynamicValue{ValueType: DynamicValueTypeString, DataString: "FLOOR only supports one argument"}
 	}
 
 	dv := convertToFloat(arguments[0])
@@ -1373,10 +1385,10 @@ func floor(arguments []DynamicValue) DynamicValue {
 	return dv
 }
 
-func ceil(arguments []DynamicValue) DynamicValue {
+func ceil(arguments []*DynamicValue) *DynamicValue {
 
 	if len(arguments) != 1 {
-		return DynamicValue{ValueType: DynamicValueTypeString, DataString: "CEIL only supports one argument"}
+		return &DynamicValue{ValueType: DynamicValueTypeString, DataString: "CEIL only supports one argument"}
 	}
 
 	dv := convertToFloat(arguments[0])
@@ -1385,19 +1397,19 @@ func ceil(arguments []DynamicValue) DynamicValue {
 	return dv
 }
 
-func length(arguments []DynamicValue) DynamicValue {
+func length(arguments []*DynamicValue) *DynamicValue {
 
 	if len(arguments) != 1 {
-		return DynamicValue{ValueType: DynamicValueTypeString, DataString: "LEN only supports one argument"}
+		return &DynamicValue{ValueType: DynamicValueTypeString, DataString: "LEN only supports one argument"}
 	}
 
 	stringValue := convertToString(arguments[0]).DataString
 
-	return DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: float64(len(stringValue))}
+	return &DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: float64(len(stringValue))}
 }
 
-func random() DynamicValue {
-	return DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: rand.Float64()}
+func random() *DynamicValue {
+	return &DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: rand.Float64()}
 }
 
 func isExplosiveFormula(formula string) bool {
@@ -1412,7 +1424,7 @@ func isExplosiveFormula(formula string) bool {
 	return false
 }
 
-func olsExplosive(arguments []DynamicValue, grid *Grid, targetRef Reference) DynamicValue {
+func olsExplosive(arguments []*DynamicValue, grid *Grid, targetRef Reference) *DynamicValue {
 
 	// TESTING
 	// set the cell below and right to this cell for testing
@@ -1509,30 +1521,30 @@ func olsExplosive(arguments []DynamicValue, grid *Grid, targetRef Reference) Dyn
 	// y_predicts
 	for key, yPredict := range yPredicts {
 		thisIndex := indexToLetters(targetCellColumn+1) + strconv.Itoa(targetCellRow+key+1) // new index is below the targetRef (two because labels)
-		explosionSetValue(Reference{String: thisIndex, SheetIndex: targetRef.SheetIndex}, DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: yPredict}, grid)
+		explosionSetValue(Reference{String: thisIndex, SheetIndex: targetRef.SheetIndex}, &DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: yPredict}, grid)
 	}
 	// residuals
 	for key, residual := range residuals {
 		thisIndex := indexToLetters(targetCellColumn+2) + strconv.Itoa(targetCellRow+key+1) // new index is below the targetRef (two because labels)
-		explosionSetValue(Reference{String: thisIndex, SheetIndex: targetRef.SheetIndex}, DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: residual}, grid)
+		explosionSetValue(Reference{String: thisIndex, SheetIndex: targetRef.SheetIndex}, &DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: residual}, grid)
 	}
 
 	// co-efficients
 	for i := 0; i < independentsCount+1; i++ { // also beta 1 for intercept
 
 		coefficientLabelIndex := indexToLetters(targetCellColumn+3) + strconv.Itoa(targetCellRow+i)
-		explosionSetValue(Reference{String: coefficientLabelIndex, SheetIndex: targetRef.SheetIndex}, DynamicValue{ValueType: DynamicValueTypeString, DataString: "beta " + strconv.Itoa(i+1)}, grid)
+		explosionSetValue(Reference{String: coefficientLabelIndex, SheetIndex: targetRef.SheetIndex}, &DynamicValue{ValueType: DynamicValueTypeString, DataString: "beta " + strconv.Itoa(i+1)}, grid)
 
 		coefficientIndex := indexToLetters(targetCellColumn+4) + strconv.Itoa(targetCellRow+i)
-		explosionSetValue(Reference{String: coefficientIndex, SheetIndex: targetRef.SheetIndex}, DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: B.Get(i, 0)}, grid)
+		explosionSetValue(Reference{String: coefficientIndex, SheetIndex: targetRef.SheetIndex}, &DynamicValue{ValueType: DynamicValueTypeFloat, DataFloat: B.Get(i, 0)}, grid)
 	}
 
 	// labels
 	yPredictsLabelIndex := indexToLetters(targetCellColumn+1) + strconv.Itoa(targetCellRow)
-	explosionSetValue(Reference{String: yPredictsLabelIndex, SheetIndex: targetRef.SheetIndex}, DynamicValue{ValueType: DynamicValueTypeString, DataString: "y hat"}, grid)
+	explosionSetValue(Reference{String: yPredictsLabelIndex, SheetIndex: targetRef.SheetIndex}, &DynamicValue{ValueType: DynamicValueTypeString, DataString: "y hat"}, grid)
 
 	residualsLabelIndex := indexToLetters(targetCellColumn+2) + strconv.Itoa(targetCellRow)
-	explosionSetValue(Reference{String: residualsLabelIndex, SheetIndex: targetRef.SheetIndex}, DynamicValue{ValueType: DynamicValueTypeString, DataString: "residuals"}, grid)
+	explosionSetValue(Reference{String: residualsLabelIndex, SheetIndex: targetRef.SheetIndex}, &DynamicValue{ValueType: DynamicValueTypeString, DataString: "residuals"}, grid)
 
 	olsDv := getDataFromRef(targetRef, grid)
 	olsDv.DataString = "OLS Regression"
@@ -1541,7 +1553,7 @@ func olsExplosive(arguments []DynamicValue, grid *Grid, targetRef Reference) Dyn
 	return olsDv
 }
 
-func explosionSetValue(ref Reference, dataDv DynamicValue, grid *Grid) {
+func explosionSetValue(ref Reference, dataDv *DynamicValue, grid *Grid) {
 
 	OriginalDependOut := getDataFromRef(ref, grid).DependOut
 
@@ -1563,9 +1575,9 @@ func explosionSetValue(ref Reference, dataDv DynamicValue, grid *Grid) {
 	setDataByRef(ref, setDependencies(ref, dataDv, grid), grid)
 }
 
-func vlookup(arguments []DynamicValue, grid *Grid, targetRef Reference) DynamicValue {
+func vlookup(arguments []*DynamicValue, grid *Grid, targetRef Reference) *DynamicValue {
 	if len(arguments) != 3 {
-		return DynamicValue{ValueType: DynamicValueTypeString, DataString: "VLOOKUP only supports 3 arguments"}
+		return &DynamicValue{ValueType: DynamicValueTypeString, DataString: "VLOOKUP only supports 3 arguments"}
 	}
 
 	stringSearchValue := convertToString(arguments[0])
@@ -1602,16 +1614,16 @@ func vlookup(arguments []DynamicValue, grid *Grid, targetRef Reference) DynamicV
 	return notFoundDv
 }
 
-func abs(arguments []DynamicValue) DynamicValue {
+func abs(arguments []*DynamicValue) *DynamicValue {
 	if len(arguments) != 1 {
-		return DynamicValue{ValueType: DynamicValueTypeString, DataString: "ABS only supports one argument"}
+		return &DynamicValue{ValueType: DynamicValueTypeString, DataString: "ABS only supports one argument"}
 	}
 	dv := arguments[0]
 	dv = convertToFloat(dv)
 	dv.DataFloat = math.Abs(dv.DataFloat)
 	return dv
 }
-func executeCommand(command string, arguments []DynamicValue, grid *Grid, targetRef Reference) DynamicValue {
+func executeCommand(command string, arguments []*DynamicValue, grid *Grid, targetRef Reference) *DynamicValue {
 
 	switch command := command; command {
 	case "SUM":
@@ -1663,7 +1675,7 @@ func executeCommand(command string, arguments []DynamicValue, grid *Grid, target
 			case pythonResult := <-grid.PythonResultChannel:
 				// fmt.Println("Received message from Python to return parse()")
 				newDv := DynamicValue{ValueType: DynamicValueTypeFormula, DataFormula: pythonResult}
-				return parse(newDv, grid, targetRef)
+				return parse(&newDv, grid, targetRef)
 			}
 		}
 
