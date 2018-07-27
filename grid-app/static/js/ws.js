@@ -107,7 +107,7 @@
                             _this.app.updateSheetSize(rowCount, columnCount, sheetIndex);
                         }
                         else if(json[0] == "SAVED"){
-                			alert("Saved workspace");
+                            _this.app.markSaved();
                         }
                         else if(json[0] == "PROGRESSINDICATOR"){
 
@@ -161,6 +161,9 @@
                         else if(json[0] == "EXPORT-CSV"){
                             download(json[1],"sheet.csv");
                         }
+                        else if(json[0] == "TESTCALLBACK-PONG"){
+                            _this.app.testManager.currentTestCallback.apply(_this.app.testManager);                            
+                        }
                         else{
                             console.warn("Received WS message without case: ")
                             console.warn(json)
@@ -178,7 +181,20 @@
 
         this.send = function(value){
             if(this.ws.readyState == this.ws.OPEN){
-                this.ws.send(value);
+
+                // only allow non string types
+                if(typeof value == "string"){
+                    this.ws.send(value);
+                }else {
+                    
+                    const noEditActions = ["GET", "JUMPCELL", "SWITCHSHEET", "GET-FILE", "SEND-FILE", "GET-DIRECTORY"];
+
+                    if(noEditActions.indexOf(value.arguments[0]) === -1){
+                        this.app.markUnsaved();
+                    }
+
+                    this.ws.send(JSON.stringify(value))
+                }
             }else{
                 console.warn("Tried to send" + value + " while not in open state");
             }

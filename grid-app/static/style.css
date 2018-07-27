@@ -28,6 +28,12 @@ body header {
   user-select: none;
   position: relative;
 }
+body header .save-status {
+  font-size: 13px;
+  font-style: italic;
+  color: #888;
+  padding-left: 10px;
+}
 body header .workspaceName {
   position: absolute;
   width: 30%;

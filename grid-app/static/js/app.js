@@ -55,6 +55,7 @@
 
 		this.wsManager = new WSManager(this);
 		this.fileManager = new FileManager(this);
+		this.testManager = new TestManager(this);
 		this.editor = new Editor(this);
 		this.codeGen = new CodeGen(this);
 		this.termManager = new TermManager(this);
@@ -271,7 +272,7 @@
 			this.dataFormulas[sheet][position[0]][position[1]] = value.toString();
 			
 			if(update !== false){
-				this.wsManager.send(JSON.stringify({arguments: ["SET", this.indexToLetters(position[1]+1) + (position[0]+1), value.toString(), ""+sheet]}));
+				this.wsManager.send({arguments: ["SET", this.indexToLetters(position[1]+1) + (position[0]+1), value.toString(), ""+sheet]});
 			}
 		}
 
@@ -484,7 +485,7 @@
 			var currentCellLocation = this.positionToCellLocation(this.lastMousePosition[0], this.lastMousePosition[1]);
 			var column = this.indexToLetters(currentCellLocation[1] + 1);
 
-			_this.wsManager.send(JSON.stringify({arguments: ["SORT", direction, rangeString, column]}));
+			_this.wsManager.send({arguments: ["SORT", direction, rangeString, column]});
 		}
 
 		this.requestSheetSize = function(){
@@ -493,7 +494,7 @@
 			var columns = parseInt(prompt("Column count:", this.numColumns));
 
 			if(!isNaN(rows) && !isNaN(columns) && rows >= 1 && columns >= 1){
-				this.wsManager.send(JSON.stringify({arguments:["SETSIZE",""+rows,""+columns, ""+this.activeSheet]}))
+				this.wsManager.send({arguments:["SETSIZE",""+rows,""+columns, ""+this.activeSheet]})
 			}
 
 		};
@@ -501,14 +502,14 @@
 		this.deleteRowColumn = function(type){
 			
 			var clickedCellPosition = _this.positionToCellLocation(_this.mouseRightClickLocation[0],_this.mouseRightClickLocation[1]);
-			_this.wsManager.send(JSON.stringify({arguments: [type, this.cellZeroIndexToString(clickedCellPosition[0], clickedCellPosition[1])]}));
+			_this.wsManager.send({arguments: [type, this.cellZeroIndexToString(clickedCellPosition[0], clickedCellPosition[1])]});
 		}
 
 		this.insertRowColumn = function(type, direction){
 			
 			var clickedCellPosition = _this.positionToCellLocation(_this.mouseRightClickLocation[0],_this.mouseRightClickLocation[1]);
 
-			_this.wsManager.send(JSON.stringify({arguments:["INSERTROWCOL", type, direction, this.cellZeroIndexToString(clickedCellPosition[0], clickedCellPosition[1])]}));
+			_this.wsManager.send({arguments:["INSERTROWCOL", type, direction, this.cellZeroIndexToString(clickedCellPosition[0], clickedCellPosition[1])]});
 		}
 
 		this.registerContextMenu = function(){
@@ -611,16 +612,16 @@
 				var destinationRange = this.cellArrayToStringRange(this.getSelectedCellsInOrder());
 
 				if(this.cutCopyPasteSelection.type == 'cut'){
-					this.wsManager.send(JSON.stringify({arguments: ["CUT", sourceRange, this.cutCopyPasteSelection.sheetIndex + "", destinationRange, this.activeSheet+""]}))
+					this.wsManager.send({arguments: ["CUT", sourceRange, this.cutCopyPasteSelection.sheetIndex + "", destinationRange, this.activeSheet+""]})
 					this.cutCopyPasteSelection = undefined;
 				}else{
-					this.wsManager.send(JSON.stringify({arguments: ["COPY", sourceRange, this.cutCopyPasteSelection.sheetIndex + "", destinationRange, this.activeSheet+""]}))
+					this.wsManager.send({arguments: ["COPY", sourceRange, this.cutCopyPasteSelection.sheetIndex + "", destinationRange, this.activeSheet+""]})
 				}
 			}
 		}
 		
 		// this.getSheets() = function(){
-		// 	this.wsManager.send(JSON.stringify({arguments: ["GETSHEETS"]}));
+		// 	this.wsManager.send({arguments: ["GETSHEETS"]}));
 		// }
 
 		this.setSheets = function(sheetsArray){
@@ -663,7 +664,7 @@
 
 			$('.sheet-tabs .sheet-tab').eq(index).addClass('active').siblings().removeClass('active');
 
-			this.wsManager.send(JSON.stringify({arguments: ["SWITCHSHEET", this.activeSheet+""]}))
+			this.wsManager.send({arguments: ["SWITCHSHEET", this.activeSheet+""]})
 
 			this.setSheetSize(this.sheetSizes[this.activeSheet][0], this.sheetSizes[this.activeSheet][1]);
 
@@ -685,7 +686,7 @@
 				var sheetName = prompt("Enter a name", "Sheet" + (numberOfCurrentSheets+1));
 
 				if(sheetName.length != 0){
-					_this.wsManager.send(JSON.stringify({arguments: ["ADDSHEET", sheetName]}));
+					_this.wsManager.send({arguments: ["ADDSHEET", sheetName]});
 				}else{
 					alert("You have to enter a sheet name, aborting.");
 				}
@@ -703,7 +704,7 @@
 				var remove = confirm("Are you sure you want to remove sheet: "+$(this).text()+"?");
 
 				if(remove){
-					_this.wsManager.send(JSON.stringify({arguments:["REMOVESHEET",tabIndex+""]}))
+					_this.wsManager.send({arguments:["REMOVESHEET",tabIndex+""]})
 				}
 				
 			});
@@ -712,6 +713,13 @@
 		this.updateOffset = function(){
 			this.scrollOffsetX = this.sheetDom.scrollLeft;
 			this.scrollOffsetY = this.sheetDom.scrollTop;
+		}
+
+		this.markSaved = function(){
+			$(".save-status").html("Saved.");
+		}
+		this.markUnsaved = function(){
+			$(".save-status").html("There are unsaved changes");
 		}
 
 		this.init = function(){
@@ -727,6 +735,9 @@
 
 			// initialize wsManager
 			this.wsManager.init();
+
+			// initialize unit testing manager
+			this.testManager.init();
 
 			this.wsManager.ws.onclose = function(){
 				var destr = prompt("Lost connection to the server. Redirect to dashboard?", "yes");
@@ -1214,6 +1225,15 @@
 						keyRegistered = false;
 					}
 				}
+				else if((e.ctrlKey || e.metaKey) && e.keyCode == 83) {
+
+					if(!_this.isFocusedOnElement()){
+						_this.saveWorkspace();
+					}else{
+						keyRegistered = false;
+					}
+
+				}
 				else{
 					keyRegistered = false;			
 				}
@@ -1297,6 +1317,10 @@
 				formula = "=" + formula.replace("Error in formula: ", "");
 			}
 
+			if(formula && formula[0] == "C" && formula.indexOf("Circular reference:") != -1){
+				formula = "=" + formula.replace("Circular reference: ", "");
+			}
+
 			this.input_field.val(formula);
 
 			this.init_input_field_backup_value = this.input_field.val();
@@ -1353,7 +1377,7 @@
 				}
 			}
 
-			_this.wsManager.send(JSON.stringify({arguments: ["RANGE","SETSINGLE",  startCell+":"+endCell, _this.activeSheet+"", ""]}));
+			_this.wsManager.send({arguments: ["RANGE","SETSINGLE",  startCell+":"+endCell, _this.activeSheet+"", ""]});
 		}
 
 		this.selectionToLowerUpper = function(selectedCells){
@@ -1402,7 +1426,7 @@
 		this.findFirstTypeCell = function(startCell, direction, cb){
 
 			this.callbacks.jumpCellCallback = cb;
-			this.wsManager.send(JSON.stringify({arguments: ["JUMPCELL", startCell, direction, ""+this.activeSheet]}));
+			this.wsManager.send({arguments: ["JUMPCELL", startCell, direction, ""+this.activeSheet]});
 
 			// var currentCell = startCell;
 
@@ -1947,7 +1971,7 @@
 				// console.log(data);
 				
 				// send data through WS
-				_this.wsManager.send(JSON.stringify({arguments: ["CSV", data]}));
+				_this.wsManager.send({arguments: ["CSV", data]});
 			}
 			
 			reader.readAsText(input[0].files[0]);
@@ -2011,11 +2035,11 @@
 		}
 
 		this.saveWorkspace = function(){
-			this.wsManager.send(JSON.stringify({arguments:["SAVE"]}));
+			this.wsManager.send({arguments:["SAVE"]});
 		}
 
 		this.exportCSV = function(){
-			this.wsManager.send(JSON.stringify({arguments:["EXPORT-CSV"]}));
+			this.wsManager.send({arguments:["EXPORT-CSV"]});
 		}
 
 		this.menuInit = function(){
@@ -2037,7 +2061,7 @@
 			menu.find('menu-item.close-workspace').click(function(e){
 				e.preventDefault();
 
-				_this.wsManager.send(JSON.stringify({arguments:["EXIT"]}))
+				_this.wsManager.send({arguments:["EXIT"]})
 
 				_this.termManager.term.socket.onclose = function(){
 					_this.wsManager.ws.close();

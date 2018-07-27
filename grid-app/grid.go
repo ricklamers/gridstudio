@@ -232,30 +232,34 @@ func gridInstance(c *Client) {
 					valuesIndex := 0
 					for _, ref := range references {
 
-						dv := getDataFromRef(ref, &grid)
+						if checkDataPresenceFromRef(ref, &grid) {
+							dv := getDataFromRef(ref, &grid)
 
-						if !isValidFormula(values[valuesIndex]) {
-							dv.ValueType = DynamicValueTypeString
-							dv.DataFormula = "\"Error in formula: " + values[valuesIndex] + "\""
+							if !isValidFormula(values[valuesIndex]) {
+								dv.ValueType = DynamicValueTypeString
+								dv.DataFormula = "\"Error in formula: " + values[valuesIndex] + "\""
+							} else {
+
+								dv.ValueType = DynamicValueTypeFormula
+								dv.DataFormula = values[valuesIndex]
+							}
+
+							// set to grid for access during setDependencies
+							parsedDv := parse(dv, &grid, ref)
+							parsedDv.DataFormula = values[valuesIndex]
+							parsedDv.DependIn = make(map[string]bool)
+							parsedDv.DependOut = dv.DependOut
+
+							setDataByRef(ref, parsedDv, &grid)
+
+							valuesIndex++
+
+							// add all OriginalDependOut to dirty
+							for key, _ := range parsedDv.DependOut {
+								copyToDirty(key, &grid)
+							}
 						} else {
-
-							dv.ValueType = DynamicValueTypeFormula
-							dv.DataFormula = values[valuesIndex]
-						}
-
-						// set to grid for access during setDependencies
-						parsedDv := parse(dv, &grid, ref)
-						parsedDv.DataFormula = values[valuesIndex]
-						parsedDv.DependIn = make(map[string]bool)
-						parsedDv.DependOut = dv.DependOut
-
-						setDataByRef(ref, parsedDv, &grid)
-
-						valuesIndex++
-
-						// add all OriginalDependOut to dirty
-						for key, _ := range parsedDv.DependOut {
-							copyToDirty(key, &grid)
+							fmt.Println("Tried writing to cell: " + getMapIndexFromReference(ref) + " which doesn't exist.")
 						}
 
 					}
@@ -327,6 +331,12 @@ func gridInstance(c *Client) {
 				}
 
 				sendSheets(c, &grid)
+
+			case "TESTCALLBACK-PING":
+
+				jsonData := []string{"TESTCALLBACK-PONG"}
+				json, _ := json.Marshal(jsonData)
+				c.send <- json
 
 			case "REMOVESHEET":
 
@@ -1091,15 +1101,6 @@ func computeDirtyCells(grid *Grid, c *Client) []Reference {
 				delete(thisDv.DependInTemp, stringRefInner)
 			}
 
-			if stringRefInner == stringRef {
-				// circular reference detected, collapse Dv
-				thisDv.DataFormula = "\"Circular reference: " + thisDv.DataFormula + "\""
-
-				// make depend on nothing
-				thisDv.DependInTemp = make(map[string]bool)
-
-				// by clearing DependInTemp thisDv at stringRef should become part of noDependInDirtyCells[stringRef]
-			}
 		}
 
 		// if after this removal DependInTemp is 0, add to list to be processed
@@ -1130,6 +1131,15 @@ func computeDirtyCells(grid *Grid, c *Client) []Reference {
 
 		if len(noDependInDirtyCells) == 0 {
 			fmt.Println("Error: should have an element in noDependInDirtyCells when DirtyCells is not empty")
+
+			// circular dependency error in all dirty cells
+			for key, _ := range grid.DirtyCells {
+				thisDv := getDataByNormalRef(key, grid)
+				thisDv.DataString = "\"Circular reference: " + thisDv.DataFormula + "\""
+				thisDv.ValueType = DynamicValueTypeString
+				changedRefs = append(changedRefs, getReferenceFromMapIndex(key))
+			}
+
 			break
 		}
 
@@ -1560,12 +1570,14 @@ func sortRange(direction string, cellRange string, sortColumn string, grid *Grid
 
 }
 
-func changeReferenceIndex(reference Reference, rowDifference int, columnDifference int, targetSheetIndex int8, grid *Grid) Reference {
+func changeReferenceIndex(reference Reference, rowDifference int, columnDifference int, targetSheetIndex int8, grid *Grid) (Reference, bool) {
+
+	crossedBounds := false
 
 	referenceString := reference.String
 
 	if rowDifference == 0 && columnDifference == 0 {
-		return Reference{String: reference.String, SheetIndex: targetSheetIndex}
+		return Reference{String: reference.String, SheetIndex: targetSheetIndex}, false
 	}
 
 	refRow := getReferenceRowIndex(referenceString)
@@ -1577,21 +1589,25 @@ func changeReferenceIndex(reference Reference, rowDifference int, columnDifferen
 	// check bounds
 	if refRow < 1 {
 		refRow = 1
+		crossedBounds = true
 	}
 	if refRow > grid.SheetSizes[grid.ActiveSheet].RowCount {
 		refRow = grid.SheetSizes[grid.ActiveSheet].RowCount
+		crossedBounds = true
 	}
 
 	if refColumn < 1 {
 		refColumn = 1
+		crossedBounds = true
 	}
 	if refColumn > grid.SheetSizes[grid.ActiveSheet].ColumnCount {
 		refColumn = grid.SheetSizes[grid.ActiveSheet].ColumnCount
+		crossedBounds = true
 	}
 
 	fixedRow, fixedColumn := getReferenceFixedBools(reference.String)
 
-	return Reference{String: indexesToReferenceWithFixed(refRow, refColumn, fixedRow, fixedColumn), SheetIndex: targetSheetIndex}
+	return Reference{String: indexesToReferenceWithFixed(refRow, refColumn, fixedRow, fixedColumn), SheetIndex: targetSheetIndex}, crossedBounds
 }
 
 func changeRangeReference(rangeReference ReferenceRange, rowDifference int, columnDifference int, targetSheetIndex int8, grid *Grid) ReferenceRange {
@@ -1601,7 +1617,11 @@ func changeRangeReference(rangeReference ReferenceRange, rowDifference int, colu
 	rangeStartReference := Reference{String: rangeReferences[0], SheetIndex: rangeReference.SheetIndex}
 	rangeEndReference := Reference{String: rangeReferences[1], SheetIndex: rangeReference.SheetIndex}
 
-	rangeReferenceString = changeReferenceIndex(rangeStartReference, rowDifference, columnDifference, rangeStartReference.SheetIndex, grid).String + ":" + changeReferenceIndex(rangeEndReference, rowDifference, columnDifference, rangeEndReference.SheetIndex, grid).String
+	// increment references
+	rangeStartReference, _ = changeReferenceIndex(rangeStartReference, rowDifference, columnDifference, rangeStartReference.SheetIndex, grid)
+	rangeEndReference, _ = changeReferenceIndex(rangeEndReference, rowDifference, columnDifference, rangeEndReference.SheetIndex, grid)
+
+	rangeReferenceString = rangeStartReference.String + ":" + rangeEndReference.String
 
 	return ReferenceRange{String: rangeReferenceString, SheetIndex: targetSheetIndex}
 }
@@ -1647,7 +1667,7 @@ func incrementFormula(sourceFormula string, sourceRef Reference, destinationRef 
 			columnDifference = 0
 		}
 
-		referenceMapping[reference] = changeReferenceIndex(reference, rowDifference, columnDifference, targetSheetIndex, grid)
+		referenceMapping[reference], _ = changeReferenceIndex(reference, rowDifference, columnDifference, targetSheetIndex, grid)
 	}
 
 	for _, rangeReference := range sourceRanges {
@@ -1880,7 +1900,9 @@ func copySourceToDestination(sourceRange ReferenceRange, destinationRange Refere
 
 				if !containsReferences(sourceCells, thisReference) {
 					outgoingRanges := findRanges(originalFormula, thisReference.SheetIndex, grid)
-					rangesToCheck[thisReference] = outgoingRanges
+					if len(outgoingRanges) > 0 {
+						rangesToCheck[thisReference] = outgoingRanges
+					}
 				}
 
 				referenceMapping := make(map[Reference]Reference)
@@ -1888,7 +1910,7 @@ func copySourceToDestination(sourceRange ReferenceRange, destinationRange Refere
 				for reference := range outgoingDvReferences {
 
 					if reference == sourceRef {
-						referenceMapping[reference] = changeReferenceIndex(reference, operationRowDifference, operationColumnDifference, destinationRef.SheetIndex, grid)
+						referenceMapping[reference], _ = changeReferenceIndex(reference, operationRowDifference, operationColumnDifference, destinationRef.SheetIndex, grid)
 					}
 
 				}
@@ -1974,9 +1996,9 @@ func copySourceToDestination(sourceRange ReferenceRange, destinationRange Refere
 
 func getDvAndRefForCopyModify(reference Reference, diffRow int, diffCol int, targetSheetIndex int8, newDvs map[Reference]*DynamicValue, grid *Grid) *DynamicValue {
 
-	newlyMappedRef := changeReferenceIndex(reference, diffRow, diffCol, targetSheetIndex, grid)
+	newlyMappedRef, crossedBounds := changeReferenceIndex(reference, diffRow, diffCol, targetSheetIndex, grid)
 
-	if _, ok := newDvs[newlyMappedRef]; ok {
+	if _, ok := newDvs[newlyMappedRef]; ok && !crossedBounds {
 		return newDvs[newlyMappedRef]
 	} else {
 		return getDataFromRef(reference, grid)
@@ -1984,9 +2006,9 @@ func getDvAndRefForCopyModify(reference Reference, diffRow int, diffCol int, tar
 }
 
 func putDvForCopyModify(reference Reference, dv *DynamicValue, diffRow int, diffCol int, targetSheetIndex int8, newDvs map[Reference]*DynamicValue, requiresUpdates map[Reference]*DynamicValue, grid *Grid) {
-	newlyMappedRef := changeReferenceIndex(reference, diffRow, diffCol, targetSheetIndex, grid)
+	newlyMappedRef, crossedBounds := changeReferenceIndex(reference, diffRow, diffCol, targetSheetIndex, grid)
 
-	if _, ok := newDvs[newlyMappedRef]; ok {
+	if _, ok := newDvs[newlyMappedRef]; ok && !crossedBounds {
 		newDvs[newlyMappedRef] = dv
 	} else {
 		setDataByRef(reference, dv, grid)

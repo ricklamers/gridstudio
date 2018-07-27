@@ -173,7 +173,7 @@
             }
             var content = this.ace.getValue();
 
-            this.app.wsManager.send(JSON.stringify({arguments: ["SET-FILE", this.filepath, content]}));
+            this.app.wsManager.send({arguments: ["SET-FILE", this.filepath, content]});
             this.dom.find(".file-name").removeClass("unsaved");
 
             this.app.fileManager.refresh();
@@ -208,11 +208,10 @@
 
             parsedScript = parsedScript.replace(/^\s*\n/gm, '');
 
-            console.log(parsedScript);
-
             if(parsedScript.length > 0){
                 this.showScriptExecuting();
                 this.app.wsManager.send("#PARSE#" + parsedScript);
+                this.app.markUnsaved();
             }
         }
     }

@@ -155,7 +155,7 @@
                 var path = $(this).attr("data-path");
 
                 if($(this).hasClass("file")){
-                    _this.app.wsManager.send(JSON.stringify({arguments: ["GET-FILE", path]}))
+                    _this.app.wsManager.send({arguments: ["GET-FILE", path]})
                 }else if($(this).hasClass("directory")){
                     _this.getDir(path);
                 }
@@ -180,7 +180,7 @@
         }
 
         this.getCwd = function(){
-            this.app.wsManager.send(JSON.stringify({arguments: ["GET-DIRECTORY", this.cwd]}))
+            this.app.wsManager.send({arguments: ["GET-DIRECTORY", this.cwd]})
         }
 
         this.showDirectory = function(data){
