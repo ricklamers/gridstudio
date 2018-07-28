@@ -138,7 +138,12 @@ def convert_to_json_string(element):
     if isinstance(element, str):
         # string meant as string, escape
         element = element.replace("\n","")
-        return "\"" + element + "\""
+
+        # if data is string without starting with =, add escape quotes
+        if data[0] == '=':
+            return data
+        else:
+            return "\"" + element + "\""
     else:
         return format(element, '.12f')
 
@@ -216,15 +221,7 @@ def sheet(cell_range, data = None, headers = False, sheet_index = 0):
             real_print(json_string, flush=True, end='')
 
         else:
-
-            # if data is string without starting with =, add escape quotes
-            if isinstance(data, str) and data[0] == '=':
-                # string meant as direct formula
-                # do nothing
-                data = data[1:]
-            elif isinstance(data, str):
-                # string meant as string, escape
-                data = "\"" + data + "\""
+            data = convert_to_json_string(data)
 
             data = {'arguments': ['RANGE', 'SETSINGLE', cell_range, str(sheet_index), ''.join(["=",str(data)])]}
             data = ''.join(['#PARSE#', json.dumps(data),'#ENDPARSE#'])
