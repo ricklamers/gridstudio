@@ -234,7 +234,7 @@ func parsePythonOutput(bufferHolder bytes.Buffer, pythonIn io.WriteCloser, c *Cl
 func (c *Client) pythonInterpreter() {
 
 	/// PYTHON COMMUNICATION SPAWNING PROTOCOL
-	pythonCommand := "python3"
+	pythonCommand := "python3.7"
 
 	if runtime.GOOS == "windows" {
 		// in Windows runtime Python 3 doesn't use 3 in the name of the executable
