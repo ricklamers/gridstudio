@@ -32,16 +32,16 @@ LABEL maintainer "NVIDIA CORPORATION <cudatools@nvidia.com>"
 # ENV NVIDIA_DRIVER_CAPABILITIES compute,utility
 # ENV NVIDIA_REQUIRE_CUDA "cuda>=9.0"
 
-# get rid of apt dialog warnings
+# get rid of apt-get dialog warnings
 RUN echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
 
 # all Grid related dependencies
-RUN apt update
-RUN apt -y install software-properties-common
+RUN apt-get update
+RUN apt-get -y install software-properties-common
 RUN add-apt-repository ppa:gophers/archive
-RUN apt update
-#RUN apt -y upgrade
-RUN apt -y install golang-1.10-go
+RUN apt-get update
+#RUN apt-get -y upgrade
+RUN apt-get -y install golang-1.10-go
 
 # install golang
 ENV PATH /usr/lib/go-1.10/bin:${PATH}
@@ -53,15 +53,15 @@ COPY . /home/source/
 
 # install python + dependencies + nodejs
 
-RUN apt install python3 -y
-RUN apt install curl -y
-RUN apt install git -y
+RUN apt-get install python3 -y
+RUN apt-get install curl -y
+RUN apt-get install git -y
 RUN curl -sL https://deb.nodesource.com/setup_10.x | bash -
-RUN apt install -y nodejs
-RUN apt install -y build-essential
-RUN apt install -y python3-pip
+RUN apt-get install -y nodejs
+RUN apt-get install -y build-essential
+RUN apt-get install -y python3-pip
 RUN pip3 install --upgrade pip
-RUN apt install -y python3-tk
+RUN apt-get install -y python3-tk
 RUN pip3 install numpy
 RUN pip3 install pandas
 RUN pip3 install matplotlib
