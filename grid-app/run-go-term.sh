@@ -4,7 +4,7 @@
 # mkdir /home/run/
 # echo "Created directory /home/run"
 export LANG=en_US.UTF_8
-
+locale
 cp -Rf /home/source/terminal-server/* /home/run/terminal-server
 # rsync -av /home/source/terminal-server /home/run/terminal-server
 echo "Copied directory"
@@ -23,7 +23,7 @@ fi
 
 cd /home/source/
 # Start the second process
-go run *.go &
+LANG=en_US.UTF-8 go run *.go &
 status=$?
 if [ $status -ne 0 ]; then
   echo "Failed to start Go webserver: $status"
