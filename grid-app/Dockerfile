@@ -32,7 +32,7 @@ LABEL maintainer "NVIDIA CORPORATION <cudatools@nvidia.com>"
 # ENV NVIDIA_DRIVER_CAPABILITIES compute,utility
 # ENV NVIDIA_REQUIRE_CUDA "cuda>=9.0"
 
-RUN apt-get clean && add-apt-repository ppa:deadsnakes/ppa -y && add-apt-repository ppa:gophers/archive -y && apt-get update && apt-get install -y locales && apt-get -y install golang-1.10-go && apt-get -y install software-properties-common && apt-get install python3.7
+RUN apt-get clean && apt-get update && add-apt-repository ppa:deadsnakes/ppa -y && add-apt-repository ppa:gophers/archive -y && apt-get update && apt-get install -y locales && apt-get -y install golang-1.10-go && apt-get -y install software-properties-common && apt-get install python3.7
 
 RUN export LANG=en_US.UTF_8
 
