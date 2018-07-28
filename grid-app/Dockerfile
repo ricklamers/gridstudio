@@ -32,13 +32,13 @@ LABEL maintainer "NVIDIA CORPORATION <cudatools@nvidia.com>"
 # ENV NVIDIA_DRIVER_CAPABILITIES compute,utility
 # ENV NVIDIA_REQUIRE_CUDA "cuda>=9.0"
 
+RUN apt-get clean && apt-get update && apt-get -y install software-properties-common && add-apt-repository ppa:deadsnakes/ppa -y && add-apt-repository ppa:gophers/archive -y && apt-get update && apt-get install -y locales && apt-get -y install golang-1.10-go && apt-get install -y python3.7
+
 RUN sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
     locale-gen
 ENV LANG en_US.UTF-8  
 ENV LANGUAGE en_US:en  
 ENV LC_ALL en_US.UTF-8  
-
-RUN apt-get clean && apt-get update && apt-get -y install software-properties-common && add-apt-repository ppa:deadsnakes/ppa -y && add-apt-repository ppa:gophers/archive -y && apt-get update && apt-get install -y locales && apt-get -y install golang-1.10-go && apt-get install -y python3.7
 
 # get rid of apt-get dialog warnings
 RUN echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
