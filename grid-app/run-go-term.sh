@@ -3,6 +3,8 @@
 # Start the first process
 # mkdir /home/run/
 # echo "Created directory /home/run"
+export LANG=en_US.UTF_8
+
 cp -Rf /home/source/terminal-server/* /home/run/terminal-server
 # rsync -av /home/source/terminal-server /home/run/terminal-server
 echo "Copied directory"

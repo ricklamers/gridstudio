@@ -32,11 +32,13 @@ LABEL maintainer "NVIDIA CORPORATION <cudatools@nvidia.com>"
 # ENV NVIDIA_DRIVER_CAPABILITIES compute,utility
 # ENV NVIDIA_REQUIRE_CUDA "cuda>=9.0"
 
+RUN apt-get clean && apt-get update && apt-get install -y locales
+RUN export LANG=en_US.UTF_8
+
 # get rid of apt-get dialog warnings
 RUN echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
 
 # all Grid related dependencies
-RUN apt-get update
 RUN apt-get -y install software-properties-common
 RUN add-apt-repository ppa:gophers/archive
 RUN apt-get update
