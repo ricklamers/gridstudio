@@ -137,6 +137,7 @@ def convert_to_json_string(element):
 
     if isinstance(element, str):
         # string meant as string, escape
+        element = element.replace("\n","")
         return "\"" + element + "\""
     else:
         return format(element, '.12f')

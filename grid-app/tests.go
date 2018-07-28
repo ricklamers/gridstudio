@@ -83,6 +83,10 @@ func runTests() {
 		referenceCount := findReferenceStrings("\"abudh\\\"ijdso\"")
 		testBool(len(referenceCount) == 0, true)
 
+		referenceCount2 := findReferenceStrings("\"Then there's a pair of us -- don't tell!\"")
+		testBool(len(referenceCount2) == 0, true)
+		
+
 		referenceMap := make(map[string]string)
 		referenceMap["Sheet2!A1"] = "Sheet2!A2"
 		testString(replaceReferenceStringInFormula("Sheet2!A1", referenceMap), "Sheet2!A2")
