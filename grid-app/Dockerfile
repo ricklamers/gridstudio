@@ -35,41 +35,23 @@ LABEL maintainer "NVIDIA CORPORATION <cudatools@nvidia.com>"
 RUN apt-get clean && apt-get update && apt-get install -y locales
 RUN export LANG=en_US.UTF_8
 
+RUN add-apt-repository ppa:deadsnakes/ppa -y && 
+
 # get rid of apt-get dialog warnings
 RUN echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
 
 # all Grid related dependencies
-RUN apt-get -y install software-properties-common
-RUN add-apt-repository ppa:gophers/archive
-RUN apt-get update
-#RUN apt-get -y upgrade
-RUN apt-get -y install golang-1.10-go
+RUN apt-get -y install software-properties-common && add-apt-repository ppa:gophers/archive && apt-get update && apt-get -y install golang-1.10-go
 
 # install golang
 ENV PATH /usr/lib/go-1.10/bin:${PATH}
-RUN echo $PATH
 
 # copy over all files to /home/source/
 WORKDIR /home/source/
 COPY . /home/source/
 
 # install python + dependencies + nodejs
-
-RUN apt-get install python3 -y
-RUN apt-get install curl -y
-RUN apt-get install git -y
-RUN curl -sL https://deb.nodesource.com/setup_10.x | bash -
-RUN apt-get install -y nodejs
-RUN apt-get install -y build-essential
-RUN apt-get install -y python3-pip
-RUN pip3 install --upgrade pip
-RUN apt-get install -y python3-tk
-RUN pip3 install numpy
-RUN pip3 install pandas
-RUN pip3 install matplotlib
-RUN pip3 install scipy
-RUN pip3 install scikit-learn
-RUN pip3 install tensorflow
+RUN apt-get install python3 -y && apt-get install curl -y && apt-get install git -y && curl -sL https://deb.nodesource.com/setup_10.x | bash - && apt-get install -y nodejs && apt-get install -y build-essential && apt-get install -y python3-pip && pip3 install --upgrade pip && apt-get install -y python3-tk && pip3 install numpy && pip3 install pandas && pip3 install matplotlib && pip3 install scipy && pip3 install scikit-learn && pip3 install tensorflow
 
 # create /home/run/ directory to run terminal nodejs project from
 RUN mkdir /home/run/
