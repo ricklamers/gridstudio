@@ -25,7 +25,10 @@ sheet_data = {}
 real_print = print
 
 def print(text):
-    real_print("#INTERPRETER#" + str(text) + "#ENDPARSE#", end='', flush=True)
+    if not isinstance(text, str):
+        text = str(text)
+
+    real_print("#INTERPRETER#" + text + "#ENDPARSE#", end='', flush=True)
 
 def parseCall(*arg):
     result = ""
