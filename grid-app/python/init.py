@@ -1,9 +1,15 @@
+import warnings
+warnings.filterwarnings("ignore", message="numpy.dtype size changed")
+warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
+
 import json
 import traceback
 import re
 import matplotlib
 import sys
 import pandas as pd
+import numpy as np
+
 matplotlib.use('Agg')
 
 import base64
