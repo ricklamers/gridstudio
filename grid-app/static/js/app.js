@@ -89,7 +89,8 @@
 
 		this.minColRowSize = 20;
 
-		this.sidebarSize = 25;
+		this.sidebarSize = [30,25];
+		this.minSidebarSize = [30,25];
 
 		this.drawRowStart = 0;
 		this.drawColumnStart = 0;
@@ -384,6 +385,34 @@
 
 		}
 
+		this.efficientTotalWidth = function(){
+			var width = this.numColumns * this.cellWidth;
+
+			// adapt based on modified widths
+			for(var key in this.columnWidthsCache){
+				width += this.columnWidthsCache[key];
+				width -= this.cellWidth;
+			}
+
+			width += this.sidebarSize[0];
+
+			return width;
+		}
+
+		this.efficientTotalHeight = function(){
+			var height = this.numRows * this.cellHeight;
+
+			// adapt based on modified widths
+			for(var key in this.rowHeightsCache){
+				height += this.rowHeightsCache[key];
+				height -= this.cellHeight;
+			}
+
+			height += this.sidebarSize[1];
+
+			return height;
+		}
+
 		this.sizeSizer = function(){
 			
 			this.canvas.width = this.sheetDom.clientWidth * this.pixelRatio;
@@ -396,15 +425,7 @@
 			this.ctx.scale(this.pixelRatio,this.pixelRatio);
 
 			// determine width based on columnWidths
-			var sizerWidth = this.numColumns * this.cellWidth;
-
-			// adapt based on modified widths
-			for(var key in this.columnWidthsCache){
-				sizerWidth += this.columnWidthsCache[key];
-				sizerWidth -= this.cellWidth;
-			}
-
-			sizerWidth += this.sidebarSize;
+			var sizerWidth = this.efficientTotalWidth();
 
 			if(sizerWidth > 40000){
 				sizerWidth = 40000;
@@ -414,15 +435,7 @@
 			}
 
 			// determine height based on rowHeights
-			var sizerHeight = this.numRows * this.cellHeight;
-
-			// adapt based on modified widths
-			for(var key in this.rowHeightsCache){
-				sizerHeight += this.rowHeightsCache[key];
-				sizerHeight -= this.cellHeight;
-			}
-
-			sizerHeight += this.sidebarSize;
+			var sizerHeight = this.efficientTotalHeight();
 
 			if(sizerHeight > 40000){
 				sizerHeight = 40000;
@@ -530,10 +543,10 @@
 
 				// show contextual items
 				
-				if(_this.mouseRightClickLocation[0] <= _this.sidebarSize){
+				if(_this.mouseRightClickLocation[0] <= _this.sidebarSize[0]){
 					$('.context-menu .row-only').show();
 				}
-				if(_this.mouseRightClickLocation[1] <= _this.sidebarSize){
+				if(_this.mouseRightClickLocation[1] <= _this.sidebarSize[1]){
 					$('.context-menu .column-only').show();
 				}
 
@@ -567,7 +580,9 @@
 					_this.cutSelection();
 				}else if($(this).hasClass('paste')){
 					_this.pasteSelection();
-				}else if($(this).hasClass('sheet-size')){
+				} else if($(this).hasClass('paste-as-value')){
+					_this.pasteSelectionAsValue();
+				} else if($(this).hasClass('sheet-size')){
 					_this.requestSheetSize();
 				}else if($(this).hasClass('insert-column-left')){
 					_this.insertRowColumn('COLUMN','LEFT');
@@ -616,6 +631,22 @@
 					this.cutCopyPasteSelection = undefined;
 				}else{
 					this.wsManager.send({arguments: ["COPY", sourceRange, this.cutCopyPasteSelection.sheetIndex + "", destinationRange, this.activeSheet+""]})
+				}
+			}
+		}
+
+		this.pasteSelectionAsValue = function(){
+			if(this.cutCopyPasteSelection){
+
+				// send copy command
+				var sourceRange = this.cellArrayToStringRange(this.cutCopyPasteSelection.cells);
+				var destinationRange = this.cellArrayToStringRange(this.getSelectedCellsInOrder());
+
+				if(this.cutCopyPasteSelection.type == 'copy'){
+					this.wsManager.send({arguments: ["COPYASVALUE", sourceRange, this.cutCopyPasteSelection.sheetIndex + "", destinationRange, this.activeSheet+""]})
+				} else if(this.cutCopyPasteSelection.type == 'cut'){
+					this.wsManager.send({arguments: ["CUTASVALUE", sourceRange, this.cutCopyPasteSelection.sheetIndex + "", destinationRange, this.activeSheet+""]})
+					this.cutCopyPasteSelection = undefined;
 				}
 			}
 		}
@@ -832,10 +863,10 @@
 						var canvasMouseY = e.offsetY - _this.sheetDom.scrollTop;
 
 						// check if dblclick location is in indicator area, if so, resize closes column to default rowheight
-						if(canvasMouseX < _this.sidebarSize || canvasMouseY < _this.sidebarSize){
+						if(canvasMouseX < _this.sidebarSize[0] || canvasMouseY < _this.sidebarSize[1]){
 							
 							var type = 'column';
-							if( canvasMouseX < _this.sidebarSize ){
+							if( canvasMouseX < _this.sidebarSize[0]){
 								type = 'row';
 							}
 
@@ -844,7 +875,8 @@
 							
 							if(type == 'column'){
 
-								_this.columnWidths(cell[1],_this.cellWidth);
+								// _this.columnWidths(cell[1],_this.cellWidth);
+								_this.wsManager.send({arguments: ["MAXCOLUMNWIDTH", (cell[1]+1) + "", _this.activeSheet + ""]});
 								
 							}else{
 
@@ -903,12 +935,12 @@
 						_this.mouse_down_canvas = true;
 						
 						// check if in indicator ranges -- resize column/rows
-						if(canvasMouseX < _this.sidebarSize || canvasMouseY < _this.sidebarSize){
+						if(canvasMouseX < _this.sidebarSize[0] || canvasMouseY < _this.sidebarSize[1]){
 							_this.resizingIndicator = true;
 
 							_this.resizingIndicatorPosition = [e.offsetX, e.offsetY];
 
-							if(canvasMouseX < _this.sidebarSize){
+							if(canvasMouseX < _this.sidebarSize[0]){
 								_this.resizingIndicatorType = 'row';
 							}else{
 								_this.resizingIndicatorType = 'column';
@@ -1219,7 +1251,11 @@
 
 					if(!_this.isFocusedOnElement()){
 						
-						_this.pasteSelection();
+						if(e.shiftKey){
+							_this.pasteSelectionAsValue();
+						}else{
+							_this.pasteSelection();
+						}
 
 					}else{
 						keyRegistered = false;
@@ -1239,7 +1275,10 @@
 					if(!_this.isFocusedOnElement()){
 						
 						// select all cells
-						_this.selectedCells = [[0,0], [_this.sheetSizes[_this.activeSheet][0], _this.sheetSizes[_this.activeSheet][1]]]
+						_this.selectedCells = [[0,0], [_this.sheetSizes[_this.activeSheet][0]-1, _this.sheetSizes[_this.activeSheet][1]-1]]
+						
+						// update draw
+						_this.drawSheet();
 
 					}else{
 						keyRegistered = false;
@@ -1348,7 +1387,7 @@
 			this.input_field.css({width: cellWidth-1, height: cellHeight-1});
 
 			// draw input at this position
-			this.input_field.css({marginLeft: cellPosition[0] + 1 + this.sidebarSize, marginTop: cellPosition[1] + 1 + this.sidebarSize});
+			this.input_field.css({marginLeft: cellPosition[0] + 1 + this.sidebarSize[0], marginTop: cellPosition[1] + 1 + this.sidebarSize[1]});
 			
 			this.input_field.show();
 			this.input_field.focus();
@@ -1609,7 +1648,7 @@
 				measuredHeight += this.rowHeights(viewEndRow);
 				
 				// increment to next row
-				if (measuredHeight >= (sheetViewHeight - this.sidebarSize)){
+				if (measuredHeight >= (sheetViewHeight - this.sidebarSize[1])){
 
 					// exclude finalRow since not fully in view
 					viewEndRow--;
@@ -1628,7 +1667,7 @@
 				measureWidth += this.columnWidths(viewEndColumn);
 
 				// increment to next row
-				if (measureWidth >= (sheetViewWidth - this.sidebarSize)){
+				if (measureWidth >= (sheetViewWidth - this.sidebarSize[0])){
 					// exclude finalColumn since not fully in view
 					viewEndColumn--;
 					break;
@@ -1651,7 +1690,7 @@
 					measuredHeight += this.rowHeights(minimumFirstRow);
 					
 					// increment to next row
-					if (measuredHeight >= (sheetViewHeight - this.sidebarSize)){
+					if (measuredHeight >= (sheetViewHeight - this.sidebarSize[1])){
 						// exclude final row since not fully in view
 						minimumFirstRow++;
 						break;
@@ -1678,7 +1717,7 @@
 					measureWidth += this.columnWidths(minimumFirstColumn);
 					
 					// increment to next row
-					if (measureWidth >= (sheetViewWidth - this.sidebarSize)){
+					if (measureWidth >= (sheetViewWidth - this.sidebarSize[0])){
 						// exclude final row since not fully in view
 						minimumFirstColumn++;
 						break;
@@ -1779,7 +1818,7 @@
 
 		this.positionToCellLocation = function(x, y){
 
-			var rowX = x + this.sheetOffsetX - this.sidebarSize;
+			var rowX = x + this.sheetOffsetX - this.sidebarSize[0];
 			var columnIndex = 0;
 			var currentColumnWidth = 0;
 
@@ -1792,7 +1831,7 @@
 				}
 			}
 
-			var rowY = y + this.sheetOffsetY - this.sidebarSize;
+			var rowY = y + this.sheetOffsetY - this.sidebarSize[1];
 			var rowIndex = 0;
 			var currentRowHeight = 0;
 
@@ -1814,7 +1853,7 @@
 			
 			// optimize efficiency due to never being able to resize both column and row
 			if(type == 'column'){
-				var rowX = x + this.sheetOffsetX - this.sidebarSize;
+				var rowX = x + this.sheetOffsetX - this.sidebarSize[0];
 				var currentColumnWidth = 0;
 	
 				for(var i = 0; i < this.numColumns; i++){
@@ -1835,7 +1874,7 @@
 					}
 				}
 			}else{
-				var rowY = y + this.sheetOffsetY - this.sidebarSize;
+				var rowY = y + this.sheetOffsetY - this.sidebarSize[1];
 				var currentRowHeight = 0;
 	
 				for(var i = 0; i < this.numRows; i++){
@@ -1909,7 +1948,7 @@
 			for(var y = this.numRows-1; y >= 0; y--){
 
 				totalHeight += this.rowHeights(y);
-				if(totalHeight < height-this.sidebarSize){
+				if(totalHeight < height-this.sidebarSize[1]){
 					finalRow = y; // choose starting cell that guarantees that it will be in view
 				}else{
 					break;
@@ -1921,7 +1960,7 @@
 			for(var x = this.numColumns-1; x >= 0; x--){
 
 				totalWidth += this.columnWidths(x);
-				if(totalWidth < width-this.sidebarSize){
+				if(totalWidth < width-this.sidebarSize[0]){
 					finalColumn = x + 1;
 				}else{
 					break;
@@ -2487,8 +2526,7 @@
 			this.ctx.lineWidth = 1;
 
 			// this.ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
-			this.ctx.fillStyle = "white";
-			this.ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
+			
 
 			// incorporate offset in drawing
 
@@ -2514,9 +2552,28 @@
 
 			// percentage method
 			var drawRowStart = Math.round(rowPercentage * this.finalRow);
-			var drawColumnStart = Math.round(columnPercentage * this.finalColumn);
 
+			var currentY = 0;
+			var drawRowEnd = drawRowStart;
+			while(true){
+
+				if(currentY > height + this.rowHeights(drawRowEnd) || drawRowEnd > this.numRows){
+					break;
+				}
+				currentY += this.rowHeights(drawRowEnd);
+				drawRowEnd++;
+			}
+
+			// adjust sidebarSize[0] based on this number
+			this.ctx.font = "9px Arial";
+			var textWidth = this.ctx.measureText(drawRowEnd).width;
+			this.sidebarSize[0] = textWidth + 5;
+			if(this.sidebarSize[0] < this.minSidebarSize[0]){
+				this.sidebarSize[0] = this.minSidebarSize[0];
+			}
 			
+
+			var drawColumnStart = Math.round(columnPercentage * this.finalColumn);
 
 			for(var x = 0; x < this.numColumns; x++){
 				if(x == drawColumnStart){
@@ -2551,12 +2608,22 @@
 			var drawHeight = 0;
 			var currentY = 0;
 
+			var horizontalLineEndX = this.efficientTotalWidth() - measureWidth;
+			var verticalLineEndY = this.efficientTotalHeight() - measureHeight;
+
+
 			this.ctx.beginPath();
+
+			this.ctx.fillStyle = "#ffffff";
+			this.ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
+
+			// this.ctx.fillStyle = "#ffffff";
+			// this.ctx.fillRect(0, 0, horizontalLineEndX, verticalLineEndY);
 
 			// render bars below navigation
 			this.ctx.fillStyle = "#eeeeee";
-			this.ctx.fillRect(0, 0, this.sidebarSize, height);
-			this.ctx.fillRect(0, 0, width, this.sidebarSize);
+			this.ctx.fillRect(0, 0, horizontalLineEndX, this.sidebarSize[1]);
+			this.ctx.fillRect(0, 0, this.sidebarSize[0], verticalLineEndY);
 			this.ctx.fillStyle = "#000000";
 			
 
@@ -2567,6 +2634,7 @@
 			this.ctx.a_moveTo(0, 0);
 			this.ctx.a_lineTo(width, 0);
 
+
 			while(true){
 
 				if(currentY > height + this.rowHeights(i) || i > this.numRows){
@@ -2574,8 +2642,8 @@
 				}
 
 				// draw row holder lines
-				this.ctx.a_moveTo(0, currentY + firstCellHeightOffset + this.sidebarSize);
-				this.ctx.a_lineTo(width, currentY + firstCellHeightOffset + this.sidebarSize);
+				this.ctx.a_moveTo(0, currentY + firstCellHeightOffset + this.sidebarSize[1]);
+				this.ctx.a_lineTo(horizontalLineEndX, currentY + firstCellHeightOffset + this.sidebarSize[1]);
 
 				currentY += this.rowHeights(i);
 
@@ -2593,8 +2661,8 @@
 					break;
 				}
 
-				this.ctx.a_moveTo(currentX + firstCellWidthOffset + this.sidebarSize, 0);
-				this.ctx.a_lineTo(currentX + firstCellWidthOffset + this.sidebarSize, height);
+				this.ctx.a_moveTo(currentX + firstCellWidthOffset + this.sidebarSize[0], 0);
+				this.ctx.a_lineTo(currentX + firstCellWidthOffset + this.sidebarSize[0], verticalLineEndY);
 
 				currentX += this.columnWidths(d);
 
@@ -2690,10 +2758,10 @@
 						this.ctx.strokeStyle = "rgba(50,110,255,0.8)";
 						this.ctx.lineWidth = 1;
 
-						var strokeX = cell_1[0] + this.sidebarSize + 0.5;
-						var strokeY = cell_1[1] + this.sidebarSize + 0.5;
+						var strokeX = cell_1[0] + this.sidebarSize[0] + 0.5;
+						var strokeY = cell_1[1] + this.sidebarSize[1] + 0.5;
 
-						if (strokeY > this.sidebarSize && strokeX > this.sidebarSize) {
+						if (strokeY > this.sidebarSize[1] && strokeX > this.sidebarSize[0]) {
 							this.ctx.strokeRect(
 								strokeX,
 								strokeY,
@@ -2744,25 +2812,25 @@
 					}
 					
 					
-					var drawX = cell_position[0] + shiftX + this.sidebarSize;
-					var drawY = cell_position[1] + shiftY + this.sidebarSize;
+					var drawX = cell_position[0] + shiftX + this.sidebarSize[0];
+					var drawY = cell_position[1] + shiftY + this.sidebarSize[1];
 					var drawWidth = highlightWidth;
 					var drawHeight = highlightHeight;
 
 					// clip x and y start to this.sidebarSize
-					if (drawX < this.sidebarSize){
-						drawWidth = drawWidth - (this.sidebarSize - drawX);
+					if (drawX < this.sidebarSize[0]){
+						drawWidth = drawWidth - (this.sidebarSize[0] - drawX);
 						if(drawWidth < 0){
 							drawWidth = 0;
 						}
-						drawX = this.sidebarSize;
+						drawX = this.sidebarSize[0];
 					}
-					if (drawY < this.sidebarSize){
-						drawHeight = drawHeight - (this.sidebarSize - drawY);
+					if (drawY < this.sidebarSize[1]){
+						drawHeight = drawHeight - (this.sidebarSize[1] - drawY);
 						if(drawHeight < 0){
 							drawHeight = 0;
 						}
-						drawY = this.sidebarSize;
+						drawY = this.sidebarSize[1];
 					}
 					
 					this.ctx.fillRect(
@@ -2778,7 +2846,7 @@
 					this.ctx.fillRect(
 						0,
 						drawY,
-						this.sidebarSize,
+						this.sidebarSize[0],
 						drawHeight
 					);
 
@@ -2786,7 +2854,7 @@
 						drawX,
 						0,
 						drawWidth,
-						this.sidebarSize
+						this.sidebarSize[1]
 					);
 				}
 
@@ -2824,7 +2892,7 @@
 						this.ctx.textAlign = 'left';
 
 						var fitted_cell_data = this.fittingStringFast(cell_data, cellMaxWidth);
-						this.ctx.fillText(fitted_cell_data, currentX + firstCellWidthOffset + this.textPadding + this.sidebarSize, currentY + firstCellHeightOffset + centeringOffset + this.sidebarSize);
+						this.ctx.fillText(fitted_cell_data, currentX + firstCellWidthOffset + this.textPadding + this.sidebarSize[0], currentY + firstCellHeightOffset + centeringOffset + this.sidebarSize[1]);
 					}
 
 
@@ -2833,9 +2901,9 @@
 						this.ctx.textAlign = 'center';
 
 						var centerOffset = this.columnWidths(d)/2;
-						var centeringOffset = ((this.sidebarSize + 2 - this.fontHeight)/2) + 1;
+						var centeringOffset = ((this.sidebarSize[1] + 2 - this.fontHeight)/2) + 1;
 					
-						this.ctx.fillText(this.indexToLetters(d+1), currentX + firstCellWidthOffset + this.sidebarSize + centerOffset, centeringOffset);
+						this.ctx.fillText(this.indexToLetters(d+1), currentX + firstCellWidthOffset + this.sidebarSize[0] + centerOffset, centeringOffset);
 					}
 
 					currentX += this.columnWidths(d);
@@ -2844,10 +2912,10 @@
 				}
 
 				this.ctx.textAlign = 'center';
-				var centerOffset = this.sidebarSize/2;
+				var centerOffset = this.sidebarSize[0]/2;
 				var centeringOffset = ((this.rowHeights(i) + 2 - (this.fontHeight-3))/2) + 1;
 				this.ctx.font = "9px Arial";
-				this.ctx.fillText(i+1, firstCellWidthOffset + centerOffset, currentY + firstCellHeightOffset + this.sidebarSize + centeringOffset);
+				this.ctx.fillText(i+1, firstCellWidthOffset + centerOffset, currentY + firstCellHeightOffset + this.sidebarSize[1] + centeringOffset);
 				this.ctx.font = this.fontStyle;
 
 				currentY += this.rowHeights(i);
@@ -2859,10 +2927,14 @@
 		}
 
 		this.computeWLetterSize = function(){
+			var width = this.computeCellTextSize("W");
+			return width;
+		}
+		this.computeCellTextSize = function(text){
 			this.ctx.font = this.fontStyle;
 			this.ctx.textAlign = 'left';
 			this.ctx.textBaseline = 'top';
-			var width = this.ctx.measureText("W").width;
+			var width = this.ctx.measureText(text).width;
 			return width;
 		}
 

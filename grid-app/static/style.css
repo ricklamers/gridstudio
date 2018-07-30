@@ -103,6 +103,9 @@ body div-sheet {
   overflow-x: scroll;
   flex: 1;
 }
+body div-sheet .sheet-sizer {
+  user-select: none;
+}
 body div-sheet canvas {
   position: fixed;
   z-index: -1;

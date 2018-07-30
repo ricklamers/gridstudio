@@ -467,7 +467,7 @@ func setDependencies(reference Reference, dv *DynamicValue, grid *Grid) *Dynamic
 				thisDv.DependOut[standardIndex] = true
 
 				// copy
-				copyToDirty(thisDvStandardRef, grid)
+				// copyToDirty(thisDvStandardRef, grid)
 			}
 
 		} else {
@@ -489,23 +489,6 @@ func setDependencies(reference Reference, dv *DynamicValue, grid *Grid) *Dynamic
 	// }
 
 	return dv
-}
-
-func copyToDirty(index string, grid *Grid) {
-
-	// only add
-	if _, ok := grid.DirtyCells[index]; !ok {
-		grid.DirtyCells[index] = true
-
-		for ref, inSet := range getDataByNormalRef(index, grid).DependOut {
-			if inSet {
-				copyToDirty(ref, grid)
-			}
-		}
-	} else {
-		fmt.Println("Notice: tried to add to dirty twice (" + index + ")")
-	}
-
 }
 
 func containsReferences(s []Reference, e Reference) bool {
@@ -536,6 +519,16 @@ func copyDv(dv *DynamicValue) *DynamicValue {
 	newDv.ValueType = dv.ValueType
 	return &newDv
 }
+
+// func copyToDv(sourceDv *DynamicValue, targetDv *DynamicValue) {
+// 	// note: DependOut and DependIn are unmodified - need to be done by setDependencies
+// 	targetDv.DataBool = sourceDv.DataBool
+// 	targetDv.DataFloat = sourceDv.DataFloat
+// 	targetDv.DataString = sourceDv.DataString
+// 	targetDv.DataFormula = sourceDv.DataFormula
+// 	targetDv.SheetIndex = sourceDv.SheetIndex
+// 	targetDv.ValueType = sourceDv.ValueType
+// }
 
 func parse(formula *DynamicValue, grid *Grid, targetRef Reference) *DynamicValue {
 
@@ -729,7 +722,10 @@ func parse(formula *DynamicValue, grid *Grid, targetRef Reference) *DynamicValue
 
 			}
 
-			arguments = append(arguments, strings.TrimSpace(buffer.String()))
+			bufferRemainder := strings.TrimSpace(buffer.String())
+			if len(bufferRemainder) > 0 {
+				arguments = append(arguments, bufferRemainder)
+			}
 
 			argumentFormulas := []*DynamicValue{}
 
@@ -1606,7 +1602,7 @@ func vlookup(arguments []*DynamicValue, grid *Grid, targetRef Reference) *Dynami
 
 			stringMapReference := strconv.Itoa(int(vlookupRange.SheetIndex)) + "!" + indexesToReferenceString(searchRangeStartRow+index, searchRangeColumn+returnColumnIndex)
 
-			return getDataByNormalRef(stringMapReference, grid)
+			return copyDv(getDataByNormalRef(stringMapReference, grid))
 		}
 	}
 	notFoundDv := makeEmptyDv()
@@ -1666,7 +1662,11 @@ func executeCommand(command string, arguments []*DynamicValue, grid *Grid, targe
 		}
 
 		// send command to Python
-		grid.PythonClient <- "parseCall(\"" + command + "\", \"" + strings.Join(argumentStrings, "\",\"") + "\")"
+		if len(arguments) != 0 {
+			grid.PythonClient <- "parseCall(\"" + command + "\", \"" + strings.Join(argumentStrings, "\",\"") + "\")"
+		} else {
+			grid.PythonClient <- "parseCall(\"" + command + "\")"
+		}
 		// fmt.Println("Posted message to Python CMD")
 
 		// loop until result is back

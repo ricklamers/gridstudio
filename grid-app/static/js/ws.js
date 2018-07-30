@@ -9,12 +9,6 @@
              .replace(/'/g, "&#039;");
     }
 
-    function getCookie(name) {
-        var value = "; " + document.cookie;
-        var parts = value.split("; " + name + "=");
-        if (parts.length == 2) return parts.pop().split(";").shift();
-    }
-     
     function WSManager(app){
         var _this = this;
         
@@ -75,6 +69,9 @@
 
                             // re-render plots
                             _this.app.update_plots();
+                            
+                            // re-render on SET data
+                            _this.app.drawSheet();
                         }
                         else if(json[0] == "SETSHEETS"){
                         
@@ -105,6 +102,8 @@
                             var sheetIndex = parseInt(json[3]);
                             
                             _this.app.updateSheetSize(rowCount, columnCount, sheetIndex);
+
+                            
                         }
                         else if(json[0] == "SAVED"){
                             _this.app.markSaved();
@@ -147,6 +146,30 @@
                             }
 
                         }
+                        else if(json[0] == "MAXCOLUMNWIDTH"){
+
+                            var rowIndex = parseInt(json[1]) - 1;
+                            var columnIndex = parseInt(json[2]) - 1;
+                            var sheetIndex = parseInt(json[3]);
+                            var maxLength = parseInt(json[4]);
+                            
+                            var cell = [rowIndex, columnIndex];
+
+                            var measuredWidth = _this.app.cellWidth;
+
+                            if(maxLength != 0){
+                                measuredWidth = _this.app.computeCellTextSize(_this.app.get(cell, sheetIndex)) + _this.app.textPadding*2;
+                                if (measuredWidth < _this.app.minColRowSize) {
+                                    measuredWidth = _this.app.minColRowSize;
+                                }
+                            }
+
+                            _this.app.columnWidths(columnIndex, measuredWidth);
+
+                            // re-render on columnWidths modification
+                            _this.app.drawSheet();
+
+                        }
                         else if(json.arguments && json.arguments[0] == "IMAGE"){
                             
                             var img = document.createElement('img');
@@ -173,8 +196,7 @@
                     
                 }
                 
-                // re-render on receive data
-                _this.app.drawSheet();
+                
     
             };
         }
@@ -187,7 +209,7 @@
                     this.ws.send(value);
                 }else {
                     
-                    const noEditActions = ["GET", "JUMPCELL", "SWITCHSHEET", "GET-FILE", "SEND-FILE", "GET-DIRECTORY"];
+                    const noEditActions = ["GET", "JUMPCELL", "MAXCOLUMNWIDTH", "SWITCHSHEET", "GET-FILE", "SEND-FILE", "GET-DIRECTORY"];
 
                     if(noEditActions.indexOf(value.arguments[0]) === -1){
                         this.app.markUnsaved();

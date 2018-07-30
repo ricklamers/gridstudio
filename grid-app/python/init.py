@@ -33,7 +33,10 @@ def print(text):
 def parseCall(*arg):
     result = ""
     try:
-        eval_result = eval(arg[0] + "(\""+'","'.join(arg[1:])+"\")")
+        if len(arg) > 1:
+            eval_result = eval(arg[0] + "(\""+'","'.join(arg[1:])+"\")")
+        else:
+            eval_result = eval(arg[0] + "()")
 
         if isinstance(eval_result, numbers.Number) and not isinstance(eval_result, bool):
             result = str(eval_result)
