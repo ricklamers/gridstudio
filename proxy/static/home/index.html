@@ -112,6 +112,11 @@
         <script>
 
             (function(){
+                
+                if(window.location.href.indexOf("beta") !== -1){
+                    window.location.href = "http://alpha.gridstudio.io"
+                }
+
                 var featureLink = document.querySelector("a[href='#features']");
 
                 var featuresOffset = document.querySelector('.features').offsetTop;
