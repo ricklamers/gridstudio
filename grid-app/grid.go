@@ -166,7 +166,7 @@ func gridInstance(c *Client) {
 					}
 
 					// parsed[3] contains the value (formula)
-					newDvs := make(map[Reference]DynamicValue)
+					newDvs := make(map[Reference]*DynamicValue)
 
 					// starting row
 
@@ -179,34 +179,23 @@ func gridInstance(c *Client) {
 
 						thisReference := ref
 
-						OriginalDependOut := getDataFromRef(thisReference, &grid).DependOut
-
-						var dv DynamicValue
+						dv := getDataFromRef(thisReference, &grid)
 
 						if !isValidFormula(formula) {
-							dv = DynamicValue{
-								ValueType:   DynamicValueTypeString,
-								DataFormula: "\"Error in formula: " + formula + "\"",
-							}
+							dv.ValueType = DynamicValueTypeString
+							dv.DataFormula = "\"Error in formula: " + formula + "\""
 						} else {
-							dv = DynamicValue{
-								ValueType:   DynamicValueTypeFormula,
-								DataFormula: formula,
-							}
+							dv.ValueType = DynamicValueTypeFormula
+							dv.DataFormula = formula
 						}
 
-						dv.DependIn = make(map[string]bool) // new dependin (new formula)
-						dv.DependOut = OriginalDependOut    // dependout remain
-
-						// range auto reference manipulation, increment row automatically for references in this formula for each iteration
 						newDvs[ref] = dv
-
 						incrementAmount++
 
 					}
 
 					for ref, dv := range newDvs {
-						setDataByRef(ref, setDependencies(ref, &dv, &grid), &grid)
+						setDataByRef(ref, setDependencies(ref, dv, &grid), &grid)
 					}
 
 					// now compute all dirty
@@ -230,6 +219,8 @@ func gridInstance(c *Client) {
 
 					// first add all to grid
 					valuesIndex := 0
+					newDvs := make(map[Reference]*DynamicValue)
+
 					for _, ref := range references {
 
 						if checkDataPresenceFromRef(ref, &grid) {
@@ -244,28 +235,21 @@ func gridInstance(c *Client) {
 								dv.DataFormula = values[valuesIndex]
 							}
 
-							// set to grid for access during setDependencies
-							parsedDv := parse(dv, &grid, ref)
-							parsedDv.DataFormula = values[valuesIndex]
-							parsedDv.DependIn = make(map[string]bool)
-							parsedDv.DependOut = dv.DependOut
-
-							setDataByRef(ref, parsedDv, &grid)
+							newDvs[ref] = dv
 
 							valuesIndex++
 
-							// add all OriginalDependOut to dirty
-							for key, _ := range parsedDv.DependOut {
-								copyToDirty(key, &grid)
-							}
 						} else {
 							fmt.Println("Tried writing to cell: " + getMapIndexFromReference(ref) + " which doesn't exist.")
 						}
 
 					}
 
-					computeDirtyCells(&grid, c)
+					for ref, dv := range newDvs {
+						setDataByRef(ref, setDependencies(ref, dv, &grid), &grid)
+					}
 
+					computeDirtyCells(&grid, c)
 					invalidateView(&grid, c)
 
 					// then setDependencies for all
@@ -516,8 +500,6 @@ func gridInstance(c *Client) {
 							dv.ValueType = DynamicValueTypeFormula
 							dv.DataFormula = formula
 
-							dv.DependIn = make(map[string]bool) // new dependin (new formula)
-
 							setDataByRef(thisReference, setDependencies(thisReference, dv, &grid), &grid)
 						}
 
@@ -543,8 +525,6 @@ func gridInstance(c *Client) {
 					if len(parsed[2]) == 0 {
 						dv.DataFormula = ""
 					}
-
-					dv.DependIn = make(map[string]bool)
 
 					newDv := setDependencies(reference, dv, &grid)
 					newDv.ValueType = DynamicValueTypeString

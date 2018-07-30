@@ -1945,6 +1945,7 @@
 
 			// resize spreadsheet
 			this.resizeSheet();
+			this.drawSheet();
 		}
 		
 		this.openFile = function(){

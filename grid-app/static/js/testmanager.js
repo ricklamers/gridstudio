@@ -25,7 +25,7 @@
             }
 
             // override, for debugging
-            // this.tests = ['testSumAndCut'];
+            // this.tests = ['testCutWithReference'];
             window.test = function(){
                 _this.runTests.apply(_this);
             };
@@ -33,6 +33,7 @@
 
         this.runTests = function(){
             this.currentTestIndex = 0;
+            this.testFailCount = 0;
             this.runTest();
         }
 

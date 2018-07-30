@@ -239,6 +239,8 @@ func (c *Client) pythonInterpreter() {
 	if runtime.GOOS == "windows" {
 		// in Windows runtime Python 3 doesn't use 3 in the name of the executable
 		pythonCommand = "python"
+	} else if runtime.GOOS == "darwin" {
+		pythonCommand = "python3"
 	}
 
 	pythonCmd := exec.Command(pythonCommand, "-u", "python/init.py")
