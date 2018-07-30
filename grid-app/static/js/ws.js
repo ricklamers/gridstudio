@@ -83,7 +83,6 @@
                         else if(json[0] == "INTERPRETER"){
                             var consoleText = json[1];
                             consoleText = escapeHtml(consoleText);
-                            consoleText = consoleText.replaceAll("\n", "<br>");
 
                             if(consoleText.indexOf("[error]") != -1){
                                 consoleText = consoleText.replace("[error]","");
@@ -102,6 +101,7 @@
                             var sheetIndex = parseInt(json[3]);
                             
                             _this.app.updateSheetSize(rowCount, columnCount, sheetIndex);
+                            _this.app.drawSheet();
 
                             
                         }

@@ -621,6 +621,8 @@ func gridInstance(c *Client) {
 
 				newDvs := make(map[Reference]*DynamicValue)
 
+				lines := [][]string{}
+
 				for {
 					// read just one record, but we could ReadAll() as well
 					record, err := reader.Read()
@@ -634,27 +636,52 @@ func gridInstance(c *Client) {
 					// record is an array of string so is directly printable
 					// fmt.Println("Record", lineCount, "is", record, "and has", len(record), "fields")
 
-					if minColumnSize == 0 {
+					lines = append(lines, record)
+
+					if len(record) > minColumnSize {
 						minColumnSize = len(record)
 					}
 
-					// and we can iterate on top of that
-					for i := 0; i < len(record); i++ {
-						// fmt.Println(" ", record[i])
+					// fmt.Println()
+					lineCount++
+				}
+
+				minRowSize := lineCount
+
+				newRowCount := grid.SheetSizes[grid.ActiveSheet].RowCount
+				newColumnCount := grid.SheetSizes[grid.ActiveSheet].ColumnCount
+
+				if minRowSize > grid.SheetSizes[grid.ActiveSheet].RowCount {
+					newRowCount = minRowSize
+				}
+				if minColumnSize > grid.SheetSizes[grid.ActiveSheet].ColumnCount {
+					newColumnCount = minColumnSize
+				}
+
+				changeSheetSize(newRowCount, newColumnCount, grid.ActiveSheet, c, &grid)
+
+				lineCount = 0
+				for _, line := range lines {
+
+					for i := 0; i < len(line); i++ {
 
 						// for now load CSV file to upper left cell, starting at A1
 						cellIndex := indexToLetters(i+1) + strconv.Itoa(lineCount+1)
 
-						inputString := strings.TrimSpace(record[i])
+						inputString := strings.TrimSpace(line[i])
 
 						reference := Reference{String: cellIndex, SheetIndex: grid.ActiveSheet}
+
 						newDv := getDataFromRef(reference, &grid)
 
 						// if not number, escape with quotes
 						if !numberOnlyFilter.MatchString(inputString) {
 							newDv.ValueType = DynamicValueTypeString
 							newDv.DataString = inputString
-							newDv.DataFormula = "\"" + inputString + "\""
+
+							escapedStringValue := strings.Replace(inputString, "\"", "\\\"", -1)
+
+							newDv.DataFormula = "\"" + escapedStringValue + "\""
 
 						} else {
 							newDv.ValueType = DynamicValueTypeFloat
@@ -672,26 +699,10 @@ func gridInstance(c *Client) {
 
 						// this will add it to dirtyCells for re-compute
 						newDvs[reference] = newDv
-
 					}
-					// fmt.Println()
+
 					lineCount++
-
 				}
-
-				minRowSize := lineCount
-
-				newRowCount := grid.SheetSizes[grid.ActiveSheet].RowCount
-				newColumnCount := grid.SheetSizes[grid.ActiveSheet].ColumnCount
-
-				if minRowSize > grid.SheetSizes[grid.ActiveSheet].RowCount {
-					newRowCount = minRowSize
-				}
-				if minColumnSize > grid.SheetSizes[grid.ActiveSheet].ColumnCount {
-					newColumnCount = minColumnSize
-				}
-
-				changeSheetSize(newRowCount, newColumnCount, grid.ActiveSheet, c, &grid)
 
 				for ref, dv := range newDvs {
 					setDataByRef(ref, setDependencies(ref, dv, &grid), &grid)

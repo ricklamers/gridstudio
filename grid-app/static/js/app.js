@@ -507,7 +507,17 @@
 			var columns = parseInt(prompt("Column count:", this.numColumns));
 
 			if(!isNaN(rows) && !isNaN(columns) && rows >= 1 && columns >= 1){
-				this.wsManager.send({arguments:["SETSIZE",""+rows,""+columns, ""+this.activeSheet]})
+
+				var confirmAmount = true;
+
+				if(rows * columns > 1000000){
+					confirmAmount = confirm("You're creating over a million cells, Grid isn't fully optimized yet. This amount could result in a degraded user experience, are you sure you want to continue?");
+				}
+
+				if(confirmAmount){
+					this.wsManager.send({arguments:["SETSIZE",""+rows,""+columns, ""+this.activeSheet]})
+				}
+
 			}
 
 		};
@@ -771,9 +781,9 @@
 			this.testManager.init();
 
 			this.wsManager.ws.onclose = function(){
-				var destr = prompt("Lost connection to the server. Redirect to dashboard?", "yes");
+				var destr = confirm("Lost connection to the server. Redirect to dashboard?");
 
-				if(destr == "yes") {
+				if(destr) {
 					setTimeout(function(){
 						var currentUrl = window.location.href;
 						var newUrl = currentUrl.replace("/workspace/","/destruct/");

@@ -200,7 +200,10 @@ func parsePythonOutput(bufferHolder bytes.Buffer, pythonIn io.WriteCloser, c *Cl
 
 						if valueDv.ValueType == DynamicValueTypeString {
 							commandBuf.WriteString("\"")
-							commandBuf.WriteString(value)
+
+							escapedStringValue := strings.Replace(value, "\"", "\\\"", -1)
+							commandBuf.WriteString(escapedStringValue)
+
 							commandBuf.WriteString("\"")
 						} else {
 							if len(value) == 0 {
