@@ -1234,6 +1234,18 @@
 					}
 
 				}
+				else if((e.ctrlKey || e.metaKey) && e.keyCode == 65) {
+
+					if(!_this.isFocusedOnElement()){
+						
+						// select all cells
+						_this.selectedCells = [[0,0], [_this.sheetSizes[_this.activeSheet][0], _this.sheetSizes[_this.activeSheet][1]]]
+
+					}else{
+						keyRegistered = false;
+					}
+
+				}
 				else{
 					keyRegistered = false;			
 				}

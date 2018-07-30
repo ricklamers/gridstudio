@@ -756,27 +756,29 @@ func isValidFormula(formula string) bool {
 			continue
 		}
 
-		if c == "'" && singleQuoteDepth == 0 {
+		if quoteDepth == 0 {
+			if c == "'" && singleQuoteDepth == 0 {
 
-			singleQuoteDepth++
+				singleQuoteDepth++
 
-			continue
+				continue
 
-		} else if c == "'" && singleQuoteDepth == 1 {
+			} else if c == "'" && singleQuoteDepth == 1 {
 
-			singleQuoteDepth--
+				singleQuoteDepth--
 
-			// should be followed by dollar or letter
-			if nextR != '!' {
-				return false
-			} else {
-				inReference = true
+				// should be followed by dollar or letter
+				if nextR != '!' {
+					return false
+				} else {
+					inReference = true
 
-				// skip next char !
-				// skipNextChar = true
+					// skip next char !
+					// skipNextChar = true
+				}
+
+				continue
 			}
-
-			continue
 		}
 
 		if quoteDepth == 0 && singleQuoteDepth == 0 {
