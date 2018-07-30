@@ -474,7 +474,7 @@ func main() {
 
 		// set cookie to UUID
 		expiration := time.Now().Add(365 * 24 * time.Hour)
-		cookie := http.Cookie{Name: "session_uuid", Value: uuid, Expires: expiration}
+		cookie := http.Cookie{Name: "session_uuid", Value: uuid, Expires: expiration, Path: "/"}
 		http.SetCookie(w, &cookie)
 
 		// redirect to app

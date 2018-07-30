@@ -12,12 +12,28 @@ var debug bool
 func runTests() {
 
 	debug = false
-	// debug = true
+	debug = true
 
 	testCount = 0
 	testFailCount = 0
 
+	// initialize the datastructure for the matrix
+	columnCount := 10
+	rowCount := 10
+
+	sheetSizes := []SheetSize{SheetSize{RowCount: rowCount, ColumnCount: columnCount}, SheetSize{RowCount: rowCount, ColumnCount: columnCount}}
+
+	// For now make this a two way mapping for ordered loops and O(1) access times -- aware of redundancy of state which could cause problems
+	sheetNames := make(map[string]int8)
+	sheetNames["Sheet1"] = 0
+	sheetNames["Sheet2"] = 1
+
+	sheetList := []string{"Sheet1", "Sheet2"}
+
+	grid := Grid{Data: make(map[string]*DynamicValue), PerformanceCounting: make(map[string]int), DirtyCells: make(map[string]bool), ActiveSheet: 0, SheetNames: sheetNames, SheetList: sheetList, SheetSizes: sheetSizes}
+
 	if !debug {
+
 		testFormula("((A1 + A10) - (1))", true)
 		testFormula("A10 + 0.2", true)
 		testFormula("A10 + A0.2", false)
@@ -85,7 +101,6 @@ func runTests() {
 
 		referenceCount2 := findReferenceStrings("\"Then there's a pair of us -- don't tell!\"")
 		testBool(len(referenceCount2) == 0, true)
-		
 
 		referenceMap := make(map[string]string)
 		referenceMap["Sheet2!A1"] = "Sheet2!A2"
@@ -109,7 +124,13 @@ func runTests() {
 		// space to run single test cases
 		// testFormula("$B$1+CEIL(RAND()*1000)", true)
 		// testFormula("'Sheet1'!$A$1", true)
-		testFormula("VLOOKUP(A1,Sheet1!$A$1:$A$1,1)", true)
+		testFormula("\"Then there's a pair of us -- don't tell!\"", true)
+
+		sampleDv := makeDv("\"Then there's a pair of us -- don't tell!\"")
+
+		resultDv := parse(sampleDv, &grid, Reference{String: "A1", SheetIndex: 0})
+
+		fmt.Println(resultDv.DataString)
 
 	}
 
