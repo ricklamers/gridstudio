@@ -29,6 +29,10 @@ $(document).ready(function(){
 
     loadWorkspaces();
 
+    // get email from cookie
+    var emailFromCookie = getCookie("email");
+    $('.email-display').html(emailFromCookie);
+
     if(findGetParameter('error') != null){
         $('body').append("<div class='notification error'><div class='message'>" + findGetParameter('error') + "</div><div class='close'><button class='interactive'>Close</button></div></div>");
     }
@@ -79,6 +83,22 @@ $(document).ready(function(){
         })
 
     });
+
+    function getCookie(cname) {
+        var name = cname + "=";
+        var decodedCookie = decodeURIComponent(document.cookie);
+        var ca = decodedCookie.split(';');
+        for(var i = 0; i <ca.length; i++) {
+            var c = ca[i];
+            while (c.charAt(0) == ' ') {
+                c = c.substring(1);
+            }
+            if (c.indexOf(name) == 0) {
+                return c.substring(name.length, c.length);
+            }
+        }
+        return "";
+    }
 
     // only allow button to be clicked once
     var hasClickedButton = false;
