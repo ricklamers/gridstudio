@@ -5,4 +5,5 @@ debug
 manager.exe
 cpu.dat
 logs/
-util/gen-password/out.txt
+out.txt
+passwords.txt
