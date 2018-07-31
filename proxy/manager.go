@@ -123,6 +123,10 @@ func checkIdleInstances(usersessions map[string]dockermanager.DockerSession, use
 		resp, err1 := client.Get("http://127.0.0.1:" + strconv.Itoa(ds.Port) + "/fell-idle-check")
 		if err1 != nil {
 			fmt.Println(err1)
+
+			// docker instance unavailable, attempt destroy
+			destructSession(uuid, usersessions, usedports)
+
 		} else {
 
 			body, err2 := ioutil.ReadAll(resp.Body)
