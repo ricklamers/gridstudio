@@ -204,7 +204,7 @@ func (w *WebsocketProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 				if srcName == "client" {
 					// send close to dst
-					fmt.Println("Send WS close to dst")
+					// fmt.Println("Send WS close to dst")
 					dst.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseGoingAway, err.Error()), time.Time{})
 				}
 

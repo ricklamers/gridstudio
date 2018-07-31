@@ -7,6 +7,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
+	"time"
 
 	"github.com/NYTimes/gziphandler"
 )
@@ -118,6 +120,12 @@ func runServer() {
 		fmt.Println("/ws http request received")
 
 		serveWs(hub, w, r)
+	})
+
+	http.HandleFunc("/fell-idle-check", func(w http.ResponseWriter, r *http.Request) {
+
+		w.Write([]byte(strconv.Itoa(int(hub.inactiveTime / time.Second))))
+
 	})
 
 	fmt.Println("Go server listening on port " + *addr)

@@ -25,7 +25,8 @@ import (
 	"./dockermanager"
 	"./websocketproxy"
 	"github.com/gorilla/websocket"
-	_ "github.com/mattn/go-sqlite3"
+
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/twinj/uuid"
 )
 
@@ -102,7 +103,53 @@ func checkQuickHTTPResponse(requestURL string) bool {
 		return true
 	}
 
+	fmt.Println("checkQuickHTTPResponse returned: " + strconv.Itoa(resp.StatusCode))
+
 	return false
+}
+
+func checkIdleInstances(usersessions map[string]dockermanager.DockerSession, usedports map[int]bool) {
+
+	// first check if
+
+	for uuid, ds := range usersessions {
+
+		// check if docker instance idle too long
+
+		client := http.Client{
+			Timeout: time.Millisecond * 150,
+		}
+
+		resp, err1 := client.Get("http://127.0.0.1:" + strconv.Itoa(ds.Port) + "/fell-idle-check")
+		if err1 != nil {
+			fmt.Println(err1)
+		} else {
+
+			body, err2 := ioutil.ReadAll(resp.Body)
+			if err2 != nil {
+				fmt.Println(err2)
+			}
+
+			bs := string(body)
+
+			timeIdle, err3 := strconv.Atoi(bs)
+			if err3 != nil {
+				fmt.Println(err3)
+			}
+
+			fmt.Println("Session " + uuid + " is idle for " + strconv.Itoa(timeIdle) + " seconds.")
+
+			// when idle for two minutes kill session
+
+			if timeIdle > 120 {
+				fmt.Println("Session " + uuid + " fell idle. Destructing Docker session")
+				destructSession(uuid, usersessions, usedports)
+			}
+
+		}
+
+	}
+
 }
 
 type WorkspaceRow struct {
@@ -111,18 +158,28 @@ type WorkspaceRow struct {
 	Slug    string `json:"slug"`
 	Name    string `json:"name"`
 	Created string `json:"created"`
+	Shared  int    `json:"shared"`
 }
 
-func getUserId(r *http.Request, db *sql.DB) int {
+type User struct {
+	ID    int
+	Email string
+}
+
+func getUser(r *http.Request, db *sql.DB) User {
 
 	cookieEmail, err1 := r.Cookie("email")
 	cookieToken, err2 := r.Cookie("token")
 
+	user := User{}
+
+	user.ID = -1
+
 	if err1 != nil || err2 != nil {
-		return -1
+		return user
 	}
 
-	ownerQuery, err := db.Query("SELECT id FROM users WHERE email = ? AND token = ?", cookieEmail.Value, cookieToken.Value)
+	ownerQuery, err := db.Query("SELECT id,email FROM users WHERE email = ? AND token = ?", cookieEmail.Value, cookieToken.Value)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -130,12 +187,11 @@ func getUserId(r *http.Request, db *sql.DB) int {
 
 	if ownerQuery.Next() {
 
-		var userId int
-		ownerQuery.Scan(&userId)
+		ownerQuery.Scan(&user.ID, &user.Email)
 
-		return userId
+		return user
 	} else {
-		return -1
+		return user
 	}
 }
 
@@ -191,6 +247,51 @@ func concatHtmlFiles(files []string) string {
 	return string(buf.Bytes())
 }
 
+func destructSession(uuid string, usersessions map[string]dockermanager.DockerSession, usedports map[int]bool) {
+
+	if _, ok := usersessions[uuid]; !ok {
+		fmt.Println("Tried destroying session " + uuid + ", but sessions not in active usersessions.")
+	} else {
+		ds := usersessions[uuid]
+
+		// set usedports for assigned port
+		usedports[ds.Port] = false
+
+		// delete from user sessions
+		delete(usersessions, uuid)
+
+		// kill Docker instance
+		dockerCmd := exec.Command("docker", "kill", "grid"+strconv.Itoa(ds.Port))
+		dockerCmd.Stdout = os.Stdout
+		dockerCmd.Stderr = os.Stderr
+		dockerCmd.Start()
+
+		fmt.Println("Destruct users session with UUID: " + uuid + ".")
+
+	}
+
+	printActiveUsers(usersessions)
+
+}
+
+func idleChecking() {
+
+	ticker := time.NewTicker(time.Second * 120)
+
+	for {
+		select {
+		case <-ticker.C:
+			resp, err := http.Get("http://127.0.0.1/check-idle-instances")
+
+			fmt.Println("Checking idle instances, response: " + strconv.Itoa(resp.StatusCode))
+
+			if err != nil {
+				fmt.Println(err)
+			}
+		}
+	}
+}
+
 func main() {
 
 	// build a map that holds all user sessions
@@ -202,16 +303,16 @@ func main() {
 	usersessions = make(map[string]dockermanager.DockerSession)
 	usedports = make(map[int]bool)
 
-	// db, err := sql.Open("mysql", "root:manneomanneo@/grid")
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-
-	db, err := sql.Open("sqlite3", "db/manager.db")
+	db, err := sql.Open("mysql", "root:manneomanneo@tcp(192.168.178.110:3306)/grid")
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
+
+	// db, err := sql.Open("sqlite3", "db/manager.db")
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	// defer db.Close()
 
 	// kill all docker instances
 	fmt.Println("Killing all running docker instances...")
@@ -344,6 +445,8 @@ func main() {
 	// setup WS proxy for Go server and Terminal
 	go wsProxy(wsPort, usersessions)
 
+	go idleChecking()
+
 	http.HandleFunc("/workspace-change-name", func(w http.ResponseWriter, r *http.Request) {
 		cookieEmail, err1 := r.Cookie("email")
 		cookieToken, err2 := r.Cookie("token")
@@ -355,6 +458,31 @@ func main() {
 			newName := r.Form.Get("workspaceNewName")
 
 			_, err := db.Exec("UPDATE workspaces SET name=? WHERE id = ?", newName, id)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+		}
+	})
+
+	http.HandleFunc("/workspace-change-share", func(w http.ResponseWriter, r *http.Request) {
+		cookieEmail, err1 := r.Cookie("email")
+		cookieToken, err2 := r.Cookie("token")
+
+		if err1 == nil && err2 == nil && checkLoggedIn(cookieEmail.Value, cookieToken.Value, db) {
+
+			r.ParseForm()
+			id := r.Form.Get("workspaceId")
+			share, errAtoi := strconv.Atoi(r.Form.Get("shared"))
+
+			user := getUser(r, db)
+
+			if errAtoi != nil {
+				fmt.Println("Could not changing sharing setting for workspace, could not parse share")
+				return
+			}
+
+			_, err := db.Exec("UPDATE workspaces SET shared=? WHERE id = ? AND owner = ?", share, id, user.ID)
 			if err != nil {
 				fmt.Println(err)
 			}
@@ -417,9 +545,9 @@ func main() {
 
 			workspaces := []WorkspaceRow{}
 
-			userId := getUserId(r, db)
+			user := getUser(r, db)
 
-			rows, err := db.Query("SELECT id, owner, slug, name, created FROM workspaces WHERE owner = ?", userId)
+			rows, err := db.Query("SELECT id, owner, slug, name, created, shared FROM workspaces WHERE owner = ?", user.ID)
 			defer rows.Close()
 
 			var (
@@ -428,14 +556,15 @@ func main() {
 				slug    string
 				name    string
 				created string
+				shared  int
 			)
 
 			for rows.Next() {
-				err := rows.Scan(&id, &owner, &slug, &name, &created)
+				err := rows.Scan(&id, &owner, &slug, &name, &created, &shared)
 				if err != nil {
 					log.Fatal(err)
 				}
-				row := WorkspaceRow{ID: id, Owner: owner, Slug: slug, Name: name, Created: created}
+				row := WorkspaceRow{ID: id, Owner: owner, Slug: slug, Name: name, Created: created, Shared: shared}
 
 				workspaces = append(workspaces, row)
 			}
@@ -452,6 +581,11 @@ func main() {
 
 		}
 
+	})
+
+	http.HandleFunc("/check-idle-instances", func(w http.ResponseWriter, r *http.Request) {
+		// trigger cron
+		checkIdleInstances(usersessions, usedports)
 	})
 
 	http.HandleFunc("/create-debug/", func(w http.ResponseWriter, r *http.Request) {
@@ -489,11 +623,11 @@ func main() {
 			return
 		}
 
-		userID := getUserId(r, db)
+		user := getUser(r, db)
 
 		uuidFromUrl := splitURL[2]
 
-		_, err := db.Exec("DELETE FROM workspaces WHERE owner = ? AND slug = ?", userID, uuidFromUrl)
+		_, err := db.Exec("DELETE FROM workspaces WHERE owner = ? AND slug = ?", user.ID, uuidFromUrl)
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -538,50 +672,54 @@ func main() {
 			if _, err := os.Stat(dirName); !os.IsNotExist(err) {
 				// path/to/whatever does not exist
 
-				userID := getUserId(r, db)
+				requestingUser := getUser(r, db)
 
 				newUuid := uuid.NewV4().String()
 				newDirName := "userdata/workspace-" + newUuid
 
 				// get name form DB
-				rows, err := db.Query("SELECT name FROM workspaces WHERE slug = ?", uuidFromUrl)
+				rows, err := db.Query("SELECT name, shared, owner FROM workspaces WHERE slug = ? LIMIT 1", uuidFromUrl)
 				defer rows.Close()
 				if err != nil {
 					fmt.Println(err)
 				}
 				var (
-					name    string
-					oldName string
+					name   string
+					shared int
+					owner  int
 				)
 
 				for rows.Next() {
-					err := rows.Scan(&name)
+					err := rows.Scan(&name, &shared, &owner)
 					if err != nil {
 						log.Fatal(err)
 					}
-					oldName = name
 				}
 
-				fmt.Println(oldName)
+				if requestingUser.ID == owner || shared == 1 {
 
-				newName := oldName + " (Copy)"
+					newName := name + " (Copy)"
 
-				created := time.Now().Format(time.RFC1123)
-				// create database entry
-				_, err2 := db.Exec("INSERT INTO workspaces (owner, slug, name, created) VALUES (?,?,?,?)", userID, newUuid, newName, created)
-				if err2 != nil {
-					fmt.Println(err2)
+					created := time.Now().Format(time.RFC1123)
+					// create database entry
+					_, err2 := db.Exec("INSERT INTO workspaces (owner, slug, name, created, shared) VALUES (?,?,?,?, 0)", requestingUser.ID, newUuid, newName, created)
+					if err2 != nil {
+						fmt.Println(err2)
+					}
+
+					// copy directory
+					copyCommand := "cp -a -p " + dirName + "/. " + newDirName
+					fmt.Println(copyCommand)
+					chownCommand := exec.Command("/bin/sh", "-c", copyCommand)
+					chownCommand.Start()
+
+					// redirect to initialize
+					// http.Redirect(w, r, "/initialize?uuid="+newUuid, 302)
+					http.Redirect(w, r, "/dashboard/", 302)
+
+				} else {
+					http.Redirect(w, r, "/dashboard/?error=Sharing is disabled for this workspace.", 302)
 				}
-
-				// copy directory
-				copyCommand := "cp -a -p " + dirName + "/. " + newDirName
-				fmt.Println(copyCommand)
-				chownCommand := exec.Command("/bin/sh", "-c", copyCommand)
-				chownCommand.Start()
-
-				// redirect to initialize
-				// http.Redirect(w, r, "/initialize?uuid="+newUuid, 302)
-				http.Redirect(w, r, "/dashboard/", 302)
 
 			} else {
 				http.Redirect(w, r, "/dashboard/", 302)
@@ -612,12 +750,15 @@ func main() {
 
 		dirName = "userdata/workspace-" + uuidString
 
+		user := getUser(r, db)
+
 		if creatingNew {
-			userID := getUserId(r, db)
+
+			fmt.Println("No uuid found, creating new Docker instance...")
 
 			// create database entry
 			created := time.Now().Format(time.RFC1123)
-			_, err := db.Exec("INSERT INTO workspaces (owner, slug, name, created) VALUES (?,?,?,?)", userID, uuidString, "Untitled", created)
+			_, err := db.Exec("INSERT INTO workspaces (owner, slug, name, created, shared) VALUES (?,?,?,?,0)", user.ID, uuidString, "Untitled", created)
 			if err != nil {
 				fmt.Println(err)
 			}
@@ -631,49 +772,70 @@ func main() {
 			chownCommand := exec.Command("/bin/sh", "-c", "chmod 0777 "+dirName+"; "+"chmod 0777 "+dirName+"/sheetdata; "+"chmod 0777 "+dirName+"/userfolder;")
 			chownCommand.Start()
 
-		}
-
-		ds := dockermanager.DockerSession{Port: getFreePort(usedports, startPort)}
-		ds.TermPort = ds.Port + termBase
-
-		// set usedports for assigned port
-		usedports[ds.Port] = true
-
-		usersessions[uuidString] = ds
-
-		// set cookie to UUID
-		expiration := time.Now().Add(365 * 24 * time.Hour)
-		cookie := http.Cookie{Name: "session_uuid", Value: uuidString, Expires: expiration, Path: "/"}
-		http.SetCookie(w, &cookie)
-
-		// log
-		fmt.Println("Create users session with UUID: " + uuidString + ".")
-
-		printActiveUsers(usersessions)
-
-		var dockerCmd *exec.Cmd
-
-		// start docker instance based on OS
-		if runtime.GOOS == "linux" {
-			// TODO: add GPU docker - big change - will be done later
-			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true",
-				"-v", "/home/rick/workspace/grid-docker/grid-app:/home/source",
-				"-v", "/home/rick/workspace/grid-docker/proxy/userdata/workspace-"+uuidString+"/userfolder:/home/user",
-				"-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "-d=false", "goserver")
-		} else if runtime.GOOS == "windows" {
-			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true",
-				"-v", "C:\\Users\\Rick\\workspace\\grid-docker\\grid-app:/home/source",
-				"-v", "C:\\Users\\Rick\\workspace\\grid-docker\\proxy\\userdata\\workspace-"+uuidString+"\\userfolder:/home/user",
-				"-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "goserver")
 		} else {
-			dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true", "-v", "/Users/ricklamers/workspace/grid-docker/proxy/userdata/workspace-"+uuidString+"/userfolder:/home/user", "-v", "/Users/ricklamers/workspace/grid-docker/grid-app:/home/source", "-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "-d=false", "goserver")
+			fmt.Println("Opening UUID: " + uuidString)
 		}
 
-		dockerCmd.Stdout = os.Stdout
-		dockerCmd.Stderr = os.Stderr
-		fmt.Printf("[Spawn] Tried creating docker instance")
+		// check if Docker instance is running for UUID uuidString
+		// if not, create usersessions
 
-		dockerCmd.Start()
+		var ds dockermanager.DockerSession
+
+		if _, ok := usersessions[uuidString]; !ok {
+
+			ds = dockermanager.DockerSession{Port: getFreePort(usedports, startPort)}
+			ds.TermPort = ds.Port + termBase
+
+			// set usedports for assigned port
+			usedports[ds.Port] = true
+
+			usersessions[uuidString] = ds
+
+			// set cookie to UUID
+			expiration := time.Now().Add(365 * 24 * time.Hour)
+			cookie := http.Cookie{Name: "session_uuid", Value: uuidString, Expires: expiration, Path: "/"}
+			http.SetCookie(w, &cookie)
+
+			// log
+			fmt.Println("Create users session with UUID: " + uuidString + ".")
+
+			printActiveUsers(usersessions)
+
+			var dockerCmd *exec.Cmd
+
+			// start docker instance based on OS
+			if runtime.GOOS == "linux" {
+				// TODO: add GPU docker - big change - will be done later
+				dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true",
+					"-v", "/home/rick/workspace/grid-docker/grid-app:/home/source",
+					"-v", "/home/rick/workspace/grid-docker/proxy/userdata/workspace-"+uuidString+"/userfolder:/home/user",
+					"-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "-d=false", "goserver")
+			} else if runtime.GOOS == "windows" {
+				dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true",
+					"-v", "C:\\Users\\Rick\\workspace\\grid-docker\\grid-app:/home/source",
+					"-v", "C:\\Users\\Rick\\workspace\\grid-docker\\proxy\\userdata\\workspace-"+uuidString+"\\userfolder:/home/user",
+					"-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "goserver")
+			} else {
+				dockerCmd = exec.Command("docker", "run", "--name=grid"+strconv.Itoa(ds.Port), "--rm=true", "-v", "/Users/ricklamers/workspace/grid-docker/proxy/userdata/workspace-"+uuidString+"/userfolder:/home/user", "-v", "/Users/ricklamers/workspace/grid-docker/grid-app:/home/source", "-p", strconv.Itoa(ds.Port)+":8080", "-p", strconv.Itoa(termBase+ds.Port)+":3000", "-d=false", "goserver")
+			}
+
+			t := time.Now()
+			logFilename := user.Email + "-" + t.Format("2006-01-02 15-04-05") + ".txt"
+			outfile, err := os.Create("logs/dockerlogs/" + logFilename)
+			if err != nil {
+				panic(err)
+			}
+			// defer outfile.Close()
+
+			dockerCmd.Stdout = outfile
+			dockerCmd.Stderr = outfile
+			fmt.Println("[Spawn] Tried creating docker instance")
+
+			dockerCmd.Start()
+
+		} else {
+			ds = usersessions[uuidString]
+		}
 
 		// start listen loop
 		for {
@@ -681,14 +843,6 @@ func main() {
 			time.Sleep(time.Second / 2)
 
 			if checkQuickHTTPResponse("http://127.0.0.1:" + strconv.Itoa(ds.Port) + "/upcheck") {
-				if !creatingNew {
-					// // copy files to docker container
-					// copyCmds := []string{"cp", "/home/rick/workspace/grid-docker/proxy/" + dirName + "/userfolder/.", "grid" + strconv.Itoa(ds.Port) + ":/home/user/"}
-					// dockerCopyCmd := exec.Command("docker", copyCmds...)
-
-					// fmt.Println(copyCmds)
-					// dockerCopyCmd.Run()
-				}
 
 				http.Redirect(w, r, "/workspace/"+uuidString+"/", 302)
 
@@ -712,23 +866,7 @@ func main() {
 
 		uuid := splitUrl[2]
 
-		ds := usersessions[uuid]
-
-		// set usedports for assigned port
-		usedports[ds.Port] = false
-
-		// delete from user sessions
-		delete(usersessions, uuid)
-
-		// kill Docker instance
-		dockerCmd := exec.Command("docker", "kill", "grid"+strconv.Itoa(ds.Port))
-		dockerCmd.Stdout = os.Stdout
-		dockerCmd.Stderr = os.Stderr
-		dockerCmd.Start()
-
-		fmt.Println("Destruct users session with UUID: " + uuid + ".")
-
-		printActiveUsers(usersessions)
+		destructSession(uuid, usersessions, usedports)
 
 		http.Redirect(w, r, "/dashboard/", 302)
 
@@ -802,22 +940,25 @@ func main() {
 			}
 
 			resp, err := httpClient.Do(proxyReq)
-			// fmt.Println("Send request to " + base.String() + " from " + r.UserAgent())
 
-			for h, val := range resp.Header {
-				w.Header().Set(h, strings.Join(val, ","))
-			}
+			if err == nil {
 
-			w.WriteHeader(resp.StatusCode)
+				for h, val := range resp.Header {
+					w.Header().Set(h, strings.Join(val, ","))
+				}
 
-			backendBody, _ := ioutil.ReadAll(resp.Body)
+				w.WriteHeader(resp.StatusCode)
 
-			w.Write(backendBody)
+				backendBody, _ := ioutil.ReadAll(resp.Body)
 
-			if err != nil {
+				w.Write(backendBody)
+
+			} else {
 				http.Error(w, err.Error(), http.StatusBadGateway)
 				return
 			}
+			// fmt.Println("Send request to " + base.String() + " from " + r.UserAgent())
+
 			defer resp.Body.Close()
 
 		}

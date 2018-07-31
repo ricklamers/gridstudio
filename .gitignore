@@ -4,3 +4,5 @@ userdata/
 debug
 manager.exe
 cpu.dat
+logs/
+util/gen-password/out.txt

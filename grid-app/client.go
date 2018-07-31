@@ -167,6 +167,8 @@ func (c *Client) readPump() {
 
 		messageString := string(message)
 
+		c.hub.inactiveTime = 0
+
 		// if len(messageString) > 100 {
 		// 	fmt.Println("Received WS message: " + messageString[:100] + "... [truncated]")
 		// } else {
@@ -230,6 +232,8 @@ func (c *Client) writePump() {
 
 		case <-ticker.C:
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+
+			c.hub.inactiveTime = 0
 
 			if err := c.conn.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
 				fmt.Println("errored on sending pingmessage to client")

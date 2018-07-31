@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 type Hub struct {
 	clients map[*Client]bool
@@ -12,6 +15,8 @@ type Hub struct {
 	unregister chan *Client
 
 	mainThreadChannel chan string
+
+	inactiveTime time.Duration
 }
 
 func newHub(mainThreadChannel chan string) *Hub {
@@ -22,11 +27,16 @@ func newHub(mainThreadChannel chan string) *Hub {
 		unregister:        make(chan *Client),
 		clients:           make(map[*Client]bool),
 		mainThreadChannel: mainThreadChannel,
+		inactiveTime:      0,
 	}
 
 }
 
 func (h *Hub) run() {
+
+	// timer for inactiveTime
+	ticker := time.NewTicker(time.Second)
+
 	for {
 		select {
 		case client := <-h.register:
@@ -39,6 +49,7 @@ func (h *Hub) run() {
 				close(client.send)
 			}
 		case message := <-h.broadcast:
+
 			for client := range h.clients {
 				select {
 				case client.send <- message:
@@ -47,6 +58,10 @@ func (h *Hub) run() {
 					delete(h.clients, client)
 				}
 			}
+		case <-ticker.C:
+
+			// update inactiveTime
+			h.inactiveTime += time.Second
 		}
 
 	}
