@@ -32,7 +32,9 @@ button {
 }
 #header a {
   font-size: 16px;
-  color: #808080;
+  color: #215adc;
+  margin-left: 20px;
+  font-weight: 500;
 }
 #header .menu {
   top: 0;
@@ -43,8 +45,8 @@ button {
   align-items: center;
   flex-direction: row;
 }
-#header a:first-child {
-  padding: 0px 20px;
+#header a:last-child {
+  font-weight: normal;
 }
 #header a.signup-button {
   color: #fff;

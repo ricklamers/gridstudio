@@ -39,7 +39,10 @@ button{
 
     a {
         font-size: 16px;
-        color: #808080;
+        color: @blueColor;
+        // padding: 0 20px;
+        margin-left: 20px;
+        font-weight: 500;
     }
 
     .menu{
@@ -52,8 +55,9 @@ button{
         flex-direction: row;
     }
 
-    a:first-child{
-        padding: 0px 20px;
+    a:last-child {
+        // padding: 0px 0;
+        font-weight: normal;
     }
     a.signup-button{
         color: #fff;
