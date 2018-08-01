@@ -340,15 +340,28 @@ body div-sheet canvas {
   overflow: hidden;
 }
 .code-editor .computing-indicator {
-  position: absolute;
-  bottom: 0;
   width: 26px;
   height: 26px;
   background: #717171;
   background-image: url("image/loading.gif");
   background-size: 100%;
-  z-index: 99;
   margin: 10px;
+}
+.code-editor .run-code-button {
+  width: 31px;
+  height: 31px;
+  cursor: pointer;
+  background-image: url("image/playicon.svg");
+  background-size: contain;
+  margin: 7px;
+}
+.code-editor .editor-action-holder {
+  position: absolute;
+  bottom: 0;
+  width: 46px;
+  height: 46px;
+  z-index: 99;
+  margin: 0px;
 }
 .code-editor .dev-tabs {
   position: absolute;

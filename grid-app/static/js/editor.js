@@ -14,9 +14,53 @@
         this.filepath;
 
         this.dom = $('.code-editor');
-        
 
-        /// TODO: temp fix missing semicolon warning (annoying)
+        this.runCurrentSelection = function(){
+            var editor = this.ace;
+            
+            // get contents from current line
+            var selectionRange = editor.getSelectionRange();
+
+            var startRow = selectionRange.start.row;
+            var endRow = selectionRange.end.row;
+
+            if(startRow == endRow){
+
+                // single mode
+                var current_line = selectionRange.start.row;
+                var script = editor.session.getLine(current_line);
+
+
+            }else{
+                // selection mode, execute all in selection
+                var script = editor.session.getTextRange(selectionRange);
+
+            }
+
+            // evalScript per line
+            // var scriptLines = script.split("\n");
+            // for(var x = 0; x < scriptLines.length; x++){
+            //     _this.evalScript(scriptLines[x]);
+            // }
+            _this.evalScript(script);
+
+            var range = editor.getSelectionRange();
+
+            // only jump if not selection
+            if(range.start.row == range.end.row && range.start.column == range.end.column){
+                // push cursor to next line
+                var session = editor.session;
+                if(session.getLength()-1 == endRow){
+                    // insert newline at end if no line at the bottom
+                    session.insert({
+                        row: session.getLength(),
+                        column: 0
+                    }, "\n")
+                }
+
+                editor.gotoLine(endRow + 2, 0)
+            }
+        }
         
         this.init = function(){
 
@@ -59,48 +103,7 @@
 
                 if(e.keyCode == 13 && (e.ctrlKey || e.metaKey)){
                     
-                    // get contents from current line
-                    var selectionRange = editor.getSelectionRange();
-
-                    var startRow = selectionRange.start.row;
-                    var endRow = selectionRange.end.row;
-
-                    if(startRow == endRow){
-
-                        // single mode
-                        var current_line = selectionRange.start.row;
-                        var script = editor.session.getLine(current_line);
-
-
-                    }else{
-                        // selection mode, execute all in selection
-                        var script = editor.session.getTextRange(selectionRange);
-
-                    }
-
-                    // evalScript per line
-                    // var scriptLines = script.split("\n");
-                    // for(var x = 0; x < scriptLines.length; x++){
-                    //     _this.evalScript(scriptLines[x]);
-                    // }
-                    _this.evalScript(script);
-
-                    var range = editor.getSelectionRange();
-
-                    // only jump if not selection
-                    if(range.start.row == range.end.row && range.start.column == range.end.column){
-                        // push cursor to next line
-                        var session = editor.session;
-                        if(session.getLength()-1 == endRow){
-                            // insert newline at end if no line at the bottom
-                            session.insert({
-                                row: session.getLength(),
-                                column: 0
-                            }, "\n")
-                        }
-
-                        editor.gotoLine(endRow + 2, 0)
-                    }
+                    this.runCurrentSelection();
 
                 }
 
@@ -121,7 +124,21 @@
             animationDiv.addClass('computing-indicator');
             animationDiv.attr("title","Computing, please be patient.");
             animationDiv.hide();
-            $('.file-editor').prepend(animationDiv);
+
+            var runCode = $(document.createElement("div"));
+            runCode.addClass('run-code-button');
+            runCode.attr("title", "You can also use Ctrl/Command + Enter to execute the current line or selection (if you have selected anything).")
+
+            runCode.click(function(){
+                _this.runCurrentSelection();
+            })
+
+            var editorActionHolder = $(document.createElement('div'));
+            editorActionHolder.addClass('editor-action-holder');
+            editorActionHolder.append(animationDiv);
+            editorActionHolder.append(runCode);
+
+            $('.file-editor').prepend(editorActionHolder);
 
         }
 
@@ -193,10 +210,12 @@
         }
         this.hideScriptExecuting = function(){
             $('#editor .computing-indicator').hide();
+            $('.run-code-button').show();
         }
 
         this.showScriptExecuting = function(){
             $('#editor .computing-indicator').show();
+            $('.run-code-button').hide();
         }
 
         this.commandComplete = function(){
