@@ -308,6 +308,9 @@ func main() {
 	usedports = make(map[int]bool)
 
 	db, err := sql.Open("mysql", "root:manneomanneo@tcp(192.168.178.110:3306)/grid")
+
+	db.SetMaxIdleConns(0)
+
 	if err != nil {
 		log.Fatal(err)
 	}
