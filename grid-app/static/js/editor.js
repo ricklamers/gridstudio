@@ -131,6 +131,7 @@
 
             runCode.click(function(){
                 _this.runCurrentSelection();
+                editor.focus();
             })
 
             var editorActionHolder = $(document.createElement('div'));
