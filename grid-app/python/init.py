@@ -144,7 +144,7 @@ def convert_to_json_string(element):
 
         # if data is string without starting with =, add escape quotes
         if len(element) > 0 and element[0] == '=':
-            return element
+            return element[1:]
         else:
             return "\"" + element + "\""
     else:
