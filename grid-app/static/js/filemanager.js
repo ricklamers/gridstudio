@@ -167,6 +167,9 @@
                     _this.getDir(newPath);
                 }
             })
+
+            // try to get main.py and open it (if it exists)
+            this.app.wsManager.send({arguments: ["GET-FILE", "/home/user/main.py"]})
         }
 
         this.getDir = function(path){
