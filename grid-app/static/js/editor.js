@@ -103,7 +103,7 @@
 
                 if(e.keyCode == 13 && (e.ctrlKey || e.metaKey)){
                     
-                    this.runCurrentSelection();
+                    _this.runCurrentSelection();
 
                 }
 
