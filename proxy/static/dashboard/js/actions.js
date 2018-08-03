@@ -20,7 +20,7 @@ $(document).ready(function(){
 
                 workspaceList.append(
                     "<li>" 
-                    +"<div class='workspace-controls'><form action='/initialize' method='post'><input type='hidden' value='"+data[x].slug+"' name='uuid' /><input type='hidden' value='"+data[x].id+"' name='id' /><button class='highlight'>Open</button></form><form action='/copy/"+data[x].slug+"' method='post'><button>Copy</button></form><form action='/remove/"+data[x].slug+"' method='post'><button>Remove</button></form><button class='interactive sharing' data-shared='"+data[x].shared+"'>Shared: " + sharedText + "</button></div>" +
+                    +"<div class='workspace-controls'><form action='/initialize' method='post'><input type='hidden' value='"+data[x].slug+"' name='uuid' /><input type='hidden' value='"+data[x].id+"' name='id' /><button class='highlight one-click'>Open</button></form><form action='/copy/"+data[x].slug+"' method='post'><button class='one-click'>Copy</button></form><form action='/remove/"+data[x].slug+"' method='post'><button class='one-click'>Remove</button></form><button class='sharing' data-shared='"+data[x].shared+"'>Shared: " + sharedText + "</button></div>" +
                     "<input type='name' name='workspaceName' value='"+workspaceNameEscaped+"' /><span class='last-edited'>Created: "+data[x].created+"</span><br><span class='slug'>Share link: "+root + "/copy/" + data[x].slug+"</span> </li>");
             }
 
@@ -108,7 +108,7 @@ $(document).ready(function(){
     var hasClickedButton = false;
 
     $(document).on('click' , 'button' , function(e){
-        if(!$(this).hasClass('interactive')){
+        if($(this).hasClass('one-click')){
             if(hasClickedButton) {
                 alert("Please wait a moment, the workspace is loading.")
                 e.preventDefault();
