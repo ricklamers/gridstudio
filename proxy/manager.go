@@ -307,7 +307,7 @@ func main() {
 	usersessions = make(map[string]dockermanager.DockerSession)
 	usedports = make(map[int]bool)
 
-	db, err := sql.Open("mysql", "root:manneomanneo@tcp(192.168.178.110:3306)/grid")
+	db, err := sql.Open("mysql", "root:manneomanneo@tcp(alpha.gridstudio.io:3306)/grid")
 
 	db.SetMaxIdleConns(0)
 

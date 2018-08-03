@@ -19,6 +19,12 @@ a.back {
   margin-bottom: 20px;
   display: inline-block;
 }
+.checkout-introduction-workspace {
+  padding: 20px;
+  background: #f5f5f5;
+  display: inline-block;
+  margin-bottom: 30px;
+}
 .new-workspace-form {
   margin-bottom: 30px;
 }

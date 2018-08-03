@@ -29,6 +29,10 @@ $(document).ready(function(){
 
     loadWorkspaces();
 
+    $('.close-introduction-notification').click(function(){
+        $('.checkout-introduction-workspace').remove();
+    });
+
     // get email from cookie
     var emailFromCookie = getCookie("email");
     $('.email-display').html(emailFromCookie);
