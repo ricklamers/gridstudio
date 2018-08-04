@@ -252,7 +252,10 @@ a {
   #header img {
     width: 120px;
   }
-  #header a:first-child {
+  #header a {
     display: none;
+  }
+  #header a:last-child {
+    display: inline-block;
   }
 }
