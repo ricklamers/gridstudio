@@ -6,7 +6,7 @@
         
         this.app = app;
 
-        this.cwd = "/home/user";
+        this.cwd = '';
 
         this.iconMap = {
             "r":"R",
@@ -144,11 +144,14 @@
         };
 
         this.init = function(){
+            this.base_cwd = "/home/userdata/workspace-" + this.app.slug + "/userfolder";
+            this.cwd = this.base_cwd;
+
             this.dom = $('.dev-tabs .view.filemanager');
             this.getDir(this.cwd);
 
             this.dom.find('.files-home').click(function(){
-                _this.getDir("/home/user")
+                _this.getDir(this.base_cwd)
             })
 
             this.dom.on('click','li.file,li.directory',function(e){
@@ -169,7 +172,7 @@
             })
 
             // try to get main.py and open it (if it exists)
-            this.app.wsManager.send({arguments: ["GET-FILE", "/home/user/main.py"]})
+            this.app.wsManager.send({arguments: ["GET-FILE", this.base_cwd + "/main.py"]})
         }
 
         this.getDir = function(path){

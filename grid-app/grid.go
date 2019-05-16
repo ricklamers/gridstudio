@@ -71,7 +71,7 @@ func gridInstance(c *Client) {
 	defaultRowCount := 100
 
 	// if Grid serialized file exists try to load that
-	sheetFile := "/home/user/sheet.serialized"
+	sheetFile := c.hub.rootDirectory + "sheetdata/sheet.serialized"
 	if _, err := os.Stat(sheetFile); os.IsNotExist(err) {
 
 		// initialize the datastructure for the matrix

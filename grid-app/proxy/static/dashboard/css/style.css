@@ -1,0 +1,204 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+html,
+body {
+  font-family: "Arial", sans-serif;
+  font-size: 15px;
+  height: 100%;
+  box-sizing: border-box;
+  background: #eeeeee;
+}
+h2 {
+  font-weight: normal;
+}
+a.back {
+  text-decoration: none;
+  margin-bottom: 20px;
+  display: inline-block;
+}
+.checkout-introduction-workspace {
+  padding: 20px;
+  background: #f5f5f5;
+  display: inline-block;
+  margin-bottom: 30px;
+}
+.new-workspace-form {
+  margin-bottom: 30px;
+}
+.logout {
+  position: absolute;
+  top: 30px;
+  right: 30px;
+  color: #000;
+  text-decoration: none;
+}
+.logout div.email-display {
+  display: inline;
+  padding-right: 20px;
+}
+.workspace-list {
+  max-width: 1000px;
+  width: 100%;
+  margin-bottom: 30px;
+}
+.workspace-list form {
+  display: inline-block;
+}
+.workspace-list li {
+  width: 100%;
+  padding: 15px;
+  list-style: none;
+  background: #fff;
+  display: block;
+  overflow: auto;
+  margin-bottom: 15px;
+  border: 1px solid #ddd;
+  border-radius: 2px;
+}
+.workspace-list li button {
+  margin-left: 10px;
+}
+.workspace-list li .workspace-controls {
+  float: right;
+}
+.workspace-list li span.slug {
+  font-style: italic;
+  color: #aaa;
+}
+.workspace-list li:last-of-type {
+  margin-bottom: 0px;
+}
+.workspace-list li input {
+  padding: 8px;
+  margin-bottom: 8px;
+}
+.workspace-list li .last-edited {
+  margin-left: 10px;
+}
+h1,
+h2 {
+  margin-bottom: 20px;
+}
+input,
+button {
+  padding: 5px 10px;
+  font: inherit;
+}
+a {
+  color: royalblue;
+}
+.notification {
+  position: absolute;
+  width: 100%;
+  max-width: 500px;
+  padding: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 20px;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  display: flex;
+}
+.notification .message {
+  flex: 1;
+  padding-right: 20px;
+  display: flex;
+  flex-direction: column;
+  align-content: center;
+  justify-content: center;
+}
+.notification.error {
+  border: 1px solid red;
+}
+.notification .close {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-content: center;
+  justify-content: center;
+}
+button {
+  background: #dedede;
+  color: #000;
+  border: 0;
+  cursor: pointer;
+  padding: 10px 20px;
+  font-size: 14px;
+  transition: 0.2s all ease;
+  border-radius: 100px;
+}
+button.highlight {
+  background: #215adc;
+  color: #fff;
+}
+button.highlight:hover {
+  background: #1a48b0;
+  color: #fff;
+}
+button:active,
+button:focus {
+  outline: none;
+}
+button:hover {
+  background: #ccc;
+  color: #000;
+}
+.loading {
+  text-align: center;
+  opacity: 0.5;
+  padding: 30px;
+}
+.dashboard-view {
+  padding: 50px;
+  margin: 30px;
+  position: absolute;
+  width: calc(100% - 60px);
+  overflow-y: auto;
+  box-shadow: 0px 15px 30px rgba(0, 0, 0, 0.2);
+  background: #fff;
+  height: calc(100% - 60px);
+  border-radius: 5px;
+}
+.login-page {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+input:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0px 1000px white inset;
+}
+.login-form {
+  background: #fff;
+  overflow: hidden;
+  border-radius: 5px;
+  box-shadow: 0px 15px 30px rgba(0, 0, 0, 0.2);
+}
+.login-form .padded-section {
+  padding: 50px;
+}
+.login-form p {
+  color: #666;
+  margin-bottom: 30px;
+}
+.login-form h2 {
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+.login-form input {
+  width: 100%;
+  margin-bottom: 30px;
+  padding: 8px;
+  border: 1px solid #aaa;
+  border-radius: 2px;
+}
+.login-form button {
+  padding: 10px 20px;
+  font-size: 17px;
+  width: 100%;
+}

@@ -1,0 +1,261 @@
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+html,
+body {
+  font-family: 'Lato', sans-serif;
+  overflow-x: hidden;
+}
+body {
+  font-size: 18px;
+}
+h2.title {
+  margin-bottom: 20px;
+  font-size: 42px;
+}
+button {
+  padding: 5px 10px;
+}
+#header {
+  width: 100%;
+  padding: 20px 20px;
+  box-shadow: 0px 5px 4px rgba(0, 0, 0, 0.1);
+  position: fixed;
+  z-index: 999;
+  background: #fff;
+}
+#header .inner-wrapper {
+  margin: 0 auto;
+  position: relative;
+}
+#header a {
+  font-size: 16px;
+  color: #215adc;
+  margin-left: 20px;
+  font-weight: 500;
+}
+#header .menu {
+  top: 0;
+  right: 0;
+  height: 100%;
+  display: flex;
+  position: absolute;
+  align-items: center;
+  flex-direction: row;
+}
+#header a:last-child {
+  font-weight: normal;
+}
+#header a.signup-button {
+  color: #fff;
+}
+a.signup-button {
+  background: #215adc;
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+  padding: 8px 12px;
+  padding-bottom: 10px;
+}
+p {
+  line-height: 1.5;
+}
+p,
+a {
+  font-weight: 300;
+}
+.footer {
+  background: #3d3d3d;
+  padding: 90px;
+  color: #fff;
+  text-align: center;
+  font-size: 16px;
+}
+.footer .copy-text,
+.footer a {
+  color: #999;
+  font-weight: 300;
+}
+.footer h2 {
+  font-weight: 300;
+  font-size: 32px;
+  margin-bottom: 50px;
+}
+.footer a.signup-button {
+  display: inline-block;
+  margin-bottom: 30px;
+  font-size: 23px;
+  padding: 12px 18px;
+  color: #fff;
+}
+.footer .divider {
+  background: #4d4d4d;
+}
+.clear {
+  clear: both;
+}
+.header-push {
+  height: 117px;
+}
+.masthead {
+  overflow: visible;
+  max-width: 1300px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 50px 0;
+  position: relative;
+}
+.masthead .text {
+  height: 100%;
+  position: absolute;
+  width: 550px;
+  top: 0;
+  display: flex;
+  justify-content: center;
+  flex-direction: column;
+}
+.masthead .text p {
+  font-size: 24px;
+  margin-bottom: 20px;
+}
+.masthead .text p.highlight {
+  color: #999;
+  font-size: 18px;
+}
+.masthead .text h1 {
+  font-weight: normal;
+  font-size: 60px;
+  margin-bottom: 20px;
+}
+.masthead .macbook {
+  margin-top: 40px;
+  float: right;
+  margin-right: -20%;
+  background: url("static/image/mac.png");
+  background-size: 100%;
+  background-repeat: no-repeat;
+}
+.masthead .macbook video {
+  transform: scale(0.76) translateY(-5%);
+  border-radius: 5px;
+  overflow: hidden;
+}
+a {
+  text-decoration: none;
+}
+.features {
+  width: 100%;
+  margin: 0 auto;
+  max-width: 1300px;
+}
+.feature {
+  padding: 90px 0;
+}
+.feature .feature-text {
+  width: 55%;
+  float: left;
+  padding-top: 50px;
+}
+.feature .feature-text p {
+  margin-bottom: 10px;
+}
+.feature .feature-text a {
+  color: #215adc;
+  border-bottom: 1px dotted #215adc;
+}
+.feature .feature-text h3 {
+  color: #215adc;
+  font-size: 16px;
+  margin-bottom: 8px;
+  font-weight: 300;
+}
+.feature .feature-text h2 {
+  font-size: 32px;
+  font-weight: normal;
+  margin-bottom: 20px;
+}
+.feature .feature-text.right {
+  float: right;
+}
+.feature .feature-video {
+  width: 35%;
+  float: right;
+}
+.feature .feature-video video {
+  width: 100%;
+  border: 2px solid #ddd;
+  box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+}
+.feature .feature-video.left {
+  float: left;
+}
+.divider {
+  height: 1px;
+  margin-top: 30px;
+  margin-bottom: 30px;
+  width: 100%;
+  background: #e6e6e6;
+}
+@media screen and (max-width: 1450px) {
+  .masthead,
+  .features {
+    max-width: 1100px;
+  }
+  .masthead .macbook {
+    margin-right: -30%;
+  }
+  .masthead .text {
+    width: 400px;
+  }
+}
+@media screen and (max-width: 1260px) {
+  .masthead .macbook {
+    float: none;
+    width: 80%;
+    margin: 0 auto;
+  }
+  .masthead .macbook video {
+    width: 100%;
+    transform: scale(0.76) translateY(-5%);
+  }
+  .masthead .text {
+    position: relative;
+    width: 100%;
+    padding: 30px;
+  }
+  .masthead .text h1 {
+    font-size: 40px;
+  }
+  .divider {
+    margin-top: 10px;
+    margin-bottom: 10px;
+  }
+  .feature {
+    padding: 20px 0;
+  }
+  .feature .feature-video {
+    width: 100%;
+    margin: 0 auto;
+    float: none;
+    max-width: 600px;
+    padding: 30px;
+  }
+  .feature .feature-video.left {
+    float: none;
+  }
+  .feature .feature-text {
+    width: 100%;
+    padding: 30px;
+  }
+  #header img {
+    width: 120px;
+  }
+  #header a {
+    display: none;
+  }
+  #header a:last-child {
+    display: inline-block;
+  }
+}

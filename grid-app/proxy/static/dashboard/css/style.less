@@ -1,0 +1,251 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+	font-family: "Arial", sans-serif;
+    font-size: 15px;
+    height: 100%;
+    box-sizing: border-box;
+    background: #eeeeee;
+}
+
+@blueColor: #215adc;
+
+h2 {
+    font-weight: normal;
+}
+
+a.back {
+    text-decoration: none;
+    margin-bottom: 20px;
+    display: inline-block;
+}
+
+.checkout-introduction-workspace {
+    padding: 20px;
+    background: #f5f5f5;
+    display: inline-block;
+    margin-bottom: 30px;
+}
+
+
+.new-workspace-form {
+    margin-bottom: 30px;
+}
+
+.logout {
+    position: absolute;
+    top: 30px;
+    right: 30px;
+
+    color: #000;
+    text-decoration: none;
+
+    div.email-display {
+        display: inline;
+        padding-right: 20px;
+    }
+}
+
+.workspace-list {
+
+    max-width: 1000px;
+    width: 100%;
+    margin-bottom: 30px;
+
+    form {
+        display: inline-block;
+    }    
+
+    li{
+        width: 100%;
+        padding: 15px;
+        list-style: none;
+        background: #fff;
+
+        display: block;
+        overflow: auto;
+        button {
+            margin-left: 10px;
+        }
+        margin-bottom: 15px;
+
+        .workspace-controls {
+            float: right;
+        }
+        span.slug{
+            font-style: italic;
+            color: #aaa;
+        }
+
+        &:last-of-type{
+            // border-bottom: 0;
+            margin-bottom: 0px;
+        }
+        input {
+            padding: 8px;
+            margin-bottom: 8px;
+        }
+
+        .last-edited {
+            margin-left: 10px;
+        }
+
+        border: 1px solid #ddd;
+        border-radius: 2px;
+    }
+}
+
+
+h1, h2 {
+    margin-bottom: 20px;
+}
+ 
+input, button {
+    padding: 5px 10px;
+    font: inherit;
+}
+
+a {
+    color: royalblue;
+}
+
+.notification {
+    position: absolute;
+
+    width: 100%;
+    max-width: 500px;
+    padding: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    top: 20px;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+
+    display: flex;
+
+
+    .message {
+        flex: 1;
+        padding-right: 20px;
+        display: flex;
+        flex-direction: column;
+        align-content: center;
+        justify-content: center;
+    }
+
+    &.error {
+        border: 1px solid red;
+    }
+
+    .close {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-content: center;
+        justify-content: center;
+    }
+}
+
+button {
+    background: #dedede;
+    color: #000;
+    border:0;
+    cursor: pointer;
+
+    &.highlight {
+        background:@blueColor;
+        color:#fff;
+
+        &:hover {
+            background: darken(@blueColor,10);
+            color: #fff;
+        }
+    }
+
+    &:active,&:focus {
+        outline: none;
+    }
+
+    padding: 10px 20px;
+    font-size: 14px;
+
+    transition: 0.2s all ease;
+
+    &:hover {
+        background: #ccc;
+        color: #000;
+    }
+    border-radius: 100px;
+}
+
+.loading {
+    text-align: center;
+    opacity: 0.5;
+    padding: 30px;
+}
+
+.dashboard-view {
+    padding: 50px;
+    margin: 30px;
+    position: absolute;
+    width: calc(~"100% - 60px");
+    overflow-y: auto;
+    box-shadow: 0px 15px 30px rgba(0,0,0,0.2);
+    background: #fff;
+    height: calc(~"100% - 60px");
+    border-radius: 5px;
+}
+ 
+.login-page {
+    height: 100%;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+input:-webkit-autofill {
+    -webkit-box-shadow: 0 0 0px 1000px white inset;
+}
+
+.login-form {
+    background: #fff;
+    overflow: hidden;
+    border-radius: 5px;
+
+    .padded-section {
+        padding: 50px;
+    }
+
+    box-shadow: 0px 15px 30px rgba(0,0,0,0.2);
+    p {
+        color: #666;
+        margin-bottom: 30px;
+    }
+
+    h2 {
+        font-weight: bold;
+        margin-bottom: 10px;
+    }
+
+    input {
+        width: 100%;
+        margin-bottom: 30px;
+        padding:8px;
+        border: 1px solid #aaa;
+        border-radius: 2px;
+
+    }
+
+    button {
+        padding: 10px 20px;
+        font-size: 17px;
+        width: 100%;
+    }
+}
+

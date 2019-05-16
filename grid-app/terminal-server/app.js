@@ -87,7 +87,7 @@ app.ws('/terminals/:pid', function (ws, req) {
   });
 });
 
-var port = process.env.PORT || 3000,
+var port = parseInt(process.argv[2]) || 4430,
     host = os.platform() === 'win32' ? '127.0.0.1' : '0.0.0.0';
 
 console.log('App listening to http://' + host + ':' + port);

@@ -1,1 +1,0 @@
-go run *.go -addr=:4000 -cpuprofile=profile-info/cpu.dat

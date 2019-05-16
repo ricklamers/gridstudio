@@ -67,8 +67,8 @@ Terminal.applyAddon(winptyCompat);
         });
         
         protocol = (location.protocol === 'https:') ? 'wss://' : 'ws://';
-        var wsPort = 443;
-        var port = 80;
+        var wsPort = 4430;
+        var port = 8080;
     
         socketURL = protocol + location.hostname + ((wsPort) ? (':' + wsPort) : '') + location.pathname + 'terminals/';
         var fetchUrl = 'http://' + location.hostname + ((port) ? (':' + port) : '') + location.pathname;

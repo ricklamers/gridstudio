@@ -1,3 +1,5 @@
+# NOTE: file obselete, service management moved to manager.go
+
 #!/bin/bash
 
 # Start the first process

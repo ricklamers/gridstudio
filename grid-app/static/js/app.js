@@ -473,6 +473,8 @@
 
 		this.getWorkspaceDetails = function(){
 			var slug = window.location.href.split("/")[4];
+			this.slug = slug;;
+
 			$.post("/get-workspace-details",{workspaceSlug: slug}, function(data){
 				$('.workspaceName input[name="workspaceName"]').val(data.name);
 				$('.workspaceName input[name="id"]').val(data.id);
