@@ -756,6 +756,10 @@
 			this.scrollOffsetY = this.sheetDom.scrollTop;
 		}
 
+		this.markSaving = function(){
+			$(".save-status").html("Saving workspace...");
+		}
+
 		this.markSaved = function(){
 			$(".save-status").html("Saved.");
 		}
@@ -2098,6 +2102,7 @@
 
 		this.saveWorkspace = function(){
 			this.wsManager.send({arguments:["SAVE"]});
+			this.markSaving();
 		}
 
 		this.exportCSV = function(){

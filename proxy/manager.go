@@ -307,7 +307,7 @@ func main() {
 	usersessions = make(map[string]dockermanager.DockerSession)
 	usedports = make(map[int]bool)
 
-	db, err := sql.Open("mysql", "root:manneomanneo@tcp(alpha.gridstudio.io:3306)/grid")
+	db, err := sql.Open("mysql", "root:manneomanneo@tcp(127.0.0.1:3306)/grid?collation=utf8mb4_general_ci")
 
 	db.SetMaxIdleConns(0)
 
@@ -463,6 +463,8 @@ func main() {
 			r.ParseForm()
 			id := r.Form.Get("workspaceId")
 			newName := r.Form.Get("workspaceNewName")
+
+			fmt.Println(newName)
 
 			_, err := db.Exec("UPDATE workspaces SET name=? WHERE id = ?", newName, id)
 			if err != nil {
@@ -707,9 +709,8 @@ func main() {
 
 					newName := name + " (Copy)"
 
-					created := time.Now().Format(time.RFC1123)
 					// create database entry
-					_, err2 := db.Exec("INSERT INTO workspaces (owner, slug, name, created, shared) VALUES (?,?,?,?, 0)", requestingUser.ID, newUuid, newName, created)
+					_, err2 := db.Exec("INSERT INTO workspaces (owner, slug, name, shared) VALUES (?,?,?,0)", requestingUser.ID, newUuid, newName)
 					if err2 != nil {
 						fmt.Println(err2)
 					}
@@ -764,8 +765,7 @@ func main() {
 			fmt.Println("No uuid found, creating new Docker instance...")
 
 			// create database entry
-			created := time.Now().Format(time.RFC1123)
-			_, err := db.Exec("INSERT INTO workspaces (owner, slug, name, created, shared) VALUES (?,?,?,?,0)", user.ID, uuidString, "Untitled", created)
+			_, err := db.Exec("INSERT INTO workspaces (owner, slug, name, shared) VALUES (?,?,?,0)", user.ID, uuidString, "Untitled")
 			if err != nil {
 				fmt.Println(err)
 			}
