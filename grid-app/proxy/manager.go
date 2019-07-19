@@ -333,11 +333,7 @@ func main() {
 	})
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" {
-			http.ServeFile(w, r, "static/home/index.html")
-		} else {
-			http.NotFound(w, r)
-		}
+		http.Redirect(w, r, "/dashboard/", 302)
 	})
 
 	http.HandleFunc("/dashboard/", func(w http.ResponseWriter, r *http.Request) {
@@ -376,8 +372,6 @@ func main() {
 			r.ParseForm()
 			id := r.Form.Get("workspaceId")
 			newName := r.Form.Get("workspaceNewName")
-
-			fmt.Println(newName)
 
 			_, err := db.Exec("UPDATE workspaces SET name=? WHERE id = ?", newName, id)
 			if err != nil {
@@ -737,7 +731,7 @@ func main() {
 			ws.GoCmd.Stdout = outfile
 			ws.GoCmd.Stderr = outfile
 
-			ws.NodeCmd = exec.Command("node", "app.js", strconv.Itoa(ws.TermPort))
+			ws.NodeCmd = exec.Command("node", "app.js", strconv.Itoa(ws.TermPort), "/home/userdata/workspace-"+uuidString+"/")
 			ws.NodeCmd.Dir = "/home/run/terminal-server/"
 			ws.NodeCmd.Stdout = outfile
 			ws.NodeCmd.Stderr = outfile

@@ -40,13 +40,9 @@ COPY . /home/source/
 RUN curl -sL https://deb.nodesource.com/setup_10.x | bash - && \
 apt install -y nodejs
 
-RUN python3.7 -m pip install --upgrade pip && \
-python3.7 -m pip install numpy && \
-python3.7 -m pip install pandas && \
-python3.7 -m pip install matplotlib && \
-python3.7 -m pip install scipy && \
-python3.7 -m pip install scikit-learn && \
-python3.7 -m pip install tensorflow
+RUN python3.7 -m pip install --upgrade pip numpy pandas matplotlib scipy scikit-learn
+
+# python3.7 -m pip install tensorflow
 
 # TODO: think about how to run terminal-server, probably multiple terminal-servers with parameters (one for each workspace)
 # create /home/run/ directory to run terminal nodejs project from
@@ -55,7 +51,7 @@ COPY ./terminal-server/ /home/run/terminal-server/
 
 # install required NPM packages for term.js
 WORKDIR /home/run/terminal-server/
-RUN npm install
+RUN npm install --no-cache
 
 # create work directory
 RUN mkdir /home/user/
@@ -64,6 +60,11 @@ RUN mkdir /home/user/
 WORKDIR /home/source/
 
 RUN go get -d -v ./...
+
+# build manager.go once to speed up consecutive go builds
+WORKDIR /home/source/proxy/
+RUN go build manager.go
+RUN rm ./manager
 
 # expose ports
 EXPOSE 8080

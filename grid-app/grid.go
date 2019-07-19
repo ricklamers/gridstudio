@@ -734,7 +734,7 @@ func gridInstance(c *Client) {
 
 				serializedGrid := ToGOB64(grid)
 
-				err := ioutil.WriteFile("/home/user/sheet.serialized", serializedGrid, 0644)
+				err := ioutil.WriteFile(c.hub.rootDirectory+"sheetdata/sheet.serialized", serializedGrid, 0644)
 
 				if err != nil {
 					fmt.Println(err)

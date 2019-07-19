@@ -101,7 +101,7 @@ func runServer() {
 
 			fmt.Fprintf(w, "%v", handler.Header)
 
-			f, err := os.OpenFile(*rootDirectory+handler.Filename, os.O_WRONLY|os.O_CREATE, 0666)
+			f, err := os.OpenFile(*rootDirectory+"userdata/"+handler.Filename, os.O_WRONLY|os.O_CREATE, 0666)
 
 			if err != nil {
 				fmt.Println(err)

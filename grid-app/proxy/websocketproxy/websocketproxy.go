@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -27,6 +28,8 @@ var (
 	// DefaultDialer is a dialer with all fields set to the default zero values.
 	DefaultDialer = websocket.DefaultDialer
 )
+
+var uuidRegex = regexp.MustCompile(`(?m)workspace\/([0-9a-z-]*)\/`)
 
 // WebsocketProxy is an HTTP Handler that takes an incoming WebSocket
 // connection and proxies it to another server.
@@ -63,17 +66,21 @@ func NewProxy(UserSessions map[string]sessionmanager.WorkspaceSession) *Websocke
 func (w *WebsocketProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	// construct backendURL based on UserSessions
+	uuidFromPath := ""
 
-	// port based on cookie
-	uuidCookie, err := req.Cookie("session_uuid")
-	if err != nil {
-		fmt.Println("No session_uuid present for websocket initialize connect")
+	matches := uuidRegex.FindStringSubmatch(req.URL.Path)
+	if len(matches) >= 2 {
+		uuidFromPath = matches[1]
 	}
 
-	ws := w.UserSessions[uuidCookie.Value]
+	if len(uuidFromPath) == 0 {
+		fmt.Println("No session_uuid present for websocket initialize connect: " + uuidFromPath)
+	}
+
+	ws := w.UserSessions[uuidFromPath]
 
 	if ws.Port == 0 {
-		fmt.Println("No session present for given session_uuid: " + uuidCookie.Value)
+		fmt.Println("No session present for given session_uuid: " + uuidFromPath)
 	}
 
 	websocketPort := ws.Port

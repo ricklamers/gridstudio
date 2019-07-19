@@ -2087,7 +2087,7 @@
 				success: function (data) {
 					// your callback here
 					_this.showTab("filemanager");
-					_this.fileManager.getDir("/home/user");
+					_this.fileManager.getDir(_this.fileManager.base_cwd);
 				},
 				error: function (error) {
 					// handle error
