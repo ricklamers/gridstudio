@@ -3,7 +3,6 @@ userdata/workspace*
 debug
 manager.exe
 cpu.dat
-logs/sessionlogs/*.txt
 main.exe
 main
 profile-info/
