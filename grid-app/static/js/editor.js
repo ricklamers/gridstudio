@@ -181,7 +181,7 @@
                 if(filename === null){
                     return;
                 }
-                this.setFilePath( "/home/user/" + filename);
+                this.setFilePath( this.app.fileManager.base_cwd +"/"+ filename);
 
                 var extension = filename.split(".")[filename.split(".").length-1];
 

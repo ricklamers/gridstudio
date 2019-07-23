@@ -1,0 +1,5 @@
+Sending build context to Docker daemon   16.1MB
+Step 1/21 : FROM ubuntu:18.04 as base
+ ---> 7698f282e524
+Step 2/21 : RUN echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
+ ---> Running in 6deb6ad4e737

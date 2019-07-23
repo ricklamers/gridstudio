@@ -17,9 +17,11 @@ type Hub struct {
 	mainThreadChannel chan string
 
 	inactiveTime time.Duration
+
+	rootDirectory string
 }
 
-func newHub(mainThreadChannel chan string) *Hub {
+func newHub(mainThreadChannel chan string, rootDirectory string) *Hub {
 
 	return &Hub{
 		broadcast:         make(chan []byte),
@@ -28,6 +30,7 @@ func newHub(mainThreadChannel chan string) *Hub {
 		clients:           make(map[*Client]bool),
 		mainThreadChannel: mainThreadChannel,
 		inactiveTime:      0,
+		rootDirectory:     rootDirectory,
 	}
 
 }

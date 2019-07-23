@@ -473,6 +473,8 @@
 
 		this.getWorkspaceDetails = function(){
 			var slug = window.location.href.split("/")[4];
+			this.slug = slug;;
+
 			$.post("/get-workspace-details",{workspaceSlug: slug}, function(data){
 				$('.workspaceName input[name="workspaceName"]').val(data.name);
 				$('.workspaceName input[name="id"]').val(data.id);
@@ -754,6 +756,10 @@
 		this.updateOffset = function(){
 			this.scrollOffsetX = this.sheetDom.scrollLeft;
 			this.scrollOffsetY = this.sheetDom.scrollTop;
+		}
+
+		this.markSaving = function(){
+			$(".save-status").html("Saving workspace...");
 		}
 
 		this.markSaved = function(){
@@ -2081,7 +2087,7 @@
 				success: function (data) {
 					// your callback here
 					_this.showTab("filemanager");
-					_this.fileManager.getDir("/home/user");
+					_this.fileManager.getDir(_this.fileManager.base_cwd);
 				},
 				error: function (error) {
 					// handle error
@@ -2098,6 +2104,7 @@
 
 		this.saveWorkspace = function(){
 			this.wsManager.send({arguments:["SAVE"]});
+			this.markSaving();
 		}
 
 		this.exportCSV = function(){

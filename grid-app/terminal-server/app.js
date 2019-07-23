@@ -14,7 +14,6 @@ app.use(function(req, res, next) {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
   next();
-  
 });
   
 app.use('/build', express.static(__dirname + '/xterm.js/'));
@@ -38,10 +37,11 @@ app.post('/terminals', function (req, res) {
         name: 'xterm-color',
         cols: cols || 80,
         rows: rows || 24,
-        cwd: "/home/user/",
+        cwd: process.argv[3] + "userfolder/",
         env: process.env
       });
 
+  console.log("Terminal starting in CWD: " + process.argv[3] + "userfolder/");
   console.log('Created terminal with PID: ' + term.pid);
   terminals[term.pid] = term;
   logs[term.pid] = '';
@@ -87,7 +87,7 @@ app.ws('/terminals/:pid', function (ws, req) {
   });
 });
 
-var port = process.env.PORT || 3000,
+var port = parseInt(process.argv[2]) || 4430,
     host = os.platform() === 'win32' ? '127.0.0.1' : '0.0.0.0';
 
 console.log('App listening to http://' + host + ':' + port);

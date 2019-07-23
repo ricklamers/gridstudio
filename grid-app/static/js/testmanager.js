@@ -25,7 +25,7 @@
             }
 
             // override, for debugging
-            // this.tests = ['testCutWithReference'];
+            this.tests = ['testCutWithReference'];
             window.test = function(){
                 _this.runTests.apply(_this);
             };

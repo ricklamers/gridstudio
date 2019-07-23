@@ -15,6 +15,7 @@ import (
 
 var addr = flag.String("addr", ":8080", "http service address")
 var mode = flag.String("mode", "server", "program run mode")
+var rootDirectory = flag.String("root", "/home/userdata/workspace-TESTUUID/", "root directory for user files")
 
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile `file`")
 var memprofile = flag.String("memprofile", "", "write memory profile to `file`")
@@ -22,6 +23,10 @@ var memprofile = flag.String("memprofile", "", "write memory profile to `file`")
 func main() {
 
 	flag.Parse()
+
+	fmt.Println("Root directory:" + *rootDirectory)
+
+	// get user directory /home/userdata/worspace-UUID and serve all dynamic data from this
 
 	// PROFILING //
 	// if *cpuprofile != "" {
@@ -96,7 +101,7 @@ func runServer() {
 
 			fmt.Fprintf(w, "%v", handler.Header)
 
-			f, err := os.OpenFile("/home/user/"+handler.Filename, os.O_WRONLY|os.O_CREATE, 0666)
+			f, err := os.OpenFile(*rootDirectory+"userdata/"+handler.Filename, os.O_WRONLY|os.O_CREATE, 0666)
 
 			if err != nil {
 				fmt.Println(err)
@@ -111,7 +116,7 @@ func runServer() {
 
 	mainThreadChannel := make(chan string)
 
-	hub := newHub(mainThreadChannel)
+	hub := newHub(mainThreadChannel, *rootDirectory)
 
 	go hub.run()
 
@@ -159,10 +164,6 @@ func startHttpServer(addr string) *http.Server {
 	// returning reference so caller can call Shutdown()
 	return srv
 }
-
-// func createDv(formula string) DynamicValue {
-// 	return parse(DynamicValue{ValueType: DynamicValueTypeFormula, DataFormula: formula})
-// }
 
 func assert(value string, expected string, testID *int) {
 	if value == expected {

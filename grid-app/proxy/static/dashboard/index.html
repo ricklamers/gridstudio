@@ -1,0 +1,14 @@
+<div class="dashboard-view">
+    <a class="logout" href="/logout"><div class='email-display'></div> <button>Logout</button></a>
+
+    <h1>Your workspaces</h1>
+    <div class="checkout-introduction-workspace">
+        New to Grid? Check out the introduction workspace to get familiar with the basics.<br><br>
+        <a href="/copy/f0db6f4d-c07a-4e6f-902d-7880937fd81d"><button class='highlight one-click'>Introduction workspace</button></a> <button class='close-introduction-notification'>Close</button>
+    </div>
+    <div class='workspace-list'><div class='loading'>Loading...</div></div>
+
+    <form method="post" class="new-workspace-form" action="/initialize">
+        <button class='highlight one-click'>Create new workspace</button>
+    </form>
+</div>
