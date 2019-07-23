@@ -8,3 +8,4 @@ main
 profile-info/
 manager
 .vscode/
+.DS_Store
