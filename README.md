@@ -1,4 +1,5 @@
-## Grid studio
+<img src='http://gridstudio.io/image/logo-grid.svg' width='200px' style='margin-bottom: 30px;'>
+
 Grid studio is a web-based spreadsheet application with full integration of the Python programming language.
 
 It intenteds to provide an integrated workflow for loading, cleaning, manipulating, and visualizing data. This is achieved through a spreadsheet backend written in Go with integration of the Python runtime to manipulate its contents.
