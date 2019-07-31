@@ -547,7 +547,7 @@ func main() {
 			fmt.Println(err)
 		}
 
-		dirName := "userdata/workspace-" + uuidFromUrl
+		dirName := "/home/userdata/workspace-" + uuidFromUrl
 
 		if _, err := os.Stat(dirName); !os.IsNotExist(err) {
 			removeCommand := "rm -rf " + dirName
@@ -580,7 +580,7 @@ func main() {
 
 			var dirName string
 
-			dirName = "userdata/workspace-" + uuidFromUrl
+			dirName = "/home/userdata/workspace-" + uuidFromUrl
 
 			fmt.Println(dirName)
 
@@ -590,7 +590,7 @@ func main() {
 				requestingUser := getUser(r, db)
 
 				newUuid := uuid.NewV4().String()
-				newDirName := "userdata/workspace-" + newUuid
+				newDirName := "/home/userdata/workspace-" + newUuid
 
 				// get name form DB
 				rows, err := db.Query("SELECT name, shared, owner FROM workspaces WHERE slug = ? LIMIT 1", uuidFromUrl)
@@ -664,7 +664,7 @@ func main() {
 
 		var dirName string
 
-		dirName = "userdata/workspace-" + uuidString
+		dirName = "/home/userdata/workspace-" + uuidString
 
 		user := getUser(r, db)
 
