@@ -1,12 +1,17 @@
-# go build manager.go
+WIN_PWD=$PWD
+WIN_PWD=$(echo $WIN_PWD | sed -r 's/[/]+/\\/g')
+WIN_PWD=$(echo $WIN_PWD | sed -r 's/\\([a-z])\\+/\U\1:\\/g')
 
-# if [[ "$OSTYPE" == "msys" ]]; then
-# 	docker kill $(docker ps -q)
-# 	./manager.exe
-# else
-# 	sudo docker kill $(sudo docker ps -q)
-# 	sudo ./manager
-# fi
-
-
-docker run --name=gridstudio --rm=false -v $PWD/grid-app:/home/source -v $PWD/grid-app/proxy/userdata:/home/userdata -p 8080:8080 -p 4430:4430 ricklamers/gridstudio:release
+if [[ "$OSTYPE" == "msys" ]]; then
+	if [ ! "$(docker ps -a | grep gridstudio)" ]; then
+		docker run --name=gridstudio --rm=false -v $WIN_PWD\\grid-app:/home/source -v $WIN_PWD\\grid-app\\proxy\\userdata:/home/userdata -p 8080:8080 -p 4430:4430 ricklamers/gridstudio:release
+	else
+		docker start gridstudio
+	fi
+else
+	if [ ! "$(docker ps -a | grep gridstudio)" ]; then
+		docker run --name=gridstudio --rm=false -v $PWD/grid-app:/home/source -v $PWD/grid-app/proxy/userdata:/home/userdata -p 8080:8080 -p 4430:4430 ricklamers/gridstudio:release
+	else
+		docker start gridstudio
+	fi
+fi
