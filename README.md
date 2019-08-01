@@ -35,4 +35,4 @@ If you prefer you can also choose to give a one time donation through PayPal:
 
 [![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=XKT365ELJHGMS)
 
-(This is an experiment - if you think I shouldn't run a Patreon for this project let me know in a GitHub issue - I'm very open to feedback!)
+(This is an experiment - if you think I shouldn't run a Patreon/donations for this project let me know in a GitHub issue - I'm very open to feedback!)
