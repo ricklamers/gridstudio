@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 WIN_PWD=$PWD
 WIN_PWD=$(echo $WIN_PWD | sed -r 's/[/]+/\\/g')
 WIN_PWD=$(echo $WIN_PWD | sed -r 's/\\([a-z])\\+/\U\1:\\/g')
