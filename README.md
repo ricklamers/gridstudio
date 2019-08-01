@@ -25,3 +25,10 @@ It comes down to pulling the latest Grid studio Docker image that has all depend
 For more information check out our <a href="https://github.com/ricklamers/gridstudio/wiki">Wiki</a>.
 
 <b>If don't want to install Grid studio locally you can try out the beta of the hosted version here: <a href="https://dashboard.gridstudio.io">https://dashboard.gridstudio.io</a>.</b>
+
+#### Patreon
+Like the project? I can dedicate more time to it if you support me.
+
+<a href="https://www.patreon.com/bePatron?u=22814116" data-patreon-widget-type="become-patron-button">Become a Patron!</a><script async src="https://c6.patreon.com/becomePatronButton.bundle.js"></script>
+
+(This is an experiment - if you think I shouldn't run a Patreon for this project let me know in a GitHub issue - I'm very open to feedback!)
