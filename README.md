@@ -2,7 +2,7 @@
 
 Grid studio is a web-based spreadsheet application with full integration of the Python programming language.
 
-It intenteds to provide an integrated workflow for loading, cleaning, manipulating, and visualizing data. This is achieved through a spreadsheet backend written in Go with integration of the Python runtime to manipulate its contents.
+It intends to provide an integrated workflow for loading, cleaning, manipulating, and visualizing data. This is achieved through a spreadsheet backend written in Go with integration of the Python runtime to manipulate its contents.
 
 ### Architecture overview
 The application is structured in two parts:
@@ -20,7 +20,7 @@ For more details about each part check out the code in the repository. If anythi
 ### Installation
 To run Grid studio locally refer to the <a href="https://github.com/ricklamers/gridstudio/wiki/Installation">Installation</a> page of the Wiki.
 
-It comes down to pulling the latest Grid studio Docker image that has all dependencies configured (mainly: Go language, Python 3 with packacges, Node.js) and starting the Docker container.
+It comes down to pulling the latest Grid studio Docker image that has all dependencies configured (mainly: Go language, Python 3 with packages, Node.js) and starting the Docker container.
 
 For more information check out our <a href="https://github.com/ricklamers/gridstudio/wiki">Wiki</a>.
 
