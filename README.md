@@ -29,6 +29,6 @@ For more information check out our <a href="https://github.com/ricklamers/gridst
 #### Patreon
 Like the project? I can dedicate more time to it if you support me.
 
-<a href="https://www.patreon.com/bePatron?u=22814116"><img src="http://gridstudio.io/image/patron.png" width="176px" /></a>
+<a target="_blank" href="https://www.patreon.com/gridstudio"><img src="http://gridstudio.io/image/patron.png" width="176px" /></a>
 
 (This is an experiment - if you think I shouldn't run a Patreon for this project let me know in a GitHub issue - I'm very open to feedback!)
