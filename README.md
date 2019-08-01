@@ -27,11 +27,11 @@ For more information check out our <a href="https://github.com/ricklamers/gridst
 <b>If don't want to install Grid studio locally you can try out the beta of the hosted version here: <a href="https://dashboard.gridstudio.io">https://dashboard.gridstudio.io</a>.</b>
 
 #### Donate
-Like the project? I can dedicate more time to it if you support me.
+Like the project? I can dedicate more time to it if you support me:
 
 <a target="_blank" href="https://www.patreon.com/gridstudio"><img src="http://gridstudio.io/image/patron.png" width="176px" /></a>
 
-If you prefer you can also choose to give a one time donation through Paypal
+If you prefer you can also choose to give a one time donation through PayPal:
 
 [![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=XKT365ELJHGMS)
 
