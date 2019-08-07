@@ -16,6 +16,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/alecthomas/participle"
 	"github.com/csimplestring/go-csv/detector"
 )
 
@@ -44,6 +45,7 @@ type Grid struct {
 	SheetSizes          []SheetSize
 	PythonResultChannel chan string
 	PythonClient        chan string
+	Parser              *participle.Parser
 }
 
 func copyToDirty(index string, grid *Grid) {
@@ -128,6 +130,16 @@ func gridInstance(c *Client) {
 	grid.PythonResultChannel = make(chan string, 256)
 	grid.PythonClient = c.commands
 
+	parser, parser_err := participle.Build(&FORMULA{},
+		participle.Lexer(formulaLexer),
+		participle.Unquote("String"))
+
+	if parser_err != nil {
+		fmt.Println("Failed to initialize parser")
+	} else {
+		grid.Parser = parser
+	}
+
 	c.grid = &grid
 
 	for {
@@ -174,13 +186,13 @@ func gridInstance(c *Client) {
 				switch parsed[1] {
 				case "SETSINGLE":
 
-					var formula string
-					if len(parsed[4]) > 0 {
-						formula = parsed[4][1:]
-						// formula = referencesToUpperCase(formula)
-					} else {
-						formula = parsed[4]
-					}
+					// var formula string
+					// if len(parsed[4]) > 0 {
+					// 	formula = parsed[4][1:]
+					// 	// formula = referencesToUpperCase(formula)
+					// } else {
+					// 	formula = parsed[4]
+					// }
 
 					// parsed[3] contains the value (formula)
 					newDvs := make(map[Reference]*DynamicValue)
@@ -198,13 +210,15 @@ func gridInstance(c *Client) {
 
 						dv := getDataFromRef(thisReference, &grid)
 
-						if !isValidFormula(formula) {
-							dv.ValueType = DynamicValueTypeString
-							dv.DataFormula = "\"Error in formula: " + formula + "\""
-						} else {
-							dv.ValueType = DynamicValueTypeFormula
-							dv.DataFormula = formula
-						}
+						// TODO: adapt line to FORMULA DataFormula
+						// if !isValidFormula(formula) {
+						// 	dv.ValueType = DynamicValueTypeString
+						// 	dv.DataString = "\"Error in formula: " + formula + "\""
+						// } else {
+						// 	dv.ValueType = DynamicValueTypeFormula
+						// 	// TODO: adapt line to FORMULA DataFormula
+						// 	// dv.DataFormula = formula
+						// }
 
 						newDvs[ref] = dv
 						incrementAmount++
@@ -243,14 +257,16 @@ func gridInstance(c *Client) {
 						if checkDataPresenceFromRef(ref, &grid) {
 							dv := getDataFromRef(ref, &grid)
 
-							if !isValidFormula(values[valuesIndex]) {
-								dv.ValueType = DynamicValueTypeString
-								dv.DataFormula = "\"Error in formula: " + values[valuesIndex] + "\""
-							} else {
+							// TODO: adapt line to FORMULA DataFormula
+							// if !isValidFormula(values[valuesIndex]) {
+							// 	dv.ValueType = DynamicValueTypeString
+							// 	dv.DataString = "\"Error in formula: " + values[valuesIndex] + "\""
+							// } else {
 
-								dv.ValueType = DynamicValueTypeFormula
-								dv.DataFormula = values[valuesIndex]
-							}
+							// 	dv.ValueType = DynamicValueTypeFormula
+							// 	// TODO: adapt line to FORMULA DataFormula
+							// 	// dv.DataFormula = values[valuesIndex]
+							// }
 
 							newDvs[ref] = dv
 
@@ -483,105 +499,132 @@ func gridInstance(c *Client) {
 
 			case "SET":
 
-				// check if formula or normal entry
-				if len(parsed[2]) > 0 && parsed[2][0:1] == "=" {
+				formulaString := parsed[2]
 
-					// TODO: regex check if input is legal
+				thisReference := Reference{String: parsed[1], SheetIndex: getIndexFromString(parsed[3])}
 
-					// for SET commands with formula values update formula to uppercase any references
-					formula := parsed[2][1:]
-					// formula = referencesToUpperCase(formula)
+				dv := getDataFromRef(thisReference, &grid)
 
-					if !isValidFormula(formula) {
+				dv.ValueType = DynamicValueTypeFormula
+				dv.DataFormula = FORMULA{}
+				dv.DataFormulaString = formulaString
 
-						sheetIndex := getIndexFromString(parsed[3])
-						reference := Reference{String: parsed[1], SheetIndex: sheetIndex}
+				err := grid.Parser.ParseString(formulaString, &dv.DataFormula)
+				if err != nil {
 
-						dv := getDataFromRef(reference, &grid)
-						dv.ValueType = DynamicValueTypeString
-						dv.DataFormula = "\"Error in formula: " + formula + "\""
+					dv := getDataFromRef(thisReference, &grid)
+					dv.ValueType = DynamicValueTypeString
+					dv.DataString = "\"Error in formula: " + formulaString + "\""
 
-						dv.DependIn = make(map[string]bool) // new dependin (new formula)
-
-						setDataByRef(reference, setDependencies(reference, dv, &grid), &grid)
-
-					} else {
-
-						// check for explosive formulas
-						isExplosive := isExplosiveFormula(formula)
-
-						if isExplosive {
-
-							// original Dependends can stay on
-							reference := Reference{String: parsed[1], SheetIndex: getIndexFromString(parsed[3])}
-							dv := getDataFromRef(reference, &grid)
-
-							dv.ValueType = DynamicValueTypeExplosiveFormula
-							dv.DataFormula = formula
-
-							// Dependencies are not required, since this cell won't depend on anything given that it's explosive
-
-							// parse explosive formula (also, explosive formulas cannot be nested)
-							newDv := parse(dv, &grid, reference)
-
-							// don't need dependend information for parsing, hence assign after parse
-							newDv.DependIn = make(map[string]bool)             // new dependin (new formula)
-							newDv.DependOut = dv.DependOut                     // dependout remain
-							newDv.ValueType = DynamicValueTypeExplosiveFormula // shouldn't be necessary, is return type of olsExplosive()
-							newDv.DataFormula = formula                        // re-assigning of formula is usually saved for computeDirty but this will be skipped there
-
-							// add OLS cell to dirty (which needs DependInTemp etc)
-							setDataByRef(reference, setDependencies(reference, newDv, &grid), &grid)
-
-							// dependencies will be fulfilled for all cells created by explosion
-
-						} else {
-							// set value for cells
-							// cut off = for parsing
-
-							// original Dependends
-							thisReference := Reference{String: parsed[1], SheetIndex: getIndexFromString(parsed[3])}
-
-							dv := getDataFromRef(thisReference, &grid)
-
-							dv.ValueType = DynamicValueTypeFormula
-							dv.DataFormula = formula
-
-							setDataByRef(thisReference, setDependencies(thisReference, dv, &grid), &grid)
-						}
-
-					}
+					dv.DependIn = make(map[string]bool) // new dependin (new formula)
+					setDataByRef(thisReference, setDependencies(thisReference, dv, &grid), &grid)
 
 				} else {
+					setDataByRef(thisReference, setDependencies(thisReference, dv, &grid), &grid)
 
-					// else enter as string
-					// if user enters non string value, client is reponsible for adding the equals sign.
-					// Anything without it won't be parsed as formula.
-					reference := Reference{String: parsed[1], SheetIndex: getIndexFromString(parsed[3])}
-
-					dv := getDataFromRef(reference, &grid)
-
-					// escape double quotes
-					formulaString := strings.Replace(parsed[2], "\"", "\\\"", -1)
-
-					dv.ValueType = DynamicValueTypeString
-					dv.DataString = parsed[2]
-					dv.DataFormula = "\"" + formulaString + "\""
-
-					// if input is empty string, set formula to empty string without quotes
-					if len(parsed[2]) == 0 {
-						dv.DataFormula = ""
-					}
-
-					newDv := setDependencies(reference, dv, &grid)
-					newDv.ValueType = DynamicValueTypeString
-
-					setDataByRef(reference, newDv, &grid)
-
+					changedCells := computeDirtyCells(&grid, c)
+					sendDirtyOrInvalidate(changedCells, &grid, c)
 				}
 
-				changedCells := computeDirtyCells(&grid, c)
-				sendDirtyOrInvalidate(changedCells, &grid, c)
+				// // check if formula or normal entry
+				// if len(parsed[2]) > 0 && parsed[2][0:1] == "=" {
+
+				// 	// TODO: regex check if input is legal
+
+				// 	// for SET commands with formula values update formula to uppercase any references
+				// 	formula := parsed[2][1:]
+				// 	// formula = referencesToUpperCase(formula)
+
+				// 	if !isValidFormula(formula) {
+
+				// 		sheetIndex := getIndexFromString(parsed[3])
+				// 		reference := Reference{String: parsed[1], SheetIndex: sheetIndex}
+
+				// 		dv := getDataFromRef(reference, &grid)
+				// 		dv.ValueType = DynamicValueTypeString
+				// 		dv.DataFormula = "\"Error in formula: " + formula + "\""
+
+				// 		dv.DependIn = make(map[string]bool) // new dependin (new formula)
+
+				// 		setDataByRef(reference, setDependencies(reference, dv, &grid), &grid)
+
+				// 	} else {
+
+				// 		// check for explosive formulas
+				// 		isExplosive := isExplosiveFormula(formula)
+
+				// 		if isExplosive {
+
+				// 			// original Dependends can stay on
+				// 			reference := Reference{String: parsed[1], SheetIndex: getIndexFromString(parsed[3])}
+				// 			dv := getDataFromRef(reference, &grid)
+
+				// 			dv.ValueType = DynamicValueTypeExplosiveFormula
+				// 			dv.DataFormula = formula
+
+				// 			// Dependencies are not required, since this cell won't depend on anything given that it's explosive
+
+				// 			// parse explosive formula (also, explosive formulas cannot be nested)
+				// 			newDv := parse(dv, &grid, reference)
+
+				// 			// don't need dependend information for parsing, hence assign after parse
+				// 			newDv.DependIn = make(map[string]bool)             // new dependin (new formula)
+				// 			newDv.DependOut = dv.DependOut                     // dependout remain
+				// 			newDv.ValueType = DynamicValueTypeExplosiveFormula // shouldn't be necessary, is return type of olsExplosive()
+				// 			newDv.DataFormula = formula                        // re-assigning of formula is usually saved for computeDirty but this will be skipped there
+
+				// 			// add OLS cell to dirty (which needs DependInTemp etc)
+				// 			setDataByRef(reference, setDependencies(reference, newDv, &grid), &grid)
+
+				// 			// dependencies will be fulfilled for all cells created by explosion
+
+				// 		} else {
+				// 			// set value for cells
+				// 			// cut off = for parsing
+
+				// 			// original Dependends
+				// 			thisReference := Reference{String: parsed[1], SheetIndex: getIndexFromString(parsed[3])}
+
+				// 			dv := getDataFromRef(thisReference, &grid)
+
+				// 			dv.ValueType = DynamicValueTypeFormula
+				// 			dv.DataFormula = formula
+
+				// 			setDataByRef(thisReference, setDependencies(thisReference, dv, &grid), &grid)
+				// 		}
+
+				// 	}
+
+				// } else {
+
+				// 	// else enter as string
+				// 	// if user enters non string value, client is reponsible for adding the equals sign.
+				// 	// Anything without it won't be parsed as formula.
+				// 	reference := Reference{String: parsed[1], SheetIndex: getIndexFromString(parsed[3])}
+
+				// 	dv := getDataFromRef(reference, &grid)
+
+				// 	// escape double quotes
+				// 	formulaString := strings.Replace(parsed[2], "\"", "\\\"", -1)
+
+				// 	dv.ValueType = DynamicValueTypeString
+				// 	dv.DataString = parsed[2]
+				// 	dv.DataFormula = "\"" + formulaString + "\""
+
+				// 	// if input is empty string, set formula to empty string without quotes
+				// 	if len(parsed[2]) == 0 {
+				// 		dv.DataFormula = ""
+				// 	}
+
+				// 	newDv := setDependencies(reference, dv, &grid)
+				// 	newDv.ValueType = DynamicValueTypeString
+
+				// 	setDataByRef(reference, newDv, &grid)
+
+				// }
+
+				// changedCells := computeDirtyCells(&grid, c)
+				// sendDirtyOrInvalidate(changedCells, &grid, c)
 
 			case "SETSIZE":
 
@@ -679,13 +722,16 @@ func gridInstance(c *Client) {
 							newDv.ValueType = DynamicValueTypeString
 							newDv.DataString = inputString
 
-							escapedStringValue := strings.Replace(inputString, "\"", "\\\"", -1)
+							// escapedStringValue := strings.Replace(inputString, "\"", "\\\"", -1)
 
-							newDv.DataFormula = "\"" + escapedStringValue + "\""
+							// TODO: adapt line to FORMULA DataFormula
+							// newDv.DataFormula = "\"" + escapedStringValue + "\""
 
 						} else {
 							newDv.ValueType = DynamicValueTypeFloat
-							newDv.DataFormula = inputString
+
+							// TODO: adapt line to FORMULA DataFormula
+							// newDv.DataFormula = inputString
 
 							floatValue, err := strconv.ParseFloat(inputString, 64)
 
@@ -751,316 +797,6 @@ func gridInstance(c *Client) {
 
 }
 
-func isValidFormula(formula string) bool {
-	currentOperator := ""
-	operatorsFound := []string{}
-
-	parenDepth := 0
-	quoteDepth := 0
-	singleQuoteDepth := 0
-	skipNextChar := false
-	previousChar := ""
-
-	// inFunction := false
-	inReference := false
-	dollarInColumn := false
-	dollarInRow := false
-	referenceFoundRange := false
-	validReference := false
-	inDecimal := false
-	inNumber := false
-	validDecimal := false
-	foundReferenceMark := false
-	inOperator := false
-	inFunction := false
-	operatorAllowed := false
-
-	var buffer bytes.Buffer
-
-	// skipCharacters := 0
-	formulaRunes := []rune{}
-
-	for _, r := range formula {
-		formulaRunes = append(formulaRunes, r)
-	}
-
-	for k := range formulaRunes {
-
-		if skipNextChar {
-			skipNextChar = false
-			continue
-		}
-
-		// fmt.Println("char index: " + strconv.Itoa(k))
-		r := formulaRunes[k]
-
-		nextR := ' '
-
-		if len(formulaRunes) > k+1 {
-			nextR = formulaRunes[k+1]
-		}
-
-		c := string(r)
-
-		// check for quotes
-		if c == "\"" && quoteDepth == 0 && previousChar != "\\" {
-
-			quoteDepth++
-			continue
-
-		} else if c == "\"" && quoteDepth == 1 && previousChar != "\\" {
-
-			quoteDepth--
-			continue
-		}
-
-		if quoteDepth == 0 {
-			if c == "'" && singleQuoteDepth == 0 {
-
-				singleQuoteDepth++
-
-				continue
-
-			} else if c == "'" && singleQuoteDepth == 1 {
-
-				singleQuoteDepth--
-
-				// should be followed by dollar or letter
-				if nextR != '!' {
-					return false
-				} else {
-					inReference = true
-
-					// skip next char !
-					// skipNextChar = true
-				}
-
-				continue
-			}
-		}
-
-		if quoteDepth == 0 && singleQuoteDepth == 0 {
-
-			if c == "(" {
-
-				parenDepth++
-
-				operatorAllowed = false
-
-				inOperator = false
-
-				operatorsFound = append(operatorsFound, currentOperator)
-				currentOperator = ""
-
-			} else if c == ")" {
-
-				parenDepth--
-
-				if parenDepth < 0 {
-					return false
-				}
-
-			}
-
-			/* reference checking */
-			if inReference && r == '!' && !foundReferenceMark {
-				foundReferenceMark = true
-				validReference = false
-				inReference = false
-				continue
-			}
-
-			if r == '!' && foundReferenceMark {
-				return false
-			}
-
-			if !inReference && unicode.IsLetter(r) {
-				inReference = true
-			}
-
-			if !inReference && dollarInColumn && r == '$' {
-				return false
-			}
-
-			if !inReference && r == '$' {
-				dollarInColumn = true
-			}
-
-			if dollarInRow && inReference && r == '$' {
-				return false
-			}
-
-			if inReference && r == '$' && dollarInRow {
-				return false
-			}
-
-			if inReference && !dollarInRow && r == '$' {
-				dollarInRow = true
-			}
-
-			if inReference && (r == ':' && []rune(previousChar)[0] != ':') {
-				inReference = false
-				validReference = false
-				referenceFoundRange = true
-				foundReferenceMark = false
-				dollarInColumn = false
-				dollarInRow = false
-			}
-
-			if inReference && validReference && unicode.IsLetter(r) {
-				return false
-			}
-
-			/* function checking */
-			if inReference && !validReference && r == '(' {
-				inFunction = true
-				inReference = false
-				foundReferenceMark = false
-			}
-
-			if inFunction && r == ')' {
-				inFunction = false
-				operatorAllowed = true
-			}
-
-			if referenceFoundRange && !inReference && unicode.IsLetter(r) {
-				inReference = true
-			}
-
-			if referenceFoundRange && !inReference && unicode.IsDigit(r) {
-				return false
-			}
-
-			if inReference && unicode.IsDigit(r) {
-				validReference = true
-			}
-
-			if inReference && referenceFoundRange && !(unicode.IsDigit(r) || unicode.IsLetter(r) || r == '$') {
-
-				if !validReference {
-					return false
-				}
-
-				inReference = false
-				foundReferenceMark = false
-				dollarInColumn = false
-				dollarInRow = false
-				validReference = false
-				referenceFoundRange = false
-			}
-
-			if inReference && !referenceFoundRange && !(unicode.IsDigit(r) || unicode.IsLetter(r) || r == ':' || r == '$') {
-
-				if !validReference {
-					return false
-				}
-
-				inReference = false
-				foundReferenceMark = false
-				validReference = false
-				dollarInColumn = false
-				dollarInRow = false
-				operatorAllowed = true
-			}
-
-			if !inReference && !inDecimal && unicode.IsDigit(r) {
-				inNumber = true
-
-				operatorsFound = append(operatorsFound, currentOperator)
-				currentOperator = ""
-
-				if inOperator {
-					inOperator = false
-					operatorAllowed = false
-				}
-			}
-
-			/* decimal checking */
-			if !inReference && inNumber && r == '.' && unicode.IsDigit([]rune(previousChar)[0]) {
-				inDecimal = true
-			} else if inDecimal && !(unicode.IsDigit(r) || unicode.IsLetter(r)) && !validDecimal {
-				return false
-			} else if inDecimal && unicode.IsDigit(r) {
-				validDecimal = true
-			} else if inDecimal && unicode.IsLetter(r) {
-				return false
-			} else if !inDecimal && r == '.' {
-				return false
-			}
-
-			if (inNumber || inDecimal) && !(unicode.IsLetter(r) || unicode.IsDigit(r)) && r != '.' {
-				inNumber = false
-				inDecimal = false
-
-				// number end
-				operatorAllowed = true
-			}
-
-			if !inNumber && r == '-' && unicode.IsDigit(nextR) {
-				inNumber = true
-
-				operatorsFound = append(operatorsFound, currentOperator)
-				currentOperator = ""
-
-				if inOperator {
-					inOperator = false
-				}
-
-			} else if inOperator && r == '-' && currentOperator == "-" {
-				return false
-			} else if !inReference && r == '-' && !inNumber && !inOperator && !unicode.IsDigit(nextR) {
-				currentOperator += c
-				inOperator = true
-
-				if !operatorAllowed {
-					return false
-				}
-
-			} else if !inReference && !inFunction && !inDecimal && !(unicode.IsDigit(r) || unicode.IsLetter(r)) && r != ' ' && r != '(' && r != ')' && r != ',' && r != '$' {
-				// if not in reference and operator is not space
-				currentOperator += c
-				inOperator = true
-
-				if !operatorAllowed {
-					return false
-				}
-			}
-
-			if inOperator && (unicode.IsDigit(r) || unicode.IsLetter(r) || r == ' ') {
-				inOperator = false
-				operatorAllowed = false
-				operatorsFound = append(operatorsFound, currentOperator)
-				currentOperator = ""
-			}
-
-		}
-
-		buffer.WriteString(c)
-
-		previousChar = c
-
-	}
-
-	for _, operator := range operatorsFound {
-		if !contains(availableOperators, operator) && operator != "" {
-			return false
-		}
-	}
-
-	if parenDepth != 0 {
-		return false
-	}
-	if quoteDepth != 0 {
-		return false
-	}
-
-	if inReference && !validReference {
-		return false
-	}
-
-	return true
-}
-
 func getReferenceRangeFromMapIndex(standardRangeReference string) ReferenceRange {
 
 	referenceParts := strings.Split(standardRangeReference, "!")
@@ -1100,156 +836,177 @@ func computeDirtyCells(grid *Grid, c *Client) []Reference {
 
 	changedRefs := []Reference{}
 
-	indicateProgress := false
-	progressTotal := len(grid.DirtyCells)
-	// communicate long computations (at arbitrary boundry 1000):
-	if progressTotal > 1000 {
-		indicateProgress = true
-	}
-
-	/// initialize DependInTemp and DependOutTemp for resolving
-	for key, _ := range grid.DirtyCells {
-
-		thisDv := getDataByNormalRef(key, grid)
-
-		thisDv.DependInTemp = make(map[string]bool)
-		thisDv.DependOutTemp = make(map[string]bool)
-
-		for ref, inSet := range thisDv.DependIn {
-			thisDv.DependInTemp[ref] = inSet
-		}
-		for ref, inSet := range thisDv.DependOut {
-			thisDv.DependOutTemp[ref] = inSet
-		}
-
-	}
-
-	// for every DV in dirtyCells clean up the DependInTemp list with refs not in DirtyCells
-
-	// When a cell is not in DirtyCells but IS in the DependInTemp of a cell, it needs to be removed from it since it needs to have zero DependInTemp before it can be evaluated
-
-	noDependInDirtyCells := make(map[string]bool)
-
-	for stringRef, _ := range grid.DirtyCells {
-
-		thisDv := getDataByNormalRef(stringRef, grid)
-
-		for stringRefInner := range thisDv.DependInTemp {
-
-			// if ref is not in dirty cells, remove from depend in
-			if _, ok := (grid.DirtyCells)[stringRefInner]; !ok {
-				delete(thisDv.DependInTemp, stringRefInner)
-			}
-
-		}
-
-		// if after this removal DependInTemp is 0, add to list to be processed
-		if len(thisDv.DependInTemp) == 0 {
-			noDependInDirtyCells[stringRef] = true
-		}
-
-	}
-
-	for len((grid.DirtyCells)) != 0 {
+	for index, _ := range grid.DirtyCells {
 
 		var dv *DynamicValue
-		var index string
 
-		// send progress indicator
-		if indicateProgress {
+		dv = getDataByNormalRef(index, grid)
 
-			if len(grid.DirtyCells)%1000 == 0 || len(grid.DirtyCells) == 1 {
-				progress := float64(progressTotal-len(grid.DirtyCells)+1) / float64(progressTotal)
-				c.send <- []byte("[\"PROGRESSINDICATOR\", " + strconv.FormatFloat(progress, 'E', -1, 64) + "]")
-			}
+		currentReference := getReferenceFromMapIndex(index)
 
-		}
+		evaluate(dv, grid, currentReference)
 
-		// remove all DependIn that are not in dirty cells (since not dirty, can use existing values)
-		// This step is done in computeDirtyCells because at this point
-		// we are certain whether cells are dirty or not
-
-		if len(noDependInDirtyCells) == 0 {
-			fmt.Println("Error: should have an element in noDependInDirtyCells when DirtyCells is not empty")
-
-			// circular dependency error in all dirty cells
-			for key, _ := range grid.DirtyCells {
-				thisDv := getDataByNormalRef(key, grid)
-				thisDv.DataString = "\"Circular reference: " + thisDv.DataFormula + "\""
-				thisDv.ValueType = DynamicValueTypeString
-				changedRefs = append(changedRefs, getReferenceFromMapIndex(key))
-			}
-
-			break
-		}
-
-		// take first element in noDependInDirtyCells
-		for k := range noDependInDirtyCells {
-			index = k
-			dv = getDataByNormalRef(index, grid)
-			break
-		}
-
-		// compute thisDv and update all DependOn values
-		if dv.DependOutTemp != nil {
-			for ref, inSet := range dv.DependOutTemp {
-				if inSet {
-
-					// only delete dirty dependencies for cells marked in dirtycells
-					if _, ok := (grid.DirtyCells)[ref]; ok {
-						delete(getDataByNormalRef(ref, grid).DependInTemp, index)
-
-						if len(getDataByNormalRef(ref, grid).DependInTemp) == 0 {
-
-							// TO VALIDATE: is the below a problem?
-							// check to see if every time when trying to add to noDependInDirtyCells it is not contained in it
-							// log.Fatal("while removing DependInTemp " + ref + " was already in noDependInDirtyCells")
-							noDependInDirtyCells[ref] = true
-						}
-					}
-
-				}
-			}
-		}
-
-		// NOTE!!! for now compare, check later if computationally feasible
-
-		// DO COMPUTE HERE
-		// stringBefore := convertToString((*grid)[index])
-
-		originalDv := getDataByNormalRef(index, grid)
-
-		// originalIsString := false
-		// if originalDv.ValueType == DynamicValueTypeString {
-		// originalIsString = true
-		// }
-
-		newDv := originalDv
-
-		// re-compute only non explosive formulas and not marked for non-recompute
-		if originalDv.ValueType != DynamicValueTypeExplosiveFormula {
-
-			originalDv.ValueType = DynamicValueTypeFormula
-			currentReference := getReferenceFromMapIndex(index)
-			newDv = parse(originalDv, grid, currentReference)
-
-			newDv.DataFormula = originalDv.DataFormula
-			newDv.DependIn = originalDv.DependIn
-			newDv.DependOut = originalDv.DependOut
-			newDv.SheetIndex = originalDv.SheetIndex
-
-			setDataByRef(currentReference, newDv, grid)
-
-			changedRefs = append(changedRefs, currentReference)
-
-		}
+		changedRefs = append(changedRefs, currentReference)
 
 		delete(grid.DirtyCells, index)
-		delete(noDependInDirtyCells, index)
-
 	}
 
 	return changedRefs
+
+	// TODO: restore computeDirtyCells to full resolve when reference functions have been restored to use new AST representation
+
+	// changedRefs := []Reference{}
+
+	// indicateProgress := false
+	// progressTotal := len(grid.DirtyCells)
+	// // communicate long computations (at arbitrary boundry 1000):
+	// if progressTotal > 1000 {
+	// 	indicateProgress = true
+	// }
+
+	// /// initialize DependInTemp and DependOutTemp for resolving
+	// for key, _ := range grid.DirtyCells {
+
+	// 	thisDv := getDataByNormalRef(key, grid)
+
+	// 	thisDv.DependInTemp = make(map[string]bool)
+	// 	thisDv.DependOutTemp = make(map[string]bool)
+
+	// 	for ref, inSet := range thisDv.DependIn {
+	// 		thisDv.DependInTemp[ref] = inSet
+	// 	}
+	// 	for ref, inSet := range thisDv.DependOut {
+	// 		thisDv.DependOutTemp[ref] = inSet
+	// 	}
+
+	// }
+
+	// // for every DV in dirtyCells clean up the DependInTemp list with refs not in DirtyCells
+
+	// // When a cell is not in DirtyCells but IS in the DependInTemp of a cell, it needs to be removed from it since it needs to have zero DependInTemp before it can be evaluated
+
+	// noDependInDirtyCells := make(map[string]bool)
+
+	// for stringRef, _ := range grid.DirtyCells {
+
+	// 	thisDv := getDataByNormalRef(stringRef, grid)
+
+	// 	for stringRefInner := range thisDv.DependInTemp {
+
+	// 		// if ref is not in dirty cells, remove from depend in
+	// 		if _, ok := (grid.DirtyCells)[stringRefInner]; !ok {
+	// 			delete(thisDv.DependInTemp, stringRefInner)
+	// 		}
+
+	// 	}
+
+	// 	// if after this removal DependInTemp is 0, add to list to be processed
+	// 	if len(thisDv.DependInTemp) == 0 {
+	// 		noDependInDirtyCells[stringRef] = true
+	// 	}
+
+	// }
+
+	// for len((grid.DirtyCells)) != 0 {
+
+	// 	var dv *DynamicValue
+	// 	var index string
+
+	// 	// send progress indicator
+	// 	if indicateProgress {
+
+	// 		if len(grid.DirtyCells)%1000 == 0 || len(grid.DirtyCells) == 1 {
+	// 			progress := float64(progressTotal-len(grid.DirtyCells)+1) / float64(progressTotal)
+	// 			c.send <- []byte("[\"PROGRESSINDICATOR\", " + strconv.FormatFloat(progress, 'E', -1, 64) + "]")
+	// 		}
+
+	// 	}
+
+	// 	// remove all DependIn that are not in dirty cells (since not dirty, can use existing values)
+	// 	// This step is done in computeDirtyCells because at this point
+	// 	// we are certain whether cells are dirty or not
+
+	// 	if len(noDependInDirtyCells) == 0 {
+	// 		fmt.Println("Error: should have an element in noDependInDirtyCells when DirtyCells is not empty")
+
+	// 		// circular dependency error in all dirty cells
+	// 		for key, _ := range grid.DirtyCells {
+	// 			thisDv := getDataByNormalRef(key, grid)
+	// 			thisDv.DataString = "\"Circular reference: " + thisDv.DataFormula + "\""
+	// 			thisDv.ValueType = DynamicValueTypeString
+	// 			changedRefs = append(changedRefs, getReferenceFromMapIndex(key))
+	// 		}
+
+	// 		break
+	// 	}
+
+	// 	// take first element in noDependInDirtyCells
+	// 	for k := range noDependInDirtyCells {
+	// 		index = k
+	// 		dv = getDataByNormalRef(index, grid)
+	// 		break
+	// 	}
+
+	// 	// compute thisDv and update all DependOn values
+	// 	if dv.DependOutTemp != nil {
+	// 		for ref, inSet := range dv.DependOutTemp {
+	// 			if inSet {
+
+	// 				// only delete dirty dependencies for cells marked in dirtycells
+	// 				if _, ok := (grid.DirtyCells)[ref]; ok {
+	// 					delete(getDataByNormalRef(ref, grid).DependInTemp, index)
+
+	// 					if len(getDataByNormalRef(ref, grid).DependInTemp) == 0 {
+
+	// 						// TO VALIDATE: is the below a problem?
+	// 						// check to see if every time when trying to add to noDependInDirtyCells it is not contained in it
+	// 						// log.Fatal("while removing DependInTemp " + ref + " was already in noDependInDirtyCells")
+	// 						noDependInDirtyCells[ref] = true
+	// 					}
+	// 				}
+
+	// 			}
+	// 		}
+	// 	}
+
+	// 	// NOTE!!! for now compare, check later if computationally feasible
+
+	// 	// DO COMPUTE HERE
+	// 	// stringBefore := convertToString((*grid)[index])
+
+	// 	originalDv := getDataByNormalRef(index, grid)
+
+	// 	// originalIsString := false
+	// 	// if originalDv.ValueType == DynamicValueTypeString {
+	// 	// originalIsString = true
+	// 	// }
+
+	// 	newDv := originalDv
+
+	// 	// re-compute only non explosive formulas and not marked for non-recompute
+	// 	if originalDv.ValueType != DynamicValueTypeExplosiveFormula {
+
+	// 		originalDv.ValueType = DynamicValueTypeFormula
+	// 		currentReference := getReferenceFromMapIndex(index)
+	// 		newDv = parse(originalDv, grid, currentReference)
+
+	// 		newDv.DataFormula = originalDv.DataFormula
+	// 		newDv.DependIn = originalDv.DependIn
+	// 		newDv.DependOut = originalDv.DependOut
+	// 		newDv.SheetIndex = originalDv.SheetIndex
+
+	// 		setDataByRef(currentReference, newDv, grid)
+
+	// 		changedRefs = append(changedRefs, currentReference)
+
+	// 	}
+
+	// 	delete(grid.DirtyCells, index)
+	// 	delete(noDependInDirtyCells, index)
+
+	// }
+
+	// return changedRefs
 }
 
 func sendCells(cellsToSend *[][]string, c *Client) {
@@ -1312,8 +1069,9 @@ func sendCellsInRange(cellRange ReferenceRange, grid *Grid, c *Client) {
 		dv := getDataFromRef(reference, grid)
 
 		if dv != nil {
-			stringAfter := convertToString(dv)
-			cellsToSend = append(cellsToSend, []string{relativeReferenceString(reference), stringAfter.DataString, "=" + dv.DataFormula, strconv.Itoa(int(dv.SheetIndex))})
+			// TODO: adapt line to FORMULA DataFormula
+			// stringAfter := convertToString(dv)
+			// cellsToSend = append(cellsToSend, []string{relativeReferenceString(reference), stringAfter.DataString, "=" + dv.DataFormula, strconv.Itoa(int(dv.SheetIndex))})
 		}
 
 		// cell to string
@@ -1333,12 +1091,15 @@ func sendCellsByRefs(refs []Reference, grid *Grid, c *Client) {
 
 	cellsToSend := [][]string{}
 
+	// TODO: adapt line to FORMULA DataFormula
 	for _, reference := range refs {
 
 		dv := getDataFromRef(reference, grid)
 		// cell to string
+
 		stringAfter := convertToString(dv)
-		cellsToSend = append(cellsToSend, []string{relativeReferenceString(reference), stringAfter.DataString, "=" + dv.DataFormula, strconv.Itoa(int(dv.SheetIndex))})
+
+		cellsToSend = append(cellsToSend, []string{relativeReferenceString(reference), stringAfter.DataString, dv.DataFormulaString, strconv.Itoa(int(dv.SheetIndex))})
 	}
 
 	sendCells(&cellsToSend, c)
@@ -1367,6 +1128,10 @@ func FromGOB64(binary []byte) Grid {
 	return grid
 }
 
+func isCellEmpty(dv *DynamicValue) bool {
+	return true
+}
+
 func determineMinimumRectangle(startRow int, startColumn int, sheetIndex int8, grid *Grid) (int, int) {
 
 	maximumRow := startRow
@@ -1377,15 +1142,11 @@ func determineMinimumRectangle(startRow int, startColumn int, sheetIndex int8, g
 
 			cell := getDataFromRef(Reference{String: indexesToReferenceString(r, c), SheetIndex: sheetIndex}, grid)
 
-			cellFormula := cell.DataFormula
-
-			cellFormula = strings.Replace(cellFormula, "\"", "", -1)
-
-			if len(cellFormula) != 0 && c >= maximumColumn {
+			if isCellEmpty(cell) && c >= maximumColumn {
 				maximumColumn = c
 			}
 
-			if len(cellFormula) != 0 && r >= maximumRow {
+			if isCellEmpty(cell) && r >= maximumRow {
 				maximumRow = r
 			}
 		}
@@ -1562,14 +1323,16 @@ func sortRange(direction string, cellRange string, sortColumn string, grid *Grid
 		oldRowIndex := getReferenceRowIndex(sortGridItem.reference.String)
 
 		// update formula to update relative references
-		sourceFormula := sortGridItem.dv.DataFormula
-		newFormula := incrementFormula(sourceFormula, sortGridItem.reference, newRef, false, grid)
+		// TODO: adapt line to FORMULA DataFormula
+		// sourceFormula := sortGridItem.dv.DataFormula
+		// newFormula := incrementFormula(sourceFormula, sortGridItem.reference, newRef, false, grid)
 
 		newDv := getDataFromRef(sortGridItem.reference, grid)
 
-		if sourceFormula != newFormula {
-			newDv.DataFormula = newFormula
-		}
+		// TODO: adapt line to FORMULA DataFormula
+		// if sourceFormula != newFormula {
+		// newDv.DataFormula = newFormula
+		// }
 
 		// DependIn will be constructed in setDependencies based on formula content
 
@@ -1584,14 +1347,16 @@ func sortRange(direction string, cellRange string, sortColumn string, grid *Grid
 			newRef := Reference{String: indexesToReferenceString(currentRow, nonSortingColumnIndex), SheetIndex: sortGridItem.reference.SheetIndex}
 
 			oldDv := getDataFromRef(oldRef, grid)
-			sourceFormula := oldDv.DataFormula
-			newFormula := incrementFormula(sourceFormula, oldRef, newRef, false, grid)
+			// TODO: adapt line to FORMULA DataFormula
+			// sourceFormula := oldDv.DataFormula
+			// newFormula := incrementFormula(sourceFormula, oldRef, newRef, false, grid)
 
 			newDv := oldDv
 
-			if sourceFormula != newFormula {
-				newDv.DataFormula = newFormula
-			}
+			// TODO: adapt line to FORMULA DataFormula
+			// if sourceFormula != newFormula {
+			// newDv.DataFormula = newFormula
+			// }
 
 			// copy DependOuts from current newRef in Grid to newDv
 			newRefDependOut := getDataFromRef(newRef, grid).DependOut
@@ -1917,14 +1682,17 @@ func copyByValue(sourceRange ReferenceRange, destinationRange ReferenceRange, gr
 		destinationDv.DataString = sourceDv.DataString
 
 		if destinationDv.ValueType == DynamicValueTypeString {
-			destinationDv.DataFormula = "\"" + sourceDv.DataString + "\""
+			// TODO: adapt line to FORMULA DataFormula
+			// destinationDv.DataFormula = "\"" + sourceDv.DataString + "\""
 		} else if destinationDv.ValueType == DynamicValueTypeFloat {
-			destinationDv.DataFormula = strconv.FormatFloat(sourceDv.DataFloat, 'f', -1, 64)
+			// TODO: adapt line to FORMULA DataFormula
+			// destinationDv.DataFormula = strconv.FormatFloat(sourceDv.DataFloat, 'f', -1, 64)
 		} else {
-			destinationDv.DataFormula = "TRUE"
-			if !sourceDv.DataBool {
-				destinationDv.DataFormula = "FALSE"
-			}
+			// TODO: adapt line to FORMULA DataFormula
+			// destinationDv.DataFormula = "TRUE"
+			// if !sourceDv.DataBool {
+			// destinationDv.DataFormula = "FALSE"
+			// }
 		}
 
 		newDvs[destinationRef] = destinationDv
@@ -1939,154 +1707,157 @@ func copyByValue(sourceRange ReferenceRange, destinationRange ReferenceRange, gr
 	return destinationCells
 }
 
+// TODO: adapt line to FORMULA DataFormula
 func copySourceToDestination(sourceRange ReferenceRange, destinationRange ReferenceRange, grid *Grid, isCut bool) []Reference {
 
-	destinationMapping, sourceCells, _ := sourceToDestinationMapping(sourceRange, destinationRange, grid)
+	// destinationMapping, sourceCells, _ := sourceToDestinationMapping(sourceRange, destinationRange, grid)
 
-	finalDestinationCells := []Reference{}
-	newDvs := make(map[Reference]*DynamicValue)
-	requiresUpdates := make(map[Reference]*DynamicValue)
+	// finalDestinationCells := []Reference{}
+	// newDvs := make(map[Reference]*DynamicValue)
+	// requiresUpdates := make(map[Reference]*DynamicValue)
 
-	rangesToCheck := make(map[Reference][]ReferenceRange)
+	// rangesToCheck := make(map[Reference][]ReferenceRange)
 
-	var operationRowDifference int
-	var operationColumnDifference int
-	var operationSourceSheet int8
-	var operationTargetSheet int8
+	// var operationRowDifference int
+	// var operationColumnDifference int
+	// var operationSourceSheet int8
+	// var operationTargetSheet int8
 
-	haveOperationDifference := false
+	// haveOperationDifference := false
 
-	k := 0
-	for k < len(destinationMapping) {
+	// k := 0
+	// for k < len(destinationMapping) {
 
-		destinationRef := destinationMapping[k]
-		sourceRef := destinationMapping[k+1]
+	// 	destinationRef := destinationMapping[k]
+	// 	sourceRef := destinationMapping[k+1]
 
-		if !haveOperationDifference {
-			operationRowDifference, operationColumnDifference = getReferenceStringDifference(destinationRef.String, sourceRef.String)
-			haveOperationDifference = true
-			operationSourceSheet = sourceRange.SheetIndex
-			operationTargetSheet = destinationRef.SheetIndex
-		}
+	// 	if !haveOperationDifference {
+	// 		operationRowDifference, operationColumnDifference = getReferenceStringDifference(destinationRef.String, sourceRef.String)
+	// 		haveOperationDifference = true
+	// 		operationSourceSheet = sourceRange.SheetIndex
+	// 		operationTargetSheet = destinationRef.SheetIndex
+	// 	}
 
-		finalDestinationCells = append(finalDestinationCells, destinationRef)
+	// 	finalDestinationCells = append(finalDestinationCells, destinationRef)
 
-		sourceDv := getDataFromRef(sourceRef, grid)
-		sourceFormula := sourceDv.DataFormula
-		sourceRanges := findRanges(sourceFormula, sourceDv.SheetIndex, grid)
-		newFormula := incrementFormula(sourceFormula, sourceRef, destinationRef, isCut, grid)
+	// 	sourceDv := getDataFromRef(sourceRef, grid)
+	// 	sourceFormula := sourceDv.DataFormula
+	// 	sourceRanges := findRanges(sourceFormula, sourceDv.SheetIndex, grid)
+	// 	newFormula := incrementFormula(sourceFormula, sourceRef, destinationRef, isCut, grid)
 
-		previousDv := getDataFromRef(destinationRef, grid)
-		destinationDv := makeDv(newFormula)
-		destinationDv.DependOut = previousDv.DependOut
+	// 	previousDv := getDataFromRef(destinationRef, grid)
+	// 	destinationDv := makeDv(newFormula)
+	// 	destinationDv.DependOut = previousDv.DependOut
 
-		newDvs[destinationRef] = destinationDv
+	// 	newDvs[destinationRef] = destinationDv
 
-		if isCut {
+	// 	if isCut {
 
-			// when cutting cells, make sure that refences in DependOut are also appropriately incremented
-			for ref := range getDataFromRef(sourceRef, grid).DependOut {
+	// 		// when cutting cells, make sure that refences in DependOut are also appropriately incremented
+	// 		for ref := range getDataFromRef(sourceRef, grid).DependOut {
 
-				thisReference := getReferenceFromMapIndex(ref)
+	// 			thisReference := getReferenceFromMapIndex(ref)
 
-				originalDv := getDvAndRefForCopyModify(thisReference, operationRowDifference, operationColumnDifference, operationSourceSheet, operationTargetSheet, newDvs, grid)
+	// 			originalDv := getDvAndRefForCopyModify(thisReference, operationRowDifference, operationColumnDifference, operationSourceSheet, operationTargetSheet, newDvs, grid)
 
-				originalFormula := originalDv.DataFormula
-				outgoingDvReferences := findReferences(originalFormula, originalDv.SheetIndex, false, grid)
+	// 			originalFormula := originalDv.DataFormula
+	// 			outgoingDvReferences := findReferences(originalFormula, originalDv.SheetIndex, false, grid)
 
-				if !containsReferences(sourceCells, thisReference) {
-					outgoingRanges := findRanges(originalFormula, thisReference.SheetIndex, grid)
-					if len(outgoingRanges) > 0 {
-						rangesToCheck[thisReference] = outgoingRanges
-					}
-				}
+	// 			if !containsReferences(sourceCells, thisReference) {
+	// 				outgoingRanges := findRanges(originalFormula, thisReference.SheetIndex, grid)
+	// 				if len(outgoingRanges) > 0 {
+	// 					rangesToCheck[thisReference] = outgoingRanges
+	// 				}
+	// 			}
 
-				referenceMapping := make(map[Reference]Reference)
+	// 			referenceMapping := make(map[Reference]Reference)
 
-				for reference := range outgoingDvReferences {
+	// 			for reference := range outgoingDvReferences {
 
-					if reference == sourceRef {
-						referenceMapping[reference], _ = changeReferenceIndex(reference, operationRowDifference, operationColumnDifference, destinationRef.SheetIndex, grid)
-					}
+	// 				if reference == sourceRef {
+	// 					referenceMapping[reference], _ = changeReferenceIndex(reference, operationRowDifference, operationColumnDifference, destinationRef.SheetIndex, grid)
+	// 				}
 
-				}
+	// 			}
 
-				newFormula := replaceReferencesInFormula(originalFormula, originalDv.SheetIndex, thisReference.SheetIndex, referenceMapping, grid)
+	// 			newFormula := replaceReferencesInFormula(originalFormula, originalDv.SheetIndex, thisReference.SheetIndex, referenceMapping, grid)
 
-				newDependOutDv := makeDv(newFormula)
-				newDependOutDv.DependOut = originalDv.DependOut
-				putDvForCopyModify(thisReference, newDependOutDv, operationRowDifference, operationColumnDifference, operationSourceSheet, operationTargetSheet, newDvs, requiresUpdates, grid)
+	// 			newDependOutDv := makeDv(newFormula)
+	// 			newDependOutDv.DependOut = originalDv.DependOut
+	// 			putDvForCopyModify(thisReference, newDependOutDv, operationRowDifference, operationColumnDifference, operationSourceSheet, operationTargetSheet, newDvs, requiresUpdates, grid)
 
-			}
+	// 		}
 
-			// check for ranges in the cell that is moved itself
-			if len(sourceRanges) > 0 {
-				rangesToCheck[destinationRef] = sourceRanges
-			}
+	// 		// check for ranges in the cell that is moved itself
+	// 		if len(sourceRanges) > 0 {
+	// 			rangesToCheck[destinationRef] = sourceRanges
+	// 		}
 
-		}
+	// 	}
 
-		k = k + 2
-	}
+	// 	k = k + 2
+	// }
 
-	// check whether DependOut ranges
-	for outgoingRef, outgoingRanges := range rangesToCheck {
+	// // check whether DependOut ranges
+	// for outgoingRef, outgoingRanges := range rangesToCheck {
 
-		// check for each outgoingRange whether it is matched in full
-		// check whether in newDv or grid
+	// 	// check for each outgoingRange whether it is matched in full
+	// 	// check whether in newDv or grid
 
-		outgoingReference := outgoingRef
+	// 	outgoingReference := outgoingRef
 
-		outgoingRefDv := getDvAndRefForCopyModify(outgoingReference, 0, 0, operationSourceSheet, outgoingRef.SheetIndex, newDvs, grid)
-		outgoingRefFormula := outgoingRefDv.DataFormula
+	// 	outgoingRefDv := getDvAndRefForCopyModify(outgoingReference, 0, 0, operationSourceSheet, outgoingRef.SheetIndex, newDvs, grid)
+	// 	outgoingRefFormula := outgoingRefDv.DataFormula
 
-		replacedFormula := false
+	// 	replacedFormula := false
 
-		referenceRangeMapping := make(map[ReferenceRange]ReferenceRange)
+	// 	referenceRangeMapping := make(map[ReferenceRange]ReferenceRange)
 
-		for _, rangeReference := range outgoingRanges {
+	// 	for _, rangeReference := range outgoingRanges {
 
-			// since cut/copy blocks are square, if first and last element in outgoingRange are in sourceRef they can be considered to all be in there
-			rangeReferences := strings.Split(rangeReference.String, ":")
-			rangeStartReference := Reference{String: rangeReferences[0], SheetIndex: rangeReference.SheetIndex}
-			rangeEndReference := Reference{String: rangeReferences[1], SheetIndex: rangeReference.SheetIndex}
+	// 		// since cut/copy blocks are square, if first and last element in outgoingRange are in sourceRef they can be considered to all be in there
+	// 		rangeReferences := strings.Split(rangeReference.String, ":")
+	// 		rangeStartReference := Reference{String: rangeReferences[0], SheetIndex: rangeReference.SheetIndex}
+	// 		rangeEndReference := Reference{String: rangeReferences[1], SheetIndex: rangeReference.SheetIndex}
 
-			if containsReferences(sourceCells, rangeStartReference) && containsReferences(sourceCells, rangeEndReference) {
+	// 		if containsReferences(sourceCells, rangeStartReference) && containsReferences(sourceCells, rangeEndReference) {
 
-				replacedFormula = true
+	// 			replacedFormula = true
 
-				// whole range is in here, increment outgoingRef's range (could be replacing more outgoingRanges)
-				referenceRangeMapping[rangeReference] = changeRangeReference(rangeReference, operationRowDifference, operationColumnDifference, operationTargetSheet, grid)
+	// 			// whole range is in here, increment outgoingRef's range (could be replacing more outgoingRanges)
+	// 			referenceRangeMapping[rangeReference] = changeRangeReference(rangeReference, operationRowDifference, operationColumnDifference, operationTargetSheet, grid)
 
-			}
+	// 		}
 
-		}
+	// 	}
 
-		if replacedFormula {
+	// 	if replacedFormula {
 
-			outgoingRefFormula = replaceReferenceRangesInFormula(outgoingRefFormula, sourceCells[0].SheetIndex, outgoingRefDv.SheetIndex, referenceRangeMapping, grid)
+	// 		outgoingRefFormula = replaceReferenceRangesInFormula(outgoingRefFormula, sourceCells[0].SheetIndex, outgoingRefDv.SheetIndex, referenceRangeMapping, grid)
 
-			newDv := makeDv(outgoingRefFormula)
-			newDv.DependOut = outgoingRefDv.DependOut
+	// 		newDv := makeDv(outgoingRefFormula)
+	// 		newDv.DependOut = outgoingRefDv.DependOut
 
-			putDvForCopyModify(outgoingReference, newDv, 0, 0, operationSourceSheet, outgoingRef.SheetIndex, newDvs, requiresUpdates, grid)
+	// 		putDvForCopyModify(outgoingReference, newDv, 0, 0, operationSourceSheet, outgoingRef.SheetIndex, newDvs, requiresUpdates, grid)
 
-		}
+	// 	}
 
-	}
+	// }
 
-	for reference, dv := range newDvs {
-		setDataByRef(reference, setDependencies(reference, dv, grid), grid)
-	}
+	// for reference, dv := range newDvs {
+	// 	setDataByRef(reference, setDependencies(reference, dv, grid), grid)
+	// }
 
-	for reference, _ := range requiresUpdates {
-		setDataByRef(reference, setDependencies(reference, getDataFromRef(reference, grid), grid), grid)
-	}
+	// for reference, _ := range requiresUpdates {
+	// 	setDataByRef(reference, setDependencies(reference, getDataFromRef(reference, grid), grid), grid)
+	// }
 
-	// for each cell mapping, copy contents after substituting the references
-	// all cells in destination should be added to dirty
+	// // for each cell mapping, copy contents after substituting the references
+	// // all cells in destination should be added to dirty
 
-	return finalDestinationCells
+	// return finalDestinationCells
+
+	return []Reference{}
 
 }
 
@@ -2285,7 +2056,8 @@ func clearCell(ref Reference, grid *Grid) {
 	dv := getDataFromRef(ref, grid)
 
 	dv.ValueType = DynamicValueTypeString
-	dv.DataFormula = ""
+	// TODO: adapt line to FORMULA DataFormula
+	// dv.DataFormula = ""
 	dv.DataString = ""
 
 	setDataByRef(ref, setDependencies(ref, dv, grid), grid)

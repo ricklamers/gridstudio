@@ -9,8 +9,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"unicode"
 
+	"github.com/jinzhu/copier"
 	matrix "github.com/skelterjohn/go.matrix"
 )
 
@@ -23,25 +23,21 @@ const DynamicValueTypeExplosiveFormula int8 = 6
 const DynamicValueTypeOperator int8 = 7
 
 type DynamicValue struct {
-	ValueType     int8
-	DataFloat     float64
-	DataString    string
-	DataBool      bool
-	DataFormula   string
-	SheetIndex    int8
-	DependIn      map[string]bool
-	DependOut     map[string]bool
-	DependInTemp  map[string]bool
-	DependOutTemp map[string]bool
+	ValueType         int8
+	DataFloat         float64
+	DataString        string
+	DataBool          bool
+	DataFormula       FORMULA
+	DataFormulaString string
+	SheetIndex        int8
+	DependIn          map[string]bool
+	DependOut         map[string]bool
+	DependInTemp      map[string]bool
+	DependOutTemp     map[string]bool
 }
 
 var numberOnlyReg *regexp.Regexp
 var numberOnlyFilter *regexp.Regexp
-
-var availableOperators []string
-var maxOperatorSize int
-var operatorsBroken []map[string]int
-var breakChars []string
 
 func makeEmptyDv() *DynamicValue {
 	dv := DynamicValue{}
@@ -53,7 +49,8 @@ func makeEmptyDv() *DynamicValue {
 }
 
 func makeDv(formula string) *DynamicValue {
-	dv := DynamicValue{ValueType: DynamicValueTypeFormula, DataFormula: formula}
+	// TODO: adapt line to FORMULA DataFormula
+	dv := DynamicValue{ValueType: DynamicValueTypeFormula}
 
 	dv.DependIn = make(map[string]bool)
 	dv.DependOut = make(map[string]bool)
@@ -62,34 +59,6 @@ func makeDv(formula string) *DynamicValue {
 }
 
 func parseInit() {
-
-	availableOperators = []string{"^", "*", "/", "+", "-", ">", "<", ">=", "<=", "==", "<>", "!="}
-	breakChars = []string{" ", ")", ",", "*", "/", "+", "-", ">", "<", "=", "^"}
-
-	// loop over availableOperators twice: once to find maxOperatorSize to initialize hashmaps, once to fill hashmaps
-	for _, e := range availableOperators {
-		if len(e) > maxOperatorSize {
-			maxOperatorSize = len(e)
-		}
-	}
-
-	// create empty hashmap array
-	operatorsBroken = []map[string]int{}
-
-	// initialize hashmaps
-	for i := 0; i < maxOperatorSize; i++ {
-		operatorsBroken = append(operatorsBroken, make(map[string]int))
-	}
-
-	for _, e := range availableOperators {
-
-		// determine target hashmap
-		index := len(e)
-
-		// assign hashmap value
-		operatorsBroken[index-1][e] = 1
-
-	}
 
 	numberOnlyReg, _ = regexp.Compile("[^0-9]+")
 	numberOnlyFilter, _ = regexp.Compile(`^-?[0-9]\d*(\.\d+)?$`)
@@ -191,90 +160,91 @@ func addToReferenceReplaceMap(reference string, incrementAmount int, references 
 
 }
 
+// TODO: adapt line to FORMULA DataFormula
 func findReferenceStrings(formula string) []string {
 
 	references := []string{}
 
-	// loop over string, if double quote is found, ignore input for references,
-	quoteLevel := 0
-	singleQuoteLevel := 0
-	previousChar := ""
+	// // loop over string, if double quote is found, ignore input for references,
+	// quoteLevel := 0
+	// singleQuoteLevel := 0
+	// previousChar := ""
 
-	var buf bytes.Buffer
+	// var buf bytes.Buffer
 
-	for _, c := range formula {
-		char := string(c)
+	// for _, c := range formula {
+	// 	char := string(c)
 
-		if char == "\"" && previousChar != "\\" {
-			if quoteLevel == 0 {
-				quoteLevel++
-			} else {
-				buf.Reset()
-				quoteLevel--
-				continue
-			}
-		}
+	// 	if char == "\"" && previousChar != "\\" {
+	// 		if quoteLevel == 0 {
+	// 			quoteLevel++
+	// 		} else {
+	// 			buf.Reset()
+	// 			quoteLevel--
+	// 			continue
+	// 		}
+	// 	}
 
-		if c == '\'' && singleQuoteLevel == 0 {
-			singleQuoteLevel++
-		} else if c == '\'' && singleQuoteLevel == 1 {
-			singleQuoteLevel--
-		}
+	// 	if c == '\'' && singleQuoteLevel == 0 {
+	// 		singleQuoteLevel++
+	// 	} else if c == '\'' && singleQuoteLevel == 1 {
+	// 		singleQuoteLevel--
+	// 	}
 
-		if quoteLevel == 0 && singleQuoteLevel == 1 {
-			buf.WriteString(char)
-		}
+	// 	if quoteLevel == 0 && singleQuoteLevel == 1 {
+	// 		buf.WriteString(char)
+	// 	}
 
-		if quoteLevel == 0 && singleQuoteLevel == 0 {
+	// 	if quoteLevel == 0 && singleQuoteLevel == 0 {
 
-			// assume everything not in quotes is a reference
-			// if we find open brace it must be a function name
-			if char == "(" {
-				buf.Reset()
-				continue
-			} else if contains(breakChars, char) {
+	// 		// assume everything not in quotes is a reference
+	// 		// if we find open brace it must be a function name
+	// 		if char == "(" {
+	// 			buf.Reset()
+	// 			continue
+	// 		} else if contains(breakChars, char) {
 
-				if buf.Len() > 0 {
-					// found space, previous is references
-					references = append(references, buf.String())
-					buf.Reset()
-				}
-				// never add break char to reference
-				continue
-			}
+	// 			if buf.Len() > 0 {
+	// 				// found space, previous is references
+	// 				references = append(references, buf.String())
+	// 				buf.Reset()
+	// 			}
+	// 			// never add break char to reference
+	// 			continue
+	// 		}
 
-			// edge case for number, if first char of buffer is number, can't be reference
-			if buf.Len() == 0 {
+	// 		// edge case for number, if first char of buffer is number, can't be reference
+	// 		if buf.Len() == 0 {
 
-				if unicode.IsDigit(c) || char == "." { // check for both numbers and . character
+	// 			if unicode.IsDigit(c) || char == "." { // check for both numbers and . character
 
-					// found number can't be reference
-					buf.Reset()
-					continue
-				}
-			}
+	// 				// found number can't be reference
+	// 				buf.Reset()
+	// 				continue
+	// 			}
+	// 		}
 
-			buf.WriteString(char)
+	// 		buf.WriteString(char)
 
-		}
+	// 	}
 
-		previousChar = char
+	// 	previousChar = char
 
-	}
+	// }
 
-	// at the end also add as reference
-	if buf.Len() > 0 {
-		references = append(references, buf.String())
-	}
+	// // at the end also add as reference
+	// if buf.Len() > 0 {
+	// 	references = append(references, buf.String())
+	// }
 
-	// filter references for known keywords such as TRUE/FALSE
-	for k, reference := range references {
-		if len(references) > 0 {
-			if reference == "TRUE" || reference == "FALSE" {
-				references = append(references[:k], references[k+1:]...)
-			}
-		}
-	}
+	// // filter references for known keywords such as TRUE/FALSE
+	// for k, reference := range references {
+	// 	if len(references) > 0 {
+	// 		if reference == "TRUE" || reference == "FALSE" {
+	// 			references = append(references[:k], references[k+1:]...)
+	// 		}
+	// 	}
+	// }
 
 	return references
 }
@@ -324,72 +294,73 @@ func findReferences(formula string, sheetIndex int8, includeRanges bool, grid *G
 	return finalMap
 }
 
+// TODO: adapt line to FORMULA DataFormula
 func referencesToUpperCase(formula string) string {
 
-	// loop over string, if double quote is found, ignore input for references,
-	quoteLevel := 0
-	previousChar := ""
+	// // loop over string, if double quote is found, ignore input for references,
+	// quoteLevel := 0
+	// previousChar := ""
 
-	var buf bytes.Buffer
+	// var buf bytes.Buffer
 
-	for k, c := range formula {
+	// for k, c := range formula {
 
-		char := string(c)
+	// 	char := string(c)
 
-		if char == "\"" && previousChar != "\\" {
-			if quoteLevel == 0 {
-				quoteLevel++
-			} else {
-				buf.Reset()
-				quoteLevel--
-				continue
-			}
-		}
+	// 	if char == "\"" && previousChar != "\\" {
+	// 		if quoteLevel == 0 {
+	// 			quoteLevel++
+	// 		} else {
+	// 			buf.Reset()
+	// 			quoteLevel--
+	// 			continue
+	// 		}
+	// 	}
 
-		if quoteLevel == 0 {
+	// 	if quoteLevel == 0 {
 
-			// assume everything not in quotes is a reference
-			// if we find open brace it must be a function name
-			if char == "(" {
-				buf.Reset()
-				continue
-			} else if contains(breakChars, char) {
+	// 		// assume everything not in quotes is a reference
+	// 		// if we find open brace it must be a function name
+	// 		if char == "(" {
+	// 			buf.Reset()
+	// 			continue
+	// 		} else if contains(breakChars, char) {
 
-				if buf.Len() > 0 {
-					// found space, previous is references
+	// 			if buf.Len() > 0 {
+	// 				// found space, previous is references
 
-					// buf is reference, replace buf with uppercase version
-					formula = formula[:k-buf.Len()] + strings.ToUpper(buf.String()) + formula[k:]
-					buf.Reset()
-				}
-				// never add break char to reference
-				continue
-			}
+	// 				// buf is reference, replace buf with uppercase version
+	// 				formula = formula[:k-buf.Len()] + strings.ToUpper(buf.String()) + formula[k:]
+	// 				buf.Reset()
+	// 			}
+	// 			// never add break char to reference
+	// 			continue
+	// 		}
 
-			// edge case for number, if first char of buffer is number, can't be reference
-			if buf.Len() == 0 {
+	// 		// edge case for number, if first char of buffer is number, can't be reference
+	// 		if buf.Len() == 0 {
 
-				_, err := strconv.Atoi(char)
+	// 			_, err := strconv.Atoi(char)
 
-				if err == nil || char == "." { // check for both numbers and . character
+	// 			if err == nil || char == "." { // check for both numbers and . character
 
-					// found number can't be reference
-					buf.Reset()
-					continue
-				}
-			}
+	// 				// found number can't be reference
+	// 				buf.Reset()
+	// 				continue
+	// 			}
+	// 		}
 
-			buf.WriteString(char)
+	// 		buf.WriteString(char)
 
-		}
+	// 	}
 
-		previousChar = char
-	}
+	// 	previousChar = char
+	// }
 
-	// at the end also add as reference
-	if buf.Len() > 0 {
-		formula = formula[:len(formula)-buf.Len()] + strings.ToUpper(buf.String()) + formula[len(formula):]
-	}
+	// // at the end also add as reference
+	// if buf.Len() > 0 {
+	// 	formula = formula[:len(formula)-buf.Len()] + strings.ToUpper(buf.String()) + formula[len(formula):]
+	// }
 
 	return formula
 }
@@ -431,7 +402,9 @@ func setDependencies(reference Reference, dv *DynamicValue, grid *Grid) *Dynamic
 	if dv.ValueType == DynamicValueTypeExplosiveFormula {
 		references = make(map[Reference]bool)
 	} else {
-		references = findReferences(dv.DataFormula, reference.SheetIndex, true, grid)
+		// TODO: adapt line to FORMULA DataFormula
+		references = make(map[Reference]bool)
+		// references = findReferences(dv.DataFormula, reference.SheetIndex, true, grid)
 	}
 
 	// every cell that this depended on needs to get removed
@@ -471,7 +444,8 @@ func setDependencies(reference Reference, dv *DynamicValue, grid *Grid) *Dynamic
 			}
 
 		} else {
-			dv.DataFormula = "\"#REF: " + referenceToRelativeString(thisRef, reference.SheetIndex, grid) + "\""
+			// TODO: adapt line to FORMULA DataFormula
+			// dv.DataFormula = "\"#REF: " + referenceToRelativeString(thisRef, reference.SheetIndex, grid) + "\""
 		}
 
 	}
@@ -514,357 +488,468 @@ func copyDv(dv *DynamicValue) *DynamicValue {
 	newDv.DataBool = dv.DataBool
 	newDv.DataFloat = dv.DataFloat
 	newDv.DataString = dv.DataString
-	newDv.DataFormula = dv.DataFormula
+	newDv.DataFormula = FORMULA{}
+	copier.Copy(&newDv.DataFormula, &dv.DataFormula)
+
 	newDv.SheetIndex = dv.SheetIndex
 	newDv.ValueType = dv.ValueType
 	return &newDv
 }
 
-// func copyToDv(sourceDv *DynamicValue, targetDv *DynamicValue) {
-// 	// note: DependOut and DependIn are unmodified - need to be done by setDependencies
-// 	targetDv.DataBool = sourceDv.DataBool
-// 	targetDv.DataFloat = sourceDv.DataFloat
-// 	targetDv.DataString = sourceDv.DataString
-// 	targetDv.DataFormula = sourceDv.DataFormula
-// 	targetDv.SheetIndex = sourceDv.SheetIndex
-// 	targetDv.ValueType = sourceDv.ValueType
-// }
+// evaluate updates dv inline
+func evaluate(dv *DynamicValue, grid *Grid, targetRef Reference) {
 
+	dynamicAST := &FORMULA{}
+	copier.Copy(&dynamicAST, &dv.DataFormula)
+
+	for !isASTResolved(dynamicAST) {
+		resolveASTStep(dynamicAST)
+
+		// TEMP
+		break
+	}
+
+	assignASTValue(dv, dynamicAST)
+
+}
+
+func assignASTValue(dv *DynamicValue, formula *FORMULA) {
+	if len(formula.Expr.Right) == 0 && len(formula.Expr.Left.Right) == 0 && formula.Expr.Left.Left.Exponent == nil {
+		if formula.Expr.Left.Left.Base.String != nil {
+			dv.DataString = *formula.Expr.Left.Left.Base.String
+			dv.ValueType = DynamicValueTypeString
+		} else if formula.Expr.Left.Left.Base.BoolFalse != nil {
+			dv.DataBool = false
+			dv.ValueType = DynamicValueTypeBool
+		} else if formula.Expr.Left.Left.Base.BoolTrue != nil {
+			dv.DataBool = true
+			dv.ValueType = DynamicValueTypeBool
+		} else if formula.Expr.Left.Left.Base.Number != nil {
+			dv.DataFloat = *formula.Expr.Left.Left.Base.Number
+			dv.ValueType = DynamicValueTypeFloat
+		} else {
+			log.Fatal("trying to assign ASTValue from AST that is not fully resolved")
+		}
+	} else {
+		log.Fatal("trying to assign ASTValue from AST that is not fully resolved")
+	}
+}
+
+/* substitution functions */
+func (e *Expr) Eval(dynamicAST *FORMULA) {
+	e.Left.Eval(dynamicAST)
+
+	for _, r := range e.Right {
+		r.Term.Eval(dynamicAST)
+	}
+
+	// know that eval has finished
+	if len(e.Right) > 0 && e.Right[0].Operator == OpAdd {
+		sum := *e.Left.Left.Base.Number + *e.Right[0].Term.Left.Base.Number
+
+		// sub base
+		valueNode := generateValueASTNode(sum)
+		e.Left = &valueNode
+		e.Right = nil
+
+	}
+
+}
+
+func generateValueASTNode(number float64) Term {
+	return Term{Left: &Factor{Base: &Value{Number: &number}}}
+}
+
+func (e *Term) Eval(dynamicAST *FORMULA) {
+
+	e.Left.Eval(dynamicAST)
+
+	for _, r := range e.Right {
+		r.Factor.Eval(dynamicAST)
+	}
+}
+
+func (e *Function) Eval(dynamicAST *FORMULA) {
+	fmt.Println("STUB: Function eval")
+}
+
+func (e *Value) Eval(dynamicAST *FORMULA) {
+
+	if e.Function != nil {
+		e.Function.Eval(dynamicAST)
+	}
+
+	// TODO: resolve reference values
+
+}
+
+func (e *Factor) Eval(dynamicAST *FORMULA) {
+	e.Base.Eval(dynamicAST)
+}
+
+func resolveASTStep(dynamicAST *FORMULA) {
+
+	// traverse to first leaf (DFS) and backtrack to find resolve OP
+	dynamicAST.Expr.Eval(dynamicAST)
+
+	fmt.Println("STUB: resolveASTStep")
+}
+
+func isASTResolved(formula *FORMULA) bool {
+	if len(formula.Expr.Right) == 0 && len(formula.Expr.Left.Right) == 0 && formula.Expr.Left.Left.Exponent == nil {
+		if formula.Expr.Left.Left.Base.String != nil {
+			return true
+		}
+		if formula.Expr.Left.Left.Base.BoolFalse != nil {
+			return true
+		}
+		if formula.Expr.Left.Left.Base.BoolTrue != nil {
+			return true
+		}
+		if formula.Expr.Left.Left.Base.Number != nil {
+			return true
+		}
+	}
+
+	return false
+}
+
+// TODO: adapt line to FORMULA DataFormula
 func parse(formula *DynamicValue, grid *Grid, targetRef Reference) *DynamicValue {
 
-	if formula.ValueType == DynamicValueTypeFloat {
-		return formula
-	}
-	if formula.ValueType == DynamicValueTypeFormula && len(formula.DataFormula) == 0 {
-		formula.DataString = ""
-		formula.ValueType = DynamicValueTypeString
-		return formula
-	}
+	// if formula.ValueType == DynamicValueTypeFloat {
+	// 	return formula
+	// }
+	// if formula.ValueType == DynamicValueTypeFormula && len(formula.DataFormula) == 0 {
+	// 	formula.DataString = ""
+	// 	formula.ValueType = DynamicValueTypeString
+	// 	return formula
+	// }
 
-	elements := []*DynamicValue{}
-	operatorsFound := []string{}
-	parenDepth := 0
-	quoteDepth := 0
-	previousChar := ""
-	var buffer bytes.Buffer
+	// elements := []*DynamicValue{}
+	// operatorsFound := []string{}
+	// parenDepth := 0
+	// quoteDepth := 0
+	// previousChar := ""
+	// var buffer bytes.Buffer
 
-	// TODO: instead of writing to buffer keep track of indexes for efficiency
-	skipCharacters := 0
+	// // TODO: instead of writing to buffer keep track of indexes for efficiency
+	// skipCharacters := 0
 
-	for k, r := range formula.DataFormula {
+	// for k, r := range formula.DataFormula {
 
-		c := string(r)
+	// 	c := string(r)
 
-		if skipCharacters > 0 {
+	// 	if skipCharacters > 0 {
 
-			skipCharacters--
-			continue
+	// 		skipCharacters--
+	// 		continue
 
-		} else {
+	// 	} else {
 
-			// check for quotes
+	// 		// check for quotes
 
-			if c == "\"" && quoteDepth == 0 && previousChar != "\\" {
+	// 		if c == "\"" && quoteDepth == 0 && previousChar != "\\" {
 
-				quoteDepth++
+	// 			quoteDepth++
 
-			} else if c == "\"" && quoteDepth == 1 && previousChar != "\\" {
+	// 		} else if c == "\"" && quoteDepth == 1 && previousChar != "\\" {
 
-				quoteDepth--
+	// 			quoteDepth--
 
-			}
+	// 		}
 
-			if quoteDepth == 0 {
+	// 		if quoteDepth == 0 {
 
-				if c == "(" {
+	// 			if c == "(" {
 
-					parenDepth++
+	// 				parenDepth++
 
-				} else if c == ")" {
+	// 			} else if c == ")" {
 
-					parenDepth--
+	// 				parenDepth--
 
-					if parenDepth < 0 {
-						log.Fatal("Invalid input string")
-					}
+	// 				if parenDepth < 0 {
+	// 					log.Fatal("Invalid input string")
+	// 				}
 
-				} else if parenDepth == 0 {
+	// 			} else if parenDepth == 0 {
 
-					identifiedOperator := ""
+	// 				identifiedOperator := ""
 
-					// never check first operator (could be minus sign)
+	// 				// never check first operator (could be minus sign)
 
-					currentTrimmedBuffer := strings.TrimSpace(buffer.String())
-					// first char and equals - or previous element is operator and this is minus
+	// 				currentTrimmedBuffer := strings.TrimSpace(buffer.String())
+	// 				// first char and equals - or previous element is operator and this is minus
 
-					// first check is for first character equals minus sign,
-					// second check is for a minus sign directly after an operator to indicate that the following term is negative
-					if !((k == 0 && c == "-") ||
-						(c == "-" && len(elements) > 0 &&
-							elements[len(elements)-1].ValueType == DynamicValueTypeOperator &&
-							len(currentTrimmedBuffer) == 0)) {
+	// 				// first check is for first character equals minus sign,
+	// 				// second check is for a minus sign directly after an operator to indicate that the following term is negative
+	// 				if !((k == 0 && c == "-") ||
+	// 					(c == "-" && len(elements) > 0 &&
+	// 						elements[len(elements)-1].ValueType == DynamicValueTypeOperator &&
+	// 						len(currentTrimmedBuffer) == 0)) {
 
-						for i := 0; i < maxOperatorSize; i++ {
+	// 					for i := 0; i < maxOperatorSize; i++ {
 
-							// condition 1: never check beyond length of original formula
-							// condition 2: identfy whether operator is in hashmapped operator data structure for high performance
+	// 						// condition 1: never check beyond length of original formula
+	// 						// condition 2: identfy whether operator is in hashmapped operator data structure for high performance
 
-							// first check for operators of size 1, then for operators of size 2, etc
-							if (k+i+1) <= len(formula.DataFormula)-1 && operatorsBroken[i][formula.DataFormula[k:k+i+1]] == 1 {
-								identifiedOperator = formula.DataFormula[k : k+i+1]
-							}
+	// 						// first check for operators of size 1, then for operators of size 2, etc
+	// 						if (k+i+1) <= len(formula.DataFormula)-1 && operatorsBroken[i][formula.DataFormula[k:k+i+1]] == 1 {
+	// 							identifiedOperator = formula.DataFormula[k : k+i+1]
+	// 						}
 
-						}
+	// 					}
 
-						if len(identifiedOperator) > 0 {
+	// 					if len(identifiedOperator) > 0 {
 
-							// add to elements everything in buffer before operator
-							newDv := DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeFormula, DataFormula: strings.TrimSpace(buffer.String())}
-							elements = append(elements, &newDv)
+	// 						// add to elements everything in buffer before operator
+	// 						newDv := DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeFormula, DataFormula: strings.TrimSpace(buffer.String())}
+	// 						elements = append(elements, &newDv)
 
-							newDv2 := DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeOperator, DataFormula: identifiedOperator}
-							// add operator to elements
-							elements = append(elements, &newDv2)
+	// 						newDv2 := DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeOperator, DataFormula: identifiedOperator}
+	// 						// add operator to elements
+	// 						elements = append(elements, &newDv2)
 
-							skipCharacters = len(identifiedOperator) - 1
+	// 						skipCharacters = len(identifiedOperator) - 1
 
-							// append operator to found operators, if not already in there
-							if !contains(operatorsFound, identifiedOperator) {
-								operatorsFound = append(operatorsFound, identifiedOperator)
-							}
+	// 						// append operator to found operators, if not already in there
+	// 						if !contains(operatorsFound, identifiedOperator) {
+	// 							operatorsFound = append(operatorsFound, identifiedOperator)
+	// 						}
 
-							// reset buffer
-							buffer.Reset()
+	// 						// reset buffer
+	// 						buffer.Reset()
 
-							continue
+	// 						continue
 
-						}
-					}
-				}
-			}
+	// 					}
+	// 				}
+	// 			}
+	// 		}
 
-			buffer.WriteString(c)
-		}
+	// 		buffer.WriteString(c)
+	// 	}
 
-		previousChar = c
+	// 	previousChar = c
 
-	}
+	// }
 
-	newDv := DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeFormula, DataFormula: strings.TrimSpace(buffer.String())}
-	elements = append(elements, &newDv)
+	// newDv := DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeFormula, DataFormula: strings.TrimSpace(buffer.String())}
+	// elements = append(elements, &newDv)
 
-	// if first and last element in elements are parens, remove parens
-	for k, e := range elements {
-		if e.ValueType == DynamicValueTypeFormula {
-			if len(e.DataFormula) > 0 {
-				if e.DataFormula[0:1] == "(" && e.DataFormula[len(e.DataFormula)-1:len(e.DataFormula)] == ")" {
-					e.DataFormula = e.DataFormula[1 : len(e.DataFormula)-1]
-					elements[k] = e
+	// // if first and last element in elements are parens, remove parens
+	// for k, e := range elements {
+	// 	if e.ValueType == DynamicValueTypeFormula {
+	// 		if len(e.DataFormula) > 0 {
+	// 			if e.DataFormula[0:1] == "(" && e.DataFormula[len(e.DataFormula)-1:len(e.DataFormula)] == ")" {
+	// 				e.DataFormula = e.DataFormula[1 : len(e.DataFormula)-1]
+	// 				elements[k] = e
 
-					// after remove braces, parse this element
-					elements[k] = parse(e, grid, targetRef)
+	// 				// after remove braces, parse this element
+	// 				elements[k] = parse(e, grid, targetRef)
 
-					// for single elements return at this point
-					if len(elements) == 1 {
-						return elements[k]
-					}
-				}
-			}
-		}
-	}
+	// 				// for single elements return at this point
+	// 				if len(elements) == 1 {
+	// 					return elements[k]
+	// 				}
+	// 			}
+	// 		}
+	// 	}
+	// }
 
-	if len(elements) == 1 {
+	// if len(elements) == 1 {
 
-		singleElement := elements[0]
+	// 	singleElement := elements[0]
 
-		if isFunction(singleElement.DataFormula) {
+	// 	if isFunction(singleElement.DataFormula) {
 
-			parenIndex := strings.Index(singleElement.DataFormula, "(")
-			command := singleElement.DataFormula[0:parenIndex]
+	// 		parenIndex := strings.Index(singleElement.DataFormula, "(")
+	// 		command := singleElement.DataFormula[0:parenIndex]
 
-			// modify arguments function
-			argumentString := singleElement.DataFormula[parenIndex+1 : len(singleElement.DataFormula)-1]
-			var arguments []string
+	// 		// modify arguments function
+	// 		argumentString := singleElement.DataFormula[parenIndex+1 : len(singleElement.DataFormula)-1]
+	// 		var arguments []string
 
-			level := 0
-			quoteLevel := 0
-			var buffer bytes.Buffer
+	// 		level := 0
+	// 		quoteLevel := 0
+	// 		var buffer bytes.Buffer
 
-			for _, r := range argumentString {
+	// 		for _, r := range argumentString {
 
-				c := string(r)
+	// 			c := string(r)
 
-				// valid delimeters
-				// go down level: " (
-				// go up level: " )
+	// 			// valid delimeters
+	// 			// go down level: " (
+	// 			// go up level: " )
 
-				if c == "(" {
-					level++
-				} else if c == ")" {
-					level--
-				} else if c == "\"" && quoteLevel == 0 {
-					level++
-					quoteLevel++
-				} else if c == "\"" && quoteLevel == 1 {
-					level--
-					quoteLevel--
-				}
+	// 			if c == "(" {
+	// 				level++
+	// 			} else if c == ")" {
+	// 				level--
+	// 			} else if c == "\"" && quoteLevel == 0 {
+	// 				level++
+	// 				quoteLevel++
+	// 			} else if c == "\"" && quoteLevel == 1 {
+	// 				level--
+	// 				quoteLevel--
+	// 			}
 
-				if level == 0 {
-					if c == "," {
-						arguments = append(arguments, strings.TrimSpace(buffer.String()))
-						buffer.Reset()
-						continue
-					}
-				}
+	// 			if level == 0 {
+	// 				if c == "," {
+	// 					arguments = append(arguments, strings.TrimSpace(buffer.String()))
+	// 					buffer.Reset()
+	// 					continue
+	// 				}
+	// 			}
 
-				buffer.WriteString(c)
+	// 			buffer.WriteString(c)
 
-			}
+	// 		}
 
-			bufferRemainder := strings.TrimSpace(buffer.String())
-			if len(bufferRemainder) > 0 {
-				arguments = append(arguments, bufferRemainder)
-			}
+	// 		bufferRemainder := strings.TrimSpace(buffer.String())
+	// 		if len(bufferRemainder) > 0 {
+	// 			arguments = append(arguments, bufferRemainder)
+	// 		}
 
-			argumentFormulas := []*DynamicValue{}
+	// 		argumentFormulas := []*DynamicValue{}
 
-			for _, e := range arguments {
-				newDv := DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeFormula, DataFormula: e}
-				argumentFormulas = append(argumentFormulas, parse(&newDv, grid, targetRef))
-			}
+	// 		for _, e := range arguments {
+	// 			newDv := DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeFormula, DataFormula: e}
+	// 			argumentFormulas = append(argumentFormulas, parse(&newDv, grid, targetRef))
+	// 		}
 
-			return executeCommand(command, argumentFormulas, grid, targetRef)
+	// 		return executeCommand(command, argumentFormulas, grid, targetRef)
 
-		} else {
+	// 	} else {
 
-			if singleElement.DataFormula[0:1] == "\"" && singleElement.DataFormula[len(singleElement.DataFormula)-1:len(singleElement.DataFormula)] == "\"" {
+	// 		if singleElement.DataFormula[0:1] == "\"" && singleElement.DataFormula[len(singleElement.DataFormula)-1:len(singleElement.DataFormula)] == "\"" {
 
-				stringValue := singleElement.DataFormula[1 : len(singleElement.DataFormula)-1]
+	// 			stringValue := singleElement.DataFormula[1 : len(singleElement.DataFormula)-1]
 
-				// unescape double quote
-				stringValue = strings.Replace(stringValue, "\\\"", "\"", -1)
+	// 			// unescape double quote
+	// 			stringValue = strings.Replace(stringValue, "\\\"", "\"", -1)
 
-				return &DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeString, DataString: stringValue}
+	// 			return &DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeString, DataString: stringValue}
 
-			} else if strings.Index(singleElement.DataFormula, ":") != -1 {
+	// 		} else if strings.Index(singleElement.DataFormula, ":") != -1 {
 
-				cells := strings.Split(singleElement.DataFormula, ":")
+	// 			cells := strings.Split(singleElement.DataFormula, ":")
 
-				if !((numberOnlyFilter.MatchString(cells[0]) && numberOnlyFilter.MatchString(cells[1])) ||
-					(!numberOnlyFilter.MatchString(cells[0]) && !numberOnlyFilter.MatchString(cells[1]))) {
+	// 			if !((numberOnlyFilter.MatchString(cells[0]) && numberOnlyFilter.MatchString(cells[1])) ||
+	// 				(!numberOnlyFilter.MatchString(cells[0]) && !numberOnlyFilter.MatchString(cells[1]))) {
 
-					log.Fatal("Wrong reference specifier")
+	// 				log.Fatal("Wrong reference specifier")
 
-				} else {
-					return &DynamicValue{ValueType: DynamicValueTypeReference, SheetIndex: targetRef.SheetIndex, DataString: singleElement.DataFormula}
-				}
+	// 			} else {
+	// 				return &DynamicValue{ValueType: DynamicValueTypeReference, SheetIndex: targetRef.SheetIndex, DataString: singleElement.DataFormula}
+	// 			}
 
-			} else if numberOnlyFilter.MatchString(singleElement.DataFormula) {
+	// 		} else if numberOnlyFilter.MatchString(singleElement.DataFormula) {
 
-				floatValue, err := strconv.ParseFloat(singleElement.DataFormula, 64)
-				if err != nil {
-					log.Fatal(err)
-				}
+	// 			floatValue, err := strconv.ParseFloat(singleElement.DataFormula, 64)
+	// 			if err != nil {
+	// 				log.Fatal(err)
+	// 			}
 
-				return &DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeFloat, DataFloat: float64(floatValue)}
+	// 			return &DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeFloat, DataFloat: float64(floatValue)}
 
-			} else if singleElement.DataFormula == "FALSE" || singleElement.DataFormula == "TRUE" {
-				newDv := DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeBool, DataBool: false}
-				if singleElement.DataFormula == "TRUE" {
-					newDv.DataBool = true
-				}
-				return &newDv
-			} else {
+	// 		} else if singleElement.DataFormula == "FALSE" || singleElement.DataFormula == "TRUE" {
+	// 			newDv := DynamicValue{SheetIndex: targetRef.SheetIndex, ValueType: DynamicValueTypeBool, DataBool: false}
+	// 			if singleElement.DataFormula == "TRUE" {
+	// 				newDv.DataBool = true
+	// 			}
+	// 			return &newDv
+	// 		} else {
 
-				// when references contain dollar signs, remove them here
-				newDv := copyDv(getDataFromRef(getReferenceFromString(singleElement.DataFormula, targetRef.SheetIndex, grid), grid))
-				return newDv
+	// 			// when references contain dollar signs, remove them here
+	// 			newDv := copyDv(getDataFromRef(getReferenceFromString(singleElement.DataFormula, targetRef.SheetIndex, grid), grid))
+	// 			return newDv
 
-			}
+	// 		}
 
-		}
+	// 	}
 
-	} else {
+	// } else {
 
-		// parse operators until top elements per formula reduced to 1
-		var operatorSets [][]string
+	// 	// parse operators until top elements per formula reduced to 1
+	// 	var operatorSets [][]string
 
-		operatorSets = [][]string{{"^"}, {"*", "/"}, {"+", "-"}, {">", "<", ">=", "<=", "==", "<>", "!="}}
+	// 	operatorSets = [][]string{{"^"}, {"*", "/"}, {"+", "-"}, {">", "<", ">=", "<=", "==", "<>", "!="}}
 
-		for _, operatorSet := range operatorSets {
+	// 	for _, operatorSet := range operatorSets {
 
-			// more efficient would be to compare each element in operatorsFound to elements in operatorSet
-			operatorInSet := anyOperatorsInOperatorSet(operatorSet, operatorsFound)
+	// 		// more efficient would be to compare each element in operatorsFound to elements in operatorSet
+	// 		operatorInSet := anyOperatorsInOperatorSet(operatorSet, operatorsFound)
 
-			if operatorInSet {
-				operatorLocation := findFirstOperatorOccurence(elements, operatorSet)
+	// 		if operatorInSet {
+	// 			operatorLocation := findFirstOperatorOccurence(elements, operatorSet)
 
-				if operatorLocation == 0 {
-					log.Fatal("Operator can never be the first input in an array")
-				}
+	// 			if operatorLocation == 0 {
+	// 				log.Fatal("Operator can never be the first input in an array")
+	// 			}
 
-				for operatorLocation != -1 {
+	// 			for operatorLocation != -1 {
 
-					LHS := parse(elements[operatorLocation-1], grid, targetRef)
-					RHS := parse(elements[operatorLocation+1], grid, targetRef)
+	// 				LHS := parse(elements[operatorLocation-1], grid, targetRef)
+	// 				RHS := parse(elements[operatorLocation+1], grid, targetRef)
 
-					var result DynamicValue
+	// 				var result DynamicValue
 
-					// todo implement operators for all possible data type combinations
+	// 				// todo implement operators for all possible data type combinations
 
-					// for now implement int and float as all float (* might actually be necessary for good performance (should compare int and float multiplication for large n in Golang))
+	// 				// for now implement int and float as all float (* might actually be necessary for good performance (should compare int and float multiplication for large n in Golang))
 
-					operator := elements[operatorLocation].DataFormula
+	// 				operator := elements[operatorLocation].DataFormula
 
-					// if boolean operatorSet run boolean_compare
-					if contains(operatorSet, "<") {
-						result = booleanCompare(LHS, RHS, elements[operatorLocation].DataFormula)
-					} else {
-						// otherwise run numeric operator evaluation
-						if LHS.ValueType == DynamicValueTypeFloat && RHS.ValueType == DynamicValueTypeFloat {
+	// 				// if boolean operatorSet run boolean_compare
+	// 				if contains(operatorSet, "<") {
+	// 					result = booleanCompare(LHS, RHS, elements[operatorLocation].DataFormula)
+	// 				} else {
+	// 					// otherwise run numeric operator evaluation
+	// 					if LHS.ValueType == DynamicValueTypeFloat && RHS.ValueType == DynamicValueTypeFloat {
 
-							// convert LHS and RHS to float
-							LHS = convertToFloat(LHS)
-							RHS = convertToFloat(RHS)
+	// 						// convert LHS and RHS to float
+	// 						LHS = convertToFloat(LHS)
+	// 						RHS = convertToFloat(RHS)
 
-							result = DynamicValue{ValueType: DynamicValueTypeFloat}
+	// 						result = DynamicValue{ValueType: DynamicValueTypeFloat}
 
-							switch operator {
-							case "*":
-								result.DataFloat = LHS.DataFloat * RHS.DataFloat
-							case "/":
-								result.DataFloat = LHS.DataFloat / RHS.DataFloat
-							case "+":
-								result.DataFloat = LHS.DataFloat + RHS.DataFloat
-							case "-":
-								result.DataFloat = LHS.DataFloat - RHS.DataFloat
-							case "^":
-								result.DataFloat = float64(math.Pow(float64(LHS.DataFloat), float64(RHS.DataFloat)))
-							}
+	// 						switch operator {
+	// 						case "*":
+	// 							result.DataFloat = LHS.DataFloat * RHS.DataFloat
+	// 						case "/":
+	// 							result.DataFloat = LHS.DataFloat / RHS.DataFloat
+	// 						case "+":
+	// 							result.DataFloat = LHS.DataFloat + RHS.DataFloat
+	// 						case "-":
+	// 							result.DataFloat = LHS.DataFloat - RHS.DataFloat
+	// 						case "^":
+	// 							result.DataFloat = float64(math.Pow(float64(LHS.DataFloat), float64(RHS.DataFloat)))
+	// 						}
 
-						}
-					}
+	// 					}
+	// 				}
 
-					arrayEnd := elements[operatorLocation+2:]
-					elements = append(elements[:operatorLocation-1], &result)
-					elements = append(elements, arrayEnd...)
+	// 				arrayEnd := elements[operatorLocation+2:]
+	// 				elements = append(elements[:operatorLocation-1], &result)
+	// 				elements = append(elements, arrayEnd...)
 
-					operatorLocation = findFirstOperatorOccurence(elements, operatorSet)
+	// 				operatorLocation = findFirstOperatorOccurence(elements, operatorSet)
 
-				}
+	// 			}
 
-			}
+	// 		}
 
-		}
+	// 	}
 
-		if len(elements) != 1 {
-			log.Fatal("Elements should be fully merged to 1 element")
-		}
+	// 	if len(elements) != 1 {
+	// 		log.Fatal("Elements should be fully merged to 1 element")
+	// 	}
 
-		return elements[0]
+	// 	return elements[0]
 
-	}
+	// }
 
 	return formula
 }
@@ -975,33 +1060,33 @@ func intersections(section1, section2 []string) (intersection []string) {
 	return
 }
 
-func indexOfOperator(ds []*DynamicValue, s string) int {
-	for k, e := range ds {
-		if e.DataFormula == s {
-			return k
-		}
-	}
-	return -1
-}
+// func indexOfOperator(ds []*DynamicValue, s string) int {
+// 	for k, e := range ds {
+// 		if e.DataFormula == s {
+// 			return k
+// 		}
+// 	}
+// 	return -1
+// }
 
-func findFirstOperatorOccurence(elements []*DynamicValue, operatorSet []string) int {
+// func findFirstOperatorOccurence(elements []*DynamicValue, operatorSet []string) int {
 
-	operatorLocation := math.MaxInt32
+// 	operatorLocation := math.MaxInt32
 
-	for d := 0; d < len(operatorSet); d++ {
+// 	for d := 0; d < len(operatorSet); d++ {
 
-		index := indexOfOperator(elements, operatorSet[d])
-		if index != -1 && index < operatorLocation {
-			operatorLocation = index
-		}
-	}
+// 		index := indexOfOperator(elements, operatorSet[d])
+// 		if index != -1 && index < operatorLocation {
+// 			operatorLocation = index
+// 		}
+// 	}
 
-	if operatorLocation == math.MaxInt32 {
-		return -1
-	}
+// 	if operatorLocation == math.MaxInt32 {
+// 		return -1
+// 	}
 
-	return operatorLocation
-}
+// 	return operatorLocation
+// }
 
 func stringToInteger(s string) int32 {
 
@@ -1143,10 +1228,6 @@ func convertToString(dv *DynamicValue) *DynamicValue {
 	}
 
 	return dv
-}
-
-func isCellEmpty(dv *DynamicValue) bool {
-	return len(dv.DataFormula) == 0
 }
 
 func convertToFloat(dv *DynamicValue) *DynamicValue {
@@ -1556,17 +1637,19 @@ func explosionSetValue(ref Reference, dataDv *DynamicValue, grid *Grid) {
 	dataDv.DependIn = make(map[string]bool) // new dependin (new formula)
 	dataDv.DependOut = OriginalDependOut    // dependout remain
 
+	// TODO: adapt line to FORMULA DataFormula
+
 	// TODO for now add formula so re-compute succeeds: later optimize for performance
-	if dataDv.ValueType == DynamicValueTypeString {
-		dataDv.DataFormula = "\"" + dataDv.DataString + "\""
-	} else if dataDv.ValueType == DynamicValueTypeFloat {
-		dataDv.DataFormula = strconv.FormatFloat(dataDv.DataFloat, 'f', -1, 64)
-	} else if dataDv.ValueType == DynamicValueTypeBool {
-		dataDv.DataFormula = "false"
-		if dataDv.DataBool {
-			dataDv.DataFormula = "true"
-		}
-	}
+	// if dataDv.ValueType == DynamicValueTypeString {
+	// 	dataDv.DataFormula = "\"" + dataDv.DataString + "\""
+	// } else if dataDv.ValueType == DynamicValueTypeFloat {
+	// 	dataDv.DataFormula = strconv.FormatFloat(dataDv.DataFloat, 'f', -1, 64)
+	// } else if dataDv.ValueType == DynamicValueTypeBool {
+	// 	dataDv.DataFormula = "false"
+	// 	if dataDv.DataBool {
+	// 		dataDv.DataFormula = "true"
+	// 	}
+	// }
 
 	setDataByRef(ref, setDependencies(ref, dataDv, grid), grid)
 }
@@ -1674,8 +1757,10 @@ func executeCommand(command string, arguments []*DynamicValue, grid *Grid, targe
 			select {
 			case pythonResult := <-grid.PythonResultChannel:
 				// fmt.Println("Received message from Python to return parse()")
-				newDv := DynamicValue{ValueType: DynamicValueTypeFormula, DataFormula: pythonResult}
-				return parse(&newDv, grid, targetRef)
+
+				// TODO: adapt line to FORMULA DataFormula
+				newDv := makeDv(pythonResult)
+				return parse(newDv, grid, targetRef)
 			}
 		}
 

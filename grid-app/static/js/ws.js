@@ -21,6 +21,11 @@
             var hostname = window.location.hostname;
             
             var wsPort = 4430;
+
+            // DEBUG port
+            if(location.pathname == "/"){
+                wsPort = 8080;
+            }
             this.ws = new WebSocket("ws:"+hostname+":" + wsPort + location.pathname + "ws");
             
             this.ws.onopen = function (event) {
