@@ -58,7 +58,7 @@ function CodeGen(app){
 
                 break;
 
-            case "pandas-std-variance":
+            case "pandas-variance":
 
                 code += this.getDataString(selection, sheetIndex)
                 code += 'data_variance = data.var()\n';
