@@ -68,7 +68,6 @@ RUN rm ./manager
 
 # expose ports
 EXPOSE 8080
-EXPOSE 4430
 
 WORKDIR /home/source/proxy/
 

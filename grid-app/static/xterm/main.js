@@ -67,18 +67,19 @@ Terminal.applyAddon(winptyCompat);
         });
         
         protocol = (location.protocol === 'https:') ? 'wss://' : 'ws://';
-        var wsPort = 4430;
-        var port = 8080;
+        
+        // use host from current url
+        var host = location.host;
     
-        socketURL = protocol + location.hostname + ((wsPort) ? (':' + wsPort) : '') + location.pathname + 'terminals/';
-        var fetchUrl = 'http://' + location.hostname + ((port) ? (':' + port) : '') + location.pathname;
+        socketURL = protocol + host + location.pathname + 'terminals/';
+        var fetchUrl = location.pathname;
     
         term.open(terminalContainer);
         term.winptyCompatInit();
         term.fit();
         // term.focus();
     
-        var paramFetchUrl = fetchUrl+'terminals?cols=' + term.cols + '&rows=' + term.rows;
+        var paramFetchUrl = fetchUrl + 'terminals?cols=' + term.cols + '&rows=' + term.rows;
     
         fetch(paramFetchUrl, {method: 'POST', credentials: "same-origin"}).then(function (res) {
     

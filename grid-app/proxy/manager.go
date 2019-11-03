@@ -814,6 +814,12 @@ func main() {
 
 			// fmt.Println("requestString (before replace): " + requestString)
 
+			// check if websocket then do proxy
+			if r.Header.Get("Upgrade") == "websocket" {
+				websocketproxy.NewProxy(usersessions).ServeHTTP(w, r)
+				return
+			}
+
 			if strings.Contains(requestString, "/terminals") {
 				httpRedirPort = ws.TermPort
 			}

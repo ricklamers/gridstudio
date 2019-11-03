@@ -18,10 +18,10 @@
             
             console.log("WSManager initialized.");
 
-            var hostname = window.location.hostname;
+            // use host from current url
+            var host = window.location.host;
             
-            var wsPort = 4430;
-            this.ws = new WebSocket("ws:"+hostname+":" + wsPort + location.pathname + "ws");
+            this.ws = new WebSocket("ws:"+ host + location.pathname + "ws");
             
             this.ws.onopen = function (event) {
                 // _this.ws.send("Send smth!"); 
