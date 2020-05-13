@@ -1,6 +1,6 @@
 <img src='http://gridstudio.io/image/logo-grid.svg' width='200px' style='margin-bottom: 30px;'>
 
-[![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/ricklamers/gridstudio/tree/master)
+[![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/ibadeeCodes/gridstudio/tree/master)
 
 Grid studio is a web-based spreadsheet application with full integration of the Python programming language.
 
