@@ -1,0 +1,8 @@
+  
+{
+  "name": "GridStudio",
+  "description": "Grid studio is a web-based application for data science with full integration of open source data science frameworks and languages.",
+  "repository": "https://github.com/ibadeeCodes/gridstudio/tree/master",
+  "logo": "http://gridstudio.io/image/logo-grid.svg",
+  "keywords": ["node", "express", "static"]
+}
