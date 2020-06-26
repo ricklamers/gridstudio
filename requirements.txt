@@ -1,0 +1,3 @@
+  
+gunicorn==19.6.0
+Flask==1.0
