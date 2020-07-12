@@ -8,7 +8,6 @@ if [[ $? -ne 0 ]]; then
 	exit 1
 fi
 
-which 
 if [[ "$OSTYPE" == "msys" ]]; then
 
 	if [ ! "$(docker ps -a | grep gridstudio)" ]; then
