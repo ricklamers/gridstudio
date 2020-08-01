@@ -24,4 +24,3 @@ It comes down to pulling the latest Grid studio Docker image that has all depend
 
 For more information check out our <a href="https://github.com/ricklamers/gridstudio/wiki">Wiki</a>.
 
-<b>If don't want to install Grid studio locally you can try out the beta of the hosted version here: <a href="https://dashboard.gridstudio.io">https://dashboard.gridstudio.io</a>.</b>
