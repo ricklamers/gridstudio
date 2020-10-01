@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 
+# test if docker is (correctly) installed.
+which docker >/dev/null 2>&1
+if [[ $? -ne 0 ]]; then
+	echo "ERROR: `docker` command not found,  please install docker first."
+	echo "For more information about docker installation, please visit: https://docs.docker.com/"
+	exit 1
+fi
+
 if [[ "$OSTYPE" == "msys" ]]; then
 
 	if [ ! "$(docker ps -a | grep gridstudio)" ]; then
