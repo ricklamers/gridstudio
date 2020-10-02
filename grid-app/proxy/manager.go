@@ -30,7 +30,6 @@ import (
 
 const termBase = -1000
 const httpPort = 8080
-const wsPort = 4430
 const constPasswordSalt = "GY=B[+inIGy,W5@U%kwP/wWrw%4uQ?6|8P$]9{X=-XY:LO6*1cG@P-+`<s=+TL#N"
 
 var src = rand.NewSource(time.Now().UnixNano())
@@ -41,26 +40,6 @@ const (
 	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
 	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
 )
-
-func wsProxy(wsPort int, usersessions map[string]sessionmanager.WorkspaceSession) {
-
-	// base, err := url.Parse("ws://127.0.0.1:" + strconv.Itoa(port) + "/ws")
-	// fmt.Println("WS base: " + "ws://127.0.0.1:" + strconv.Itoa(port) + "/ws")
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	fmt.Println("WS Listening on port: " + strconv.Itoa(wsPort))
-
-	wsp := websocketproxy.NewProxy(usersessions)
-	wsp.Upgrader = &websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool { return true },
-	}
-
-	errWS := http.ListenAndServe(":"+strconv.Itoa(wsPort), wsp)
-	if errWS != nil {
-		log.Fatal(errWS)
-	}
-}
 
 func getFreePort(usedports map[int]bool, startPort int) int {
 	currentPort := startPort
@@ -359,9 +338,6 @@ func main() {
 		}
 
 	})
-
-	// setup WS proxy for Go server and Terminal
-	go wsProxy(wsPort, usersessions)
 
 	http.HandleFunc("/workspace-change-name", func(w http.ResponseWriter, r *http.Request) {
 		cookieEmail, err1 := r.Cookie("email")
@@ -781,6 +757,11 @@ func main() {
 
 	})
 
+	wsp := websocketproxy.NewProxy(usersessions)
+	wsp.Upgrader = &websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool { return true },
+	}
+
 	http.HandleFunc("/workspace/", func(w http.ResponseWriter, r *http.Request) {
 
 		// append port based on UUID
@@ -813,6 +794,12 @@ func main() {
 			requestString := r.RequestURI
 
 			// fmt.Println("requestString (before replace): " + requestString)
+
+			// check if websocket then do proxy
+			if r.Header.Get("Upgrade") == "websocket" {
+				wsp.ServeHTTP(w, r)
+				return
+			}
 
 			if strings.Contains(requestString, "/terminals") {
 				httpRedirPort = ws.TermPort
