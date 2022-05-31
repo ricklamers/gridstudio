@@ -75,7 +75,7 @@ def getReferenceRowIndex(reference):
     return int(re.findall(r'\d+', reference)[0])
 
 def getReferenceColumnIndex(reference):
-    return letterToIndex(''.join(re.findall(r'[a-zA-Z]', reference)))
+    return letterToIndex(re.findall(r'[a-zA-Z]+', reference)[0])
 
 def letterToIndex(letters):
     columns = len(letters) - 1
