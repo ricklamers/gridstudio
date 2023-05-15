@@ -1,4 +1,4 @@
-<img src='http://gridstudio.io/image/logo-grid.svg' width='200px' style='margin-bottom: 30px;'>
+<img src='https://github.com/ricklamers/gridstudio/assets/1309307/147b8ffd-8843-4a4a-b42c-e28805e9d3e7' width='200px' style='margin-bottom: 30px;'>
 
 Grid studio is a web-based spreadsheet application with full integration of the Python programming language.
 
