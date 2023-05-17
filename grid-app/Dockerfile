@@ -12,7 +12,8 @@ wget \
 python3-pip \
 locales \
 curl \
-git
+git \
+python3-distutils
 
 # # TODO: see if any locale issues arise
 # # RUN sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
